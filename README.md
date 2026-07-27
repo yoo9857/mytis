@@ -25,6 +25,18 @@ npm install
 
 `playwright install chromium`이 자동으로 함께 실행됩니다.
 
+**유튜브 영상을 소재로 쓰거나 장면을 캡처하려면** 추가 준비물이 있습니다.
+기사 기반 글쓰기만 할 거면 건너뛰어도 됩니다.
+
+```powershell
+pip install -r requirements.txt          # yt-dlp[default] · opencv 4.x
+winget install Gyan.FFmpeg               # ffmpeg + ffprobe (둘 다 필요)
+```
+
+Node는 **22 이상**이어야 합니다 — yt-dlp가 유튜브 서명 검증에 Node를 JS 런타임으로 씁니다.
+없으면 자막·영상 접근이 403으로 막힙니다. `npm run doctor`가 이 항목들을 점검합니다.
+자세한 설명은 [HANDOVER 2-1-1](HANDOVER.md)에 있습니다.
+
 ### 1-2. 블로그 정보 입력
 
 `.env.example`을 `.env`로 복사한 뒤 채웁니다.

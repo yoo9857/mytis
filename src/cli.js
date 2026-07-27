@@ -265,6 +265,72 @@ async function cmdTopics(args) {
   st.pending.forEach((t, i) => log.info(`  ${String(i + 1).padStart(2)}. ${t}`));
 }
 
+/**
+ * 유튜브 소재·장면 캡처에 필요한 외부 도구를 점검한다.
+ *
+ * 이것들이 없으면 조용히 실패하거나 403 만 뜨고 원인을 알기 어렵다.
+ * (실제로 JS 런타임 하나 때문에 한참 헤맸다 — HANDOVER 참고)
+ * 기사 기반 글쓰기에는 필요 없으므로 안내만 하고 실패로 세지 않는다.
+ */
+async function checkYoutubeDeps() {
+  const { spawn } = await import('node:child_process');
+  const probe = (cmd, args) =>
+    new Promise((resolve) => {
+      const p = spawn(cmd, args, { windowsHide: true });
+      let out = '';
+      const done = (v) => resolve(v);
+      const t = setTimeout(() => { p.kill(); done(null); }, 12_000);
+      p.stdout.on('data', (d) => (out += d));
+      p.on('error', () => { clearTimeout(t); done(null); });
+      p.on('close', (c) => { clearTimeout(t); done(c === 0 ? out.trim() : null); });
+    });
+
+  const [ytdlp, py] = await Promise.all([
+    probe('yt-dlp', ['--version']),
+    probe('python', ['-c', 'import cv2,numpy;print(cv2.__version__)']),
+  ]);
+
+  // PATH 에 있거나 .tmp/ffmpeg 아래에 풀어 뒀거나 둘 중 하나면 된다
+  const localFf = (() => {
+    const base = path.join(DIRS.tmp, 'ffmpeg');
+    if (!fs.existsSync(base)) return false;
+    const stack = [base];
+    while (stack.length) {
+      const dir = stack.pop();
+      let entries = [];
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+      const names = entries.map((e) => e.name);
+      if (names.includes('ffprobe.exe') || names.includes('ffprobe')) return true;
+      for (const e of entries) if (e.isDirectory()) stack.push(path.join(dir, e.name));
+    }
+    return false;
+  })();
+  const ffprobe = localFf || (await probe('ffprobe', ['-version'])) ? '있음' : '없음';
+  const nodeMajor = Number(process.versions.node.split('.')[0]);
+
+  const parts = [
+    `yt-dlp ${ytdlp || '없음'}`,
+    `opencv ${py || '없음'}`,
+    `ffmpeg/ffprobe ${ffprobe}`,
+    `Node ${process.versions.node}`,
+  ];
+  log.info(`유튜브 기능 준비물: ${parts.join(' · ')}`);
+
+  const missing = [];
+  if (!ytdlp) missing.push('yt-dlp');
+  if (!py) missing.push('opencv-python-headless');
+  if (ffprobe === '없음') missing.push('ffmpeg + ffprobe');
+  if (nodeMajor < 22) missing.push(`Node 22 이상 (현재 ${nodeMajor})`);
+
+  if (missing.length) {
+    log.info(
+      `  → 영상 소재·장면 캡처를 쓰려면 필요합니다: ${missing.join(', ')}. ` +
+        '`pip install -r requirements.txt` 와 HANDOVER 2-1-1 을 보세요. ' +
+        '(기사 기반 글쓰기는 이것 없이도 동작합니다)'
+    );
+  }
+}
+
 async function cmdDoctor(cfg) {
   log.banner('환경 점검');
   let bad = 0;
@@ -292,6 +358,11 @@ async function cmdDoctor(cfg) {
 
   log.info(`아티클 스키마: ${fs.existsSync(FILES.articleSchema) ? '정상' : '없음'}`);
   if (!fs.existsSync(FILES.articleSchema)) bad++;
+
+  /* 유튜브 기능 준비물.
+   * 기사 기반 글쓰기는 이것들 없이도 동작하므로 실패로 세지 않고 안내만 한다.
+   * 새 컴퓨터에서 왜 영상 기능이 안 되는지 여기서 바로 알 수 있어야 한다. */
+  await checkYoutubeDeps();
 
   const st = queue.status();
   log.info(`주제 큐: 대기 ${st.pending.length} · 완료 ${st.done} · 실패 ${st.failed}`);

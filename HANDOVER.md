@@ -30,9 +30,44 @@ README는 "쓰는 법", 이 문서는 "왜 이렇게 만들었고 어디가 위�
 
 | 항목 | 확인 |
 |---|---|
-| Node.js 20 이상 | `node --version` |
+| Node.js **22 이상** | `node --version` — 유튜브 기능이 JS 런타임으로 Node 22+ 를 씁니다 |
 | Google Chrome | 설치되어 있으면 됨 (Playwright가 자동으로 찾음) |
 | codex CLI + 로그인 | `codex --version`, `codex exec "hi"` 가 동작해야 함 |
+
+### 2-1-1. 유튜브 기능을 쓸 때만 필요한 것
+
+기사 기반 글쓰기는 아래 없이도 전부 동작합니다. **유튜브 영상을 소재로 쓰거나
+장면을 캡처할 때만** 필요합니다.
+
+```powershell
+pip install -r requirements.txt
+```
+
+| 항목 | 왜 필요한가 | 없으면 |
+|---|---|---|
+| `yt-dlp[default]` | 자막·영상 접근 | 자막을 못 읽어 영상 소재 모드가 꺼짐 |
+| **`[default]` 부분** | 유튜브 서명 검증용 EJS 스크립트 | **403 Forbidden** |
+| **Node 22+ JS 런타임** | 같은 서명 검증. `--js-runtimes node` 로 지정 | ANDROID 클라이언트로 폴백 → **403** |
+| `opencv-python-headless` 4.x | 얼굴이 잘 나온 프레임·대표 이미지 선별 | 선별 없이 첫 후보를 씀 |
+| **ffmpeg + ffprobe** | 프레임 추출. **ffmpeg 만 있으면 안 되고 ffprobe 도 있어야 함** | 캡처 실패 |
+
+**ffmpeg 설치** — `.tmp/ffmpeg/` 는 `.gitignore` 대상이라 클론해도 따라오지 않습니다.
+
+```powershell
+# 방법 1: winget (있으면 가장 간단)
+winget install Gyan.FFmpeg
+
+# 방법 2: 직접 받아서 프로젝트 안에 두기 (winget 이 없을 때)
+$dst = "C:\mytis\.tmp\ffmpeg"
+New-Item -ItemType Directory -Force $dst | Out-Null
+Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "$dst\ff.zip"
+Expand-Archive "$dst\ff.zip" -DestinationPath $dst -Force
+```
+
+`src/ytShot.js` 의 `findFfmpegDir()` 이 `.tmp/ffmpeg/` 아래를 훑어 찾고,
+없으면 PATH 의 `ffmpeg` 를 씁니다. 환경변수 `FFMPEG_DIR` 로 직접 지정해도 됩니다.
+
+`npm run doctor` 가 이 항목들을 점검합니다.
 
 codex CLI가 없으면: `npm i -g @openai/codex` 후 `codex` 실행해 로그인.
 

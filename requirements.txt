@@ -1,0 +1,13 @@
+# 유튜브 영상 기능에만 필요합니다. 기사 기반 글쓰기는 이것 없이도 동작합니다.
+#
+#   pip install -r requirements.txt
+#
+# yt-dlp[default] 의 [default] 가 중요합니다. 유튜브 서명 검증에 쓰는
+# EJS 스크립트가 여기 들어 있습니다. 빼면 자막·영상 접근이 403 으로 막힙니다.
+yt-dlp[default]>=2026.7.4
+
+# 장면 캡처에서 '얼굴이 가장 잘 나온 프레임' 을 고를 때 씁니다
+# (scripts/pick_face_frame.py).
+# 5.x 는 haarcascade 를 번들에서 뺐으므로 4.x 를 고정합니다.
+opencv-python-headless>=4.10,<5
+numpy>=1.24
