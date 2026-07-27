@@ -1,0 +1,8 @@
+node_modules/
+profile/
+logs/
+out/
+.tmp/
+.env
+topics.done.txt
+topics.failed.txt

@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["photos"],
+  "properties": {
+    "photos": {
+      "type": "array",
+      "description": "찾아낸 실사 사진 목록. 요청한 개수보다 넉넉하게 담는다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["url", "source", "pageUrl", "photographer", "description", "forSlot"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "브라우저에서 바로 이미지가 뜨는 직접 이미지 URL. images.unsplash.com / images.pexels.com / cdn.pixabay.com 도메인만 허용. HTML 페이지 주소가 아니어야 한다."
+          },
+          "source": {
+            "type": "string",
+            "enum": ["unsplash", "pexels", "pixabay"],
+            "description": "출처 사이트."
+          },
+          "pageUrl": {
+            "type": "string",
+            "description": "해당 사진의 원본 게시 페이지 주소."
+          },
+          "photographer": {
+            "type": "string",
+            "description": "촬영자 이름. 모르면 빈 문자열."
+          },
+          "description": {
+            "type": "string",
+            "description": "사진에 무엇이 담겨 있는지 한국어 한 문장 설명."
+          },
+          "forSlot": {
+            "type": "integer",
+            "description": "이 사진을 몇 번째 이미지 슬롯에 쓸지 (0부터 시작). 0은 대표 이미지."
+          }
+        }
+      }
+    }
+  }
+}

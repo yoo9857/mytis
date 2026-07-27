@@ -1,0 +1,12 @@
+# 자동 발행할 주제를 한 줄에 하나씩 적으세요.
+# '#' 로 시작하는 줄과 빈 줄은 무시됩니다.
+# 발행에 성공하면 이 파일에서 제거되고 topics.done.txt 로 옮겨집니다.
+#
+# 예시:
+# 2026년 청년도약계좌 가입 조건과 신청 방법
+# 무지출 챌린지 한 달 실천 후기와 실제 절약액
+# 국내 ETF와 해외 ETF 세금 차이 완벽 정리
+https://enews.imbc.com/News/RetrieveNewsInfo/512723
+https://www.starnewskorea.com/broadcast-drama/2026/07/27/2026072701143969139
+https://www.starnewskorea.com/movie/2026/07/27/2026072708040424352
+https://www.starnewskorea.com/music/2026/07/27/2026072713123556674

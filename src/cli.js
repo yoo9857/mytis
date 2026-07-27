@@ -1,0 +1,378 @@
+#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+import { ensureDirs, DIRS, FILES } from './paths.js';
+import { log } from './log.js';
+import { loadConfig, blogUrls, validateForPublish } from './config.js';
+import { runTopic, generate, publish } from './run.js';
+import { launchBrowser, firstPage, saveSession } from './browser.js';
+import { ensureLoggedIn, isLoggedIn, discoverBlog, genericUrls } from './kakaoLogin.js';
+import { probeEditor } from './tistory.js';
+import { verifySelectors } from './verifySelectors.js';
+import { renderImages } from './images.js';
+import { buildHtml } from './html.js';
+import { resolveCodex, isUrl } from './codexWriter.js';
+import { discoverNews } from './newsFeed.js';
+import * as queue from './queue.js';
+
+const HELP = `
+티스토리 자동 글쓰기 · 자동 발행
+
+  npm run login                        브라우저를 열어 티스토리(카카오) 로그인 · 세션 저장
+  npm run post -- "주제"                주제로 글 생성 → 이미지 → 즉시 발행
+  npm run post -- "기사URL"             기사를 읽고 출처를 밝힌 자체 해설 글로 발행
+  npm run draft -- "주제 또는 기사URL"   발행 없이 글과 미리보기만 생성
+  npm run publish -- out/xxx.json      이미 생성한 아티클을 발행
+  npm run queue                        topics.txt 에서 하나를 꺼내 발행 (스케줄러용)
+  npm run queue -- --count 3           연속으로 3개 발행
+  npm run verify                       로그인 셀렉터 점검 (계정 없이 실행 가능)
+  npm run probe                        에디터 구조 덤프 (셀렉터가 깨졌을 때 진단)
+  npm run doctor                       설정·환경 점검
+
+  뉴스 소재 수집
+  npm run news                         최신 기사를 훑어 소재 후보를 보여줌
+  npm run news -- --add                찾은 기사를 topics.txt 큐에 추가
+  npm run news -- --add --now          찾은 기사 중 1위를 바로 발행
+  npm run news -- "아이돌 컴백" --count 8   분야와 개수 지정
+
+  기타
+  node src/cli.js topics add "주제1" "https://기사url"    큐에 추가
+  node src/cli.js topics list                            큐 상태 보기
+
+  공통 옵션
+  --headless        브라우저를 숨기고 실행 (무인 실행용)
+  --show            브라우저를 띄워서 실행
+  --no-publish      생성까지만 하고 발행하지 않음
+  --private         이번 실행만 비공개로 발행 (테스트용)
+  --public          이번 실행만 공개로 발행
+  --verbose         상세 로그 (codex 진행 상황 포함)
+`;
+
+function parseArgs(argv) {
+  const flags = {};
+  const positional = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--headless') flags.headless = true;
+    else if (a === '--show') flags.headless = false;
+    else if (a === '--no-publish') flags.noPublish = true;
+    else if (a === '--verbose' || a === '-v') flags.verbose = true;
+    else if (a === '--count') flags.count = Number(argv[++i]) || 1;
+    else if (a.startsWith('--count=')) flags.count = Number(a.split('=')[1]) || 1;
+    else if (a === '--hours') flags.hours = Number(argv[++i]) || 24;
+    else if (a.startsWith('--hours=')) flags.hours = Number(a.split('=')[1]) || 24;
+    else if (a === '--private') flags.visibility = 'private';
+    else if (a === '--public') flags.visibility = 'public';
+    else if (a === '--visibility') flags.visibility = argv[++i];
+    else if (a.startsWith('--visibility=')) flags.visibility = a.split('=')[1];
+    else if (a.startsWith('--')) flags[a.slice(2)] = true;
+    else positional.push(a);
+  }
+  return { flags, positional };
+}
+
+function applyFlags(cfg, flags) {
+  if (flags.headless !== undefined) cfg.browser.headless = flags.headless;
+  if (flags.visibility && ['public', 'protected', 'private'].includes(flags.visibility)) {
+    cfg.blog.visibility = flags.visibility;
+  }
+  if (flags.verbose) {
+    cfg.verbose = true;
+    log.setVerbose(true);
+  }
+  return cfg;
+}
+
+/** .env 의 특정 키를 갱신한다 (없으면 추가). */
+function updateEnvFile(key, value) {
+  let text = fs.existsSync(FILES.env) ? fs.readFileSync(FILES.env, 'utf8') : '';
+  const line = `${key}=${value}`;
+  const re = new RegExp(`^${key}=.*$`, 'm');
+  text = re.test(text) ? text.replace(re, line) : `${text.replace(/\s*$/, '')}\n${line}\n`;
+  fs.writeFileSync(FILES.env, text, 'utf8');
+}
+
+async function cmdLogin(cfg) {
+  cfg.browser.headless = false; // 로그인은 반드시 화면을 띄운다
+
+  // 블로그 주소를 아직 몰라도 로그인은 할 수 있다. 로그인 후에 찾아낸다.
+  let urls;
+  let knowsBlog = true;
+  try {
+    urls = blogUrls(cfg);
+  } catch {
+    knowsBlog = false;
+    urls = genericUrls();
+    log.info('블로그 주소가 아직 없습니다. 로그인 후 자동으로 찾겠습니다.');
+  }
+
+  const ctx = await launchBrowser(cfg);
+  try {
+    const page = await firstPage(ctx);
+    await ensureLoggedIn(page, cfg, urls, { interactive: true });
+    await saveSession(ctx, cfg);
+
+    if (!knowsBlog) {
+      const name = await discoverBlog(page);
+      if (name) {
+        updateEnvFile('TISTORY_BLOG', name);
+        log.ok(`블로그를 찾았습니다: ${name}.tistory.com — .env 에 저장했습니다.`);
+      } else {
+        log.warn(
+          '블로그 주소를 자동으로 찾지 못했습니다. .env 의 TISTORY_BLOG 를 직접 채워주세요.'
+        );
+      }
+    }
+
+    log.ok('세션이 profile/ 에 저장되었습니다. 이제 --headless 무인 실행이 가능합니다.');
+  } finally {
+    await new Promise((r) => setTimeout(r, 1500));
+    await ctx.close().catch(() => {});
+  }
+}
+
+async function cmdPost(cfg, topic, { noPublish }) {
+  if (!topic) {
+    throw new Error(
+      '주제 또는 기사 URL 을 입력하세요.\n' +
+        '  예)  npm run post -- "2026년 청년도약계좌 조건"\n' +
+        '  예)  npm run post -- "https://enews.imbc.com/News/RetrieveNewsInfo/512756"'
+    );
+  }
+  await runTopic(topic, cfg, { publish: !noPublish });
+}
+
+async function cmdNews(cfg, args, flags) {
+  const query = args.filter((a) => !isUrl(a)).join(' ') || cfg.news?.query || '한국 연예 뉴스';
+  const count = flags.count || cfg.news?.count || 5;
+  const hours = flags.hours || cfg.news?.hours || 24;
+
+  const items = await discoverNews({ cfg, query, count, hours });
+  if (!items.length) {
+    process.exitCode = 1;
+    return;
+  }
+
+  if (flags.add) {
+    const added = queue.addTopics(items.map((i) => i.url));
+    log.ok(`큐에 ${added.length}건 추가 (중복 ${items.length - added.length}건 제외)`);
+  }
+
+  if (flags.now) {
+    const top = items[0];
+    log.banner(`바로 발행: ${top.title}`);
+    try {
+      const res = await runTopic(top.url, cfg, { publish: !flags.noPublish });
+      if (flags.add) queue.markDone(top.url, res.result?.postUrl || res.result?.url || '');
+    } catch (err) {
+      if (flags.add) queue.markFailed(top.url, err.message);
+      throw err;
+    }
+  } else if (!flags.add) {
+    log.info('');
+    log.info('큐에 넣으려면  npm run news -- --add');
+    log.info('바로 발행하려면 npm run news -- --add --now');
+  }
+}
+
+async function cmdPublishFile(cfg, file) {
+  if (!file) throw new Error('아티클 JSON 경로를 입력하세요.  예)  npm run publish -- out/xxx.json');
+  const abs = path.isAbsolute(file) ? file : path.resolve(process.cwd(), file);
+  if (!fs.existsSync(abs)) throw new Error(`파일을 찾을 수 없습니다: ${abs}`);
+
+  const article = JSON.parse(fs.readFileSync(abs, 'utf8'));
+  log.info(`아티클 로드: ${article.title}`);
+
+  const rendered = await renderImages(article, cfg);
+  const ordered = [rendered.thumbnail, ...rendered.body].filter(Boolean);
+  const images = {
+    thumbnail: rendered.thumbnail
+      ? { placeholder: '{{IMAGE_0}}', alt: rendered.thumbnail.alt, caption: '' }
+      : null,
+    body: rendered.body.map((b, i) => ({
+      placeholder: `{{IMAGE_${(rendered.thumbnail ? 1 : 0) + i}}}`,
+      alt: b.alt,
+      caption: b.caption,
+      afterSection: b.afterSection,
+    })),
+  };
+  const html = buildHtml(article, { cfg, images });
+
+  const result = await publish(
+    { article, html, imageFiles: ordered.map((i) => i.file) },
+    cfg
+  );
+  log.ok(`발행 완료: ${result.postUrl || result.url}`);
+}
+
+async function cmdQueue(cfg, { count = 1, noPublish }) {
+  const st = queue.status();
+  if (!st.pending.length) {
+    log.warn(`topics.txt 에 처리할 주제가 없습니다. (완료 ${st.done} · 실패 ${st.failed})`);
+    return;
+  }
+  log.info(`대기 중인 주제 ${st.pending.length}개 · 이번 실행에서 ${Math.min(count, st.pending.length)}개 처리`);
+
+  let ok = 0;
+  let fail = 0;
+  for (let i = 0; i < count; i++) {
+    const topic = queue.nextTopic();
+    if (!topic) {
+      log.info('큐가 비었습니다.');
+      break;
+    }
+    try {
+      const res = await runTopic(topic, cfg, { publish: !noPublish });
+      queue.markDone(topic, res.result?.postUrl || res.result?.url || '');
+      ok++;
+    } catch (err) {
+      log.error(`실패 [${topic}]: ${err.message}`);
+      queue.markFailed(topic, err.message);
+      fail++;
+    }
+    if (i < count - 1) {
+      log.info('다음 글까지 30초 대기...');
+      await new Promise((r) => setTimeout(r, 30_000));
+    }
+  }
+
+  log.banner(`큐 처리 결과: 성공 ${ok} · 실패 ${fail}`);
+  if (fail > 0 && ok === 0) process.exitCode = 1;
+}
+
+async function cmdProbe(cfg) {
+  cfg.browser.headless = false;
+  const urls = blogUrls(cfg);
+  const ctx = await launchBrowser(cfg);
+  try {
+    const page = await firstPage(ctx);
+    await ensureLoggedIn(page, cfg, urls, { interactive: true });
+    await probeEditor(page, urls);
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+}
+
+async function cmdTopics(args) {
+  const [sub, ...rest] = args;
+  if (sub === 'add') {
+    const added = queue.addTopics(rest);
+    log.ok(`주제 ${added.length}개 추가: ${added.join(' / ') || '(중복 제외됨)'}`);
+    return;
+  }
+  const st = queue.status();
+  log.info(`대기 ${st.pending.length} · 완료 ${st.done} · 실패 ${st.failed}`);
+  st.pending.forEach((t, i) => log.info(`  ${String(i + 1).padStart(2)}. ${t}`));
+}
+
+async function cmdDoctor(cfg) {
+  log.banner('환경 점검');
+  let bad = 0;
+
+  const { cmd, shell } = resolveCodex();
+  log.info(`codex 실행 파일: ${cmd}${shell ? ' (shell 경유)' : ''}`);
+  if (shell) log.warn('네이티브 codex 바이너리를 못 찾아 PATH 경유로 실행합니다. 느릴 수 있습니다.');
+
+  try {
+    const urls = blogUrls(cfg);
+    log.ok(`블로그: ${urls.host}`);
+  } catch (err) {
+    log.error(err.message);
+    bad++;
+  }
+
+  if (cfg.secrets.kakaoId && cfg.secrets.kakaoPw) {
+    log.ok(`카카오 계정: ${cfg.secrets.kakaoId.replace(/(.{2}).*(@.*)/, '$1***$2')}`);
+  } else {
+    log.warn('.env 에 KAKAO_ID / KAKAO_PW 가 없습니다. `npm run login` 으로 수동 로그인이 필요합니다.');
+  }
+
+  const hasProfile = fs.existsSync(path.join(cfg.profileDir, 'Default'));
+  log.info(`저장된 브라우저 프로필: ${hasProfile ? '있음' : '없음 (첫 로그인 필요)'}`);
+
+  log.info(`아티클 스키마: ${fs.existsSync(FILES.articleSchema) ? '정상' : '없음'}`);
+  if (!fs.existsSync(FILES.articleSchema)) bad++;
+
+  const st = queue.status();
+  log.info(`주제 큐: 대기 ${st.pending.length} · 완료 ${st.done} · 실패 ${st.failed}`);
+
+  log.info(
+    `설정: 공개=${cfg.blog.visibility} · 카테고리=${cfg.blog.category || '(미지정)'} · ` +
+      `이미지=${cfg.images.enabled ? `대표+본문${cfg.images.bodyImages}` : '없음'} · ` +
+      `배경=${cfg.images.background === 'photo' ? '실사 사진' : '그라디언트'} · ` +
+      `검색=${cfg.codex.search ? 'ON' : 'OFF'}`
+  );
+  if (cfg.images.enabled && cfg.images.background === 'photo') {
+    if (cfg.secrets.pexelsApiKey) log.ok('배경 사진: Pexels API 사용 (빠름·정확)');
+    else log.info('배경 사진: codex 웹 검색 사용 — PEXELS_API_KEY 를 넣으면 더 빠르고 정확합니다.');
+  }
+
+  if (hasProfile) {
+    log.info('로그인 세션 유효성 확인 중...');
+    try {
+      const urls = blogUrls(cfg);
+      const ctx = await launchBrowser(cfg, { headless: true });
+      try {
+        const page = await firstPage(ctx);
+        const ok = await isLoggedIn(page, urls);
+        if (ok) log.ok('로그인 세션 유효 — 무인 실행 준비 완료');
+        else log.warn('로그인 세션 만료 — `npm run login` 실행을 권장합니다.');
+      } finally {
+        await ctx.close().catch(() => {});
+      }
+    } catch (err) {
+      log.warn(`세션 확인 실패: ${err.message}`);
+    }
+  }
+
+  if (bad) {
+    log.error(`점검 실패 항목 ${bad}개`);
+    process.exitCode = 1;
+  } else {
+    log.ok('점검 완료');
+  }
+}
+
+async function main() {
+  ensureDirs();
+  const { flags, positional } = parseArgs(process.argv.slice(2));
+  const command = positional[0] || 'help';
+  const rest = positional.slice(1);
+
+  const cfg = applyFlags(loadConfig(), flags);
+  if (cfg.verbose) log.setVerbose(true);
+
+  switch (command) {
+    case 'login':
+      return cmdLogin(cfg);
+    case 'post':
+      return cmdPost(cfg, rest.join(' '), flags);
+    case 'draft':
+      return cmdPost(cfg, rest.join(' '), { noPublish: true });
+    case 'publish':
+      return cmdPublishFile(cfg, rest[0]);
+    case 'news':
+      return cmdNews(cfg, rest, flags);
+    case 'queue':
+      return cmdQueue(cfg, { count: flags.count || 1, noPublish: flags.noPublish });
+    case 'probe':
+      return cmdProbe(cfg);
+    case 'verify': {
+      const ok = await verifySelectors(cfg);
+      if (!ok) process.exitCode = 1;
+      return undefined;
+    }
+    case 'topics':
+      return cmdTopics(rest);
+    case 'doctor':
+      return cmdDoctor(cfg);
+    default:
+      process.stdout.write(HELP);
+      return undefined;
+  }
+}
+
+main().catch((err) => {
+  log.error(err.stack || err.message);
+  process.exitCode = 1;
+});

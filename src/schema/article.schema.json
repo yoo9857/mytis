@@ -1,0 +1,245 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "seoTitle",
+    "metaDescription",
+    "primaryKeyword",
+    "urlSlug",
+    "secondaryKeywords",
+    "tags",
+    "directAnswer",
+    "keyTakeaways",
+    "sections",
+    "faq",
+    "conclusion",
+    "sources",
+    "entities",
+    "embeds",
+    "imageBriefs"
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "독자에게 보여줄 글 제목. 32자 내외. 핵심 키워드를 앞쪽에 배치하고 낚시성 표현은 쓰지 않는다."
+    },
+    "seoTitle": {
+      "type": "string",
+      "description": "검색엔진용 제목. 60자 이내. 핵심 키워드 + 연도 또는 구체 수치 포함."
+    },
+    "metaDescription": {
+      "type": "string",
+      "description": "검색 결과 스니펫용 요약. 90~150자. 이 글이 답하는 질문과 결론을 압축해서 담는다."
+    },
+    "primaryKeyword": {
+      "type": "string",
+      "description": "이 글이 노리는 메인 검색 키워드 하나."
+    },
+    "urlSlug": {
+      "type": "string",
+      "description": "글 주소에 쓸 영문 슬러그. 소문자 영문·숫자·하이픈만. 3~6단어, 60자 이내. 한글을 쓰면 URL이 퍼센트 인코딩되어 SEO에 불리하므로 반드시 영문으로. 예: 'lim-young-woong-brand-reputation-july-2026'"
+    },
+    "entities": {
+      "type": "array",
+      "description": "글의 주인공인 인물·그룹. 이 이름으로 라이선스가 열린 실제 사진을 찾는다. 인물이 주제가 아니면 빈 배열.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nameKo", "nameEn", "role"],
+        "properties": {
+          "nameKo": { "type": "string", "description": "한국어 정식 표기. 예: 임영웅" },
+          "nameEn": {
+            "type": "string",
+            "description": "영문 표기. 위키백과·위키미디어 공용에서 쓰는 로마자 표기를 그대로 쓸 것. 예: Lim Young-woong, IU, BTS. 모르면 빈 문자열."
+          },
+          "role": {
+            "type": "string",
+            "description": "가수 / 배우 / 그룹 / 프로그램 등 짧은 분류."
+          }
+        }
+      }
+    },
+    "secondaryKeywords": {
+      "type": "array",
+      "description": "본문에 자연스럽게 녹일 보조 키워드 및 롱테일 질의 5~10개.",
+      "items": { "type": "string" }
+    },
+    "tags": {
+      "type": "array",
+      "description": "티스토리 태그. 각 태그는 공백 없이 또는 짧은 단어 조합으로. 쉼표를 포함하지 않는다.",
+      "items": { "type": "string" }
+    },
+    "directAnswer": {
+      "type": "string",
+      "description": "GEO(생성형 검색 최적화)용 직답 문단. 글 맨 위에 놓이며, 제목이 던진 질문에 2~4문장으로 즉시 답한다. 구체적인 수치·기준·조건을 포함한다."
+    },
+    "keyTakeaways": {
+      "type": "array",
+      "description": "핵심 요약 4~6개. 각 항목은 그 자체로 인용 가능한 완결된 사실 문장이어야 한다.",
+      "items": { "type": "string" }
+    },
+    "sections": {
+      "type": "array",
+      "description": "본문 섹션 목록. 각 섹션은 h2 하나에 해당한다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["heading", "paragraphs", "bullets", "table", "callout"],
+        "properties": {
+          "heading": {
+            "type": "string",
+            "description": "섹션 제목. 독자가 검색창에 칠 법한 질문형 또는 명사구."
+          },
+          "paragraphs": {
+            "type": "array",
+            "description": "본문 문단 2~4개. 한 문단은 3~6문장. 추상적 서술 대신 수치·사례·비교를 넣는다.",
+            "items": { "type": "string" }
+          },
+          "bullets": {
+            "type": "array",
+            "description": "이 섹션의 불릿 목록. 필요 없으면 빈 배열.",
+            "items": { "type": "string" }
+          },
+          "table": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["caption", "headers", "rows"],
+            "description": "비교표. 필요 없으면 caption은 빈 문자열, headers와 rows는 빈 배열로 둔다.",
+            "properties": {
+              "caption": { "type": "string" },
+              "headers": { "type": "array", "items": { "type": "string" } },
+              "rows": {
+                "type": "array",
+                "items": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "callout": {
+            "type": "string",
+            "description": "강조 박스에 넣을 한 문장 팁이나 주의사항. 필요 없으면 빈 문자열."
+          }
+        }
+      }
+    },
+    "faq": {
+      "type": "array",
+      "description": "자주 묻는 질문. 실제 검색 질의처럼 쓰고, 답변은 2~4문장으로 완결한다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "answer"],
+        "properties": {
+          "question": { "type": "string" },
+          "answer": { "type": "string" }
+        }
+      }
+    },
+    "conclusion": {
+      "type": "string",
+      "description": "마무리 문단 3~5문장. 요약 + 독자가 다음에 할 행동 제안."
+    },
+    "sources": {
+      "type": "array",
+      "description": "웹 검색으로 실제 확인한 출처만 넣는다. 확인하지 못했으면 빈 배열. URL을 지어내지 않는다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "url", "publisher", "date"],
+        "properties": {
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "publisher": { "type": "string" },
+          "date": { "type": "string", "description": "YYYY-MM-DD 또는 YYYY-MM. 모르면 빈 문자열." }
+        }
+      }
+    },
+    "embeds": {
+      "type": "array",
+      "description": "본문에 넣을 공식 유튜브 임베드. 임베드는 원저작자 서버에서 재생되므로 저작권 문제가 없다. 적절한 영상이 없으면 빈 배열.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["videoId", "title", "channel", "afterSection"],
+        "properties": {
+          "videoId": {
+            "type": "string",
+            "description": "유튜브 영상 ID 11자리. watch?v= 뒤의 값. 전체 URL이 아니라 ID만. 검색으로 실제 확인한 것만 넣고 절대 추측하지 말 것."
+          },
+          "title": { "type": "string", "description": "영상 제목." },
+          "channel": {
+            "type": "string",
+            "description": "채널명. 반드시 공식 채널이어야 한다(소속사·방송사·아티스트 공식). 팬 채널이나 재업로드 채널은 금지."
+          },
+          "afterSection": {
+            "type": "integer",
+            "description": "몇 번째 섹션 뒤에 넣을지 (1부터 시작)."
+          }
+        }
+      }
+    },
+    "imageBriefs": {
+      "type": "array",
+      "description": "생성할 이미지 카드 설명. 첫 항목은 반드시 placement가 thumbnail 인 대표 이미지.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "placement",
+          "headline",
+          "subline",
+          "caption",
+          "alt",
+          "afterSection",
+          "photoQuery",
+          "eyebrow",
+          "statValue",
+          "statLabel"
+        ],
+        "properties": {
+          "placement": {
+            "type": "string",
+            "enum": ["thumbnail", "body"],
+            "description": "thumbnail은 대표 이미지, body는 본문 삽입 이미지."
+          },
+          "photoQuery": {
+            "type": "string",
+            "description": "이 이미지의 배경으로 쓸 실사 사진을 스톡 사진 사이트에서 검색할 영어 키워드 2~4단어. 한국어 금지. 추상 개념이 아니라 카메라로 찍을 수 있는 구체적 장면이어야 한다. 예: 'young woman using banking app', 'korean apartment building exterior', 'calculator receipts desk'."
+          },
+          "headline": {
+            "type": "string",
+            "description": "이미지 카드에 크게 들어갈 문구. 18자 이내 권장."
+          },
+          "subline": {
+            "type": "string",
+            "description": "헤드라인 아래 보조 문구. 30자 이내."
+          },
+          "eyebrow": {
+            "type": "string",
+            "description": "헤드라인 위에 작게 들어갈 분류 라벨. 2~8자. 예: '가입 조건', '핵심 정리', '신청 방법'. 이미지마다 다르게."
+          },
+          "statValue": {
+            "type": "string",
+            "description": "이 이미지가 강조할 핵심 수치. 본문에 실제로 나오는 숫자여야 한다. 예: '70만원', '3년', '7,500만원', '46%'. 강조할 수치가 없으면 빈 문자열."
+          },
+          "statLabel": {
+            "type": "string",
+            "description": "statValue 가 무엇인지 설명하는 짧은 라벨. 12자 이내. 예: '월 최대 납입액', '소득 상한'. statValue 가 비었으면 빈 문자열."
+          },
+          "caption": {
+            "type": "string",
+            "description": "이미지 아래 캡션. 본문 이미지에만 사용."
+          },
+          "alt": {
+            "type": "string",
+            "description": "SEO용 alt 텍스트. 키워드를 포함한 서술형 문장."
+          },
+          "afterSection": {
+            "type": "integer",
+            "description": "body 이미지를 몇 번째 섹션 뒤에 넣을지 (1부터 시작). thumbnail 이면 0."
+          }
+        }
+      }
+    }
+  }
+}

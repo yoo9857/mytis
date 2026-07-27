@@ -1,0 +1,26 @@
+{
+  "name": "moneyti",
+  "version": "1.0.0",
+  "private": true,
+  "description": "티스토리 자동 글쓰기 · 자동 발행 (codex CLI + Playwright Chrome)",
+  "type": "module",
+  "main": "src/cli.js",
+  "scripts": {
+    "login": "node src/cli.js login",
+    "post": "node src/cli.js post",
+    "draft": "node src/cli.js draft",
+    "publish": "node src/cli.js publish",
+    "queue": "node src/cli.js queue",
+    "news": "node src/cli.js news",
+    "probe": "node src/cli.js probe",
+    "verify": "node src/cli.js verify",
+    "doctor": "node src/cli.js doctor",
+    "postinstall": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

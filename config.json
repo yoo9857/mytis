@@ -1,0 +1,76 @@
+{
+  "blog": {
+    "name": "CHANGE-ME",
+    "category": "",
+    "visibility": "public",
+    "acceptComment": true,
+    "publishMode": "now",
+    "reserveAfterMinutes": 10
+  },
+  "article": {
+    "language": "ko",
+    "minChars": 3000,
+    "sectionCount": 7,
+    "tagCount": 8,
+    "faqCount": 5,
+    "tone": "이슈를 빠르게 짚어주는 연예 전문 에디터 톤. 문장은 짧고 리듬감 있게. 수치와 팩트로 밀어붙이되 추측은 금지.",
+    "audience": "포털에서 연예 이슈를 검색해 들어온 한국 일반 독자",
+    "extraInstructions": "가수·배우·프로그램명은 정식 표기를 쓰고, 소속사 공식 입장이 있으면 반드시 인용 형태로 넣으세요. 팬덤 명칭이 있으면 정확히 표기하세요."
+  },
+  "news": {
+    "query": "한국 연예 뉴스",
+    "count": 5,
+    "hours": 24
+  },
+  "seo": {
+    "includeEmbeds": true,
+    "embedCount": 2,
+    "includeJsonLd": true,
+    "includeTableOfContents": true,
+    "includeKeyTakeaways": true,
+    "includeFaq": true,
+    "includeSources": true
+  },
+  "images": {
+    "enabled": true,
+    "thumbnail": true,
+    "bodyImages": 2,
+    "brand": "ISSUE",
+    "width": 1200,
+    "height": 630,
+    "thumbSize": 1200,
+    "thumbLayout": "clean",
+    "bodyStyle": "photo",
+    "bodyAspects": ["3:2", "4:3", "3:4", "1:1", "2:3"],
+    "background": "photo",
+    "scrim": 0.55,
+    "showCredit": true,
+    "style": "trendy",
+    "layout": "",
+    "useStats": true,
+    "photoTimeoutMs": 300000,
+    "usePersonPhotos": true,
+    "allowShareAlike": true,
+    "palettes": [
+      ["#1a0b2e", "#7b2cbf", "#ff2e97"],
+      ["#0b132b", "#1c7ed6", "#22d3ee"],
+      ["#2b0a12", "#c9184a", "#ffb703"],
+      ["#0d1b2a", "#0f766e", "#5eead4"],
+      ["#1c1917", "#7c2d12", "#fb923c"],
+      ["#111827", "#4338ca", "#a78bfa"]
+    ]
+  },
+  "codex": {
+    "model": "gpt-5.6-terra",
+    "reasoningEffort": "medium",
+    "search": true,
+    "timeoutMs": 1200000
+  },
+  "browser": {
+    "headless": false,
+    "channel": "chrome",
+    "slowMo": 50,
+    "timeoutMs": 60000,
+    "manualLoginWaitMs": 180000
+  }
+}
