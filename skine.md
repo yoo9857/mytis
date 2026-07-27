@@ -1300,7 +1300,7 @@ a:active {
 }
 
 #tt-body-archive .post-header span:after {
-  content: "' ???깅줉??湲";
+  content: "' 에 등록된 글";
 }
 
 #tt-body-tag .post-header span:before {
@@ -1312,7 +1312,7 @@ a:active {
 }
 
 #tt-body-search .post-header span:after {
-  content: "'??寃?됯껐怨?;
+  content: "'의 검색결과";
 }
 
 .post-header h1 em {
@@ -2516,7 +2516,7 @@ a:active {
 }
 
 .absent_post:before {
-  content: "二꾩넚?⑸땲?ㅻ쭔 \A湲??李얠? 紐삵뻽?듬땲??";
+  content: "죄송합니다만 \A글을 찾지 못했습니다.";
   display: block;
   margin-bottom: 7px;
   font-weight: bold;
@@ -3642,7 +3642,7 @@ a:active {
   }
 }
 
-/* ?꾩껜 怨듯넻 */
+/* 전체 공통 */
 #article-view {
   margin: 0;
   padding: 20px 20px 50px;
@@ -3659,7 +3659,7 @@ a:active {
   margin: 20px 0 0 0;
 }
 
-/* ?띿뒪??愿??*/
+/* 텍스트 관련 */
 #article-view h2[data-ke-size] {
   font-size: 1.62em;
   line-height: 1.46;
@@ -3740,7 +3740,7 @@ a:active {
   text-decoration: none;
 }
 
-/* ?몄슜臾?*/
+/* 인용문 */
 #article-view blockquote[data-ke-style='style1'] {
   text-align: center;
   background: url(https://t1.daumcdn.net/keditor/dist/0.7.21/image/blockquote-style1.svg) no-repeat 50% 0;
@@ -3779,14 +3779,14 @@ a:active {
   letter-spacing: 0px;
 }
 
-/* 泥⑤?: 怨듯넻 */
+/* 첨부: 공통 */
 
-/* ?대?吏 ?대┃ 愿??- lightbox */
+/* 이미지 클릭 관련 - lightbox */
 #article-view span[data-lightbox] {
   cursor: pointer;
 }
 
-/* 泥⑤?: ?뚯씪 */
+/* 첨부: 파일 */
 #article-view figure.fileblock {
   width: 470px;
   height: 73px;
@@ -3865,7 +3865,7 @@ a:active {
   top: 19px;
 }
 
-/* 泥⑤?: ?대?吏 */
+/* 첨부: 이미지 */
 #article-view figure.imageblock {
   display: table;
   position: relative;
@@ -3941,7 +3941,7 @@ a:active {
   margin-top: 10px;
 }
 
-/* 罹≪뀡 ?띿뒪??*/
+/* 캡션 텍스트 */
 #article-view figure figcaption {
   font-size: 13px;
   color: #777;
@@ -3955,7 +3955,7 @@ a:active {
   box-sizing: content-box;
 }
 
-/* 泥⑤?: ?대?吏 洹몃━??*/
+/* 첨부: 이미지 그리드 */
 #article-view figure.imagegridblock {
   position: relative;
   caret-color: transparent;
@@ -4067,7 +4067,7 @@ hr[data-ke-style='style8'],
   padding: 18px 20px 17px 20px;
 }
 
-/* ?뚯씠釉?*/
+/* 테이블 */
 #article-view table[data-ke-style] {
   margin-bottom: 0px;
 }
@@ -4233,7 +4233,7 @@ hr[data-ke-style='style8'],
   border-color: transparent;
 }
 
-/* ?ㅽ뵂 洹몃옒??*/
+/* 오픈 그래프 */
 #article-view figure[data-ke-type='opengraph'] {
   margin: 10px 0;
 }
@@ -4342,7 +4342,7 @@ hr[data-ke-style='style8'],
   }
 }
 
-/* 鍮꾨뵒??泥⑤? */
+/* 비디오 첨부 */
 #article-view figure[data-ke-type='video'] {
   display: block;
   table-layout: fixed;
@@ -4386,7 +4386,7 @@ hr[data-ke-style='style8'],
   max-width: 100%;
 }
 
-/* 肄붾뱶 釉붾윮 */
+/* 코드 블럭 */
 #article-view pre code.hljs {
   font-size: 14px;
   padding: 20px;
@@ -4396,7 +4396,7 @@ hr[data-ke-style='style8'],
   overflow: auto;
 }
 
-/* ?묒? 湲 */
+/* 접은 글 */
 #article-view .moreless-content :first-child {
   margin-top: 0;
   margin-bottom: 0;
@@ -4419,7 +4419,7 @@ hr[data-ke-style='style8'],
   text-decoration: none;
 }
 
-/* 由ъ뒪??*/
+/* 리스트 */
 #article-view ul li,
 #article-view ol li {
   margin: 0 0 3px 22px;
@@ -4432,7 +4432,7 @@ hr[data-ke-style='style8'],
   padding: 0 0 0 10px;
 }
 
-/* ?대え?곗퐯 */
+/* 이모티콘 */
 #article-view figure[data-ke-type=emoticon][data-ke-align=alignCenter] {
   text-align: center;
 }
@@ -4445,14 +4445,14 @@ hr[data-ke-style='style8'],
   text-align: right;
 }
 
-/* 吏??*/
+/* 지도 */
 #article-view figure[data-ke-type='map'],
 #article-view iframe[data-ke-type='map'] {
   display: block;
   margin: 0 auto;
 }
 
-/* 泥⑤?: ?대?吏 ?щ씪?대뱶 */
+/* 첨부: 이미지 슬라이드 */
 #article-view figure.imageslideblock {
   clear: both;
   position: relative;
@@ -4605,7 +4605,7 @@ hr[data-ke-style='style8'],
   }
 }
 
-/* 援??먮뵒???띿꽦 */
+/* 구 에디터 속성 */
 .btn_more, .btn_less {
   border: 0;
   background: transparent;
@@ -4636,30 +4636,32 @@ hr[data-ke-style='style8'],
 
 /* =========================================================================
  * UPGRADE PACK  (v1.0)
- * ?먮낯 ?ㅽ궓 CSS ?ㅼ뿉 ?㏓텤???뺤옣 ?덉씠??
- * - ?먮낯 洹쒖튃??吏?곗? ?딄퀬 '?ㅼ뿉????뼱?곕뒗' 諛⑹떇?대씪 ?섎룎由ш린媛 ?쎈떎.
- *   (??二쇱꽍 ?꾨옒 ?꾩껜瑜???젣?섎㈃ ?먮낯 ?곹깭濡??꾩쟾 蹂듦?)
+ * 원본 스킨 CSS 뒤에 덧붙는 확장 레이어.
+ * - 원본 규칙을 지우지 않고 '뒤에서 덮어쓰는' 방식이라 되돌리기가 쉽다.
+ *   (이 주석 아래 전체를 삭제하면 원본 상태로 완전 복귀)
  *
  * CONTENTS
- *   A. ?붿옄???좏겙 & 湲곕낯 蹂댁젙
- *   B. ?ㅽ겕 紐⑤뱶
- *   C. ?ㅻ뜑 / ?대퉬寃뚯씠?? *   D. ?쎄린 吏꾪뻾瑜?쨌 ?뚮줈??踰꾪듉 쨌 ?좎뒪?? *   E. 紐⑹감(TOC) 쨌 紐⑤컮???쒗듃
- *   F. ?쎄린 ?꾧뎄(?쎈뒗 ?쒓컙 쨌 湲???ш린)
- *   G. 蹂몃Ц ??댄룷 & ?붿냼 (??肄붾뱶/?대?吏/留곹겕)
- *   H. ?앹꽦湲??몃씪???ㅽ???????ㅽ겕 紐⑤뱶 媛?낆꽦)
- *   I. ?좊뱶?쇱뒪 愿묎퀬 ?곸뿭
- *   J. 怨듭쑀 踰꾪듉
- *   K. 紐⑸줉/移대뱶/?쒓렇/?섏씠吏?留덉씠?щ줈 ?명꽣?숈뀡
- *   L. ?ъ씠?쒕컮 쨌 ?볤? 쨌 ?명꽣
- *   M. ?묎렐??쨌 紐⑥뀡 쨌 ?몄뇙
+ *   A. 디자인 토큰 & 기본 보정
+ *   B. 다크 모드
+ *   C. 헤더 / 내비게이션
+ *   D. 읽기 진행률 · 플로팅 버튼 · 토스트
+ *   E. 목차(TOC) · 모바일 시트
+ *   F. 읽기 도구(읽는 시간 · 글자 크기)
+ *   G. 본문 타이포 & 요소 (표/코드/이미지/링크)
+ *   H. 생성기 인라인 스타일 대응(다크 모드 가독성)
+ *   I. 애드센스 광고 영역
+ *   J. 공유 버튼
+ *   K. 목록/카드/태그/페이징 마이크로 인터랙션
+ *   L. 사이드바 · 댓글 · 푸터
+ *   M. 접근성 · 모션 · 인쇄
  * ========================================================================= */
 
 /* ---------------------------------------------------------------
- * A. ?붿옄???좏겙 & 湲곕낯 蹂댁젙
+ * A. 디자인 토큰 & 기본 보정
  * --------------------------------------------------------------- */
 :root {
   --sk-accent: #4c1d95;
-  /* 蹂몃Ц 諛뺤뒪(#4c1d95)? ?ㅼ쓣 留욎텣 ?ъ씤????*/
+  /* 본문 박스(#4c1d95)와 톤을 맞춘 포인트 색 */
   --sk-accent-soft: rgba(76, 29, 149, 0.08);
   --sk-accent-line: rgba(76, 29, 149, 0.28);
 
@@ -4681,13 +4683,13 @@ hr[data-ke-style='style8'],
   --sk-header-h: 96px;
 }
 
-/* hidden ?띿꽦? ?대뼡 display ?좎뼵蹂대떎 ?곗꽑?댁빞 ?쒕떎 (JS 濡?耳쒓퀬 ?꾨뒗 ?붿냼?ㅼ쓽 湲곕낯媛? */
+/* hidden 속성은 어떤 display 선언보다 우선해야 한다 (JS 로 켜고 끄는 요소들의 기본값) */
 [hidden] {
   display: none !important;
 }
 
-/* ?덈줈 異붽???而댄룷?뚰듃?먮쭔 border-box ?곸슜.
-   ?꾩뿭(*)???곸슜?섎㈃ ?먮낯 ?덉씠?꾩썐 怨꾩궛???닿툔?????덉뼱 ?쇰???踰붿쐞瑜?醫곹삍?? */
+/* 새로 추가한 컴포넌트에만 border-box 적용.
+   전역(*)에 적용하면 원본 레이아웃 계산이 어긋날 수 있어 일부러 범위를 좁혔다. */
 [class^="sk-"],
 [class*=" sk-"] {
   box-sizing: border-box;
@@ -4695,14 +4697,14 @@ hr[data-ke-style='style8'],
 
 html {
   scroll-padding-top: 124px;
-  /* ?ㅽ떚???ㅻ뜑???쒕ぉ??媛?ㅼ?吏 ?딄쾶 */
+  /* 스티키 헤더에 제목이 가려지지 않게 */
   -webkit-tap-highlight-color: rgba(76, 29, 149, .12);
 }
 
 @media (max-width: 767px) {
   html {
     scroll-padding-top: 20px;
-    /* 紐⑤컮?쇱? ?ㅻ뜑媛 怨좎젙?섏? ?딅뒗??*/
+    /* 모바일은 헤더가 고정되지 않는다 */
   }
 }
 
@@ -4719,7 +4721,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ?쒓뎅???⑥뼱 以묎컙 以꾨컮轅?諛⑹? ???쒕ぉ/?붿빟 ??瑗??꾩슂??怨노쭔 */
+/* 한국어 단어 중간 줄바꿈 방지 — 제목/요약 등 꼭 필요한 곳만 */
 .post-cover h1,
 .post-item .excerpt,
 .entry-content h1,
@@ -4742,7 +4744,7 @@ img {
   color: var(--sk-text-strong);
 }
 
-/* ?ㅽ겕由곕━???꾩슜 ?띿뒪?????먮낯 CSS ???뺤쓽媛 ?놁뼱 蹂닿컯 */
+/* 스크린리더 전용 텍스트 — 원본 CSS 에 정의가 없어 보강 */
 .screen_out,
 .sk-sr-only {
   position: absolute !important;
@@ -4756,7 +4758,7 @@ img {
   border: 0;
 }
 
-/* ?뉕퀬 議곗슜???ㅽ겕濡ㅻ컮 (?곗뒪?ы넲) */
+/* 얇고 조용한 스크롤바 (데스크톱) */
 @media (min-width: 1025px) {
 
   .sk-toc--rail,
@@ -4781,8 +4783,8 @@ img {
 }
 
 /* ---------------------------------------------------------------
- * B. ?ㅽ겕 紐⑤뱶
- *    - ?먮낯? ?됱쓣 ?섎뱶肄붾뵫?덇린 ?뚮Ц??釉붾줉蹂꾨줈 ?뺥솗????뼱?대떎.
+ * B. 다크 모드
+ *    - 원본은 색을 하드코딩했기 때문에 블록별로 정확히 덮어쓴다.
  * --------------------------------------------------------------- */
 html[data-theme="dark"] {
   --sk-accent: #a78bfa;
@@ -4809,7 +4811,7 @@ html[data-theme="dark"] body {
   color: var(--sk-text);
 }
 
-/* ?ㅻ뜑 쨌 ?대퉬 */
+/* 헤더 · 내비 */
 html[data-theme="dark"] #header {
   background-color: var(--sk-bg);
   border-bottom-color: var(--sk-border);
@@ -4876,7 +4878,7 @@ html[data-theme="dark"] #gnb ul li a:focus:after {
   background-color: var(--sk-accent);
 }
 
-/* ?덉씠?꾩썐 援щ텇??*/
+/* 레이아웃 구분선 */
 html[data-theme="dark"] #container .content-wrap:before,
 html[data-theme="dark"] #footer,
 html[data-theme="dark"] .page-nav,
@@ -4889,7 +4891,7 @@ html[data-theme="dark"] #container .content-wrap:before {
   background-color: var(--sk-border);
 }
 
-/* 湲 ?ㅻ뜑 */
+/* 글 헤더 */
 html[data-theme="dark"] .post-cover h1,
 html[data-theme="dark"] .post-cover h1 a,
 html[data-theme="dark"] #tt-body-index .post-cover.notice h1,
@@ -4914,7 +4916,7 @@ html[data-theme="dark"] .post-cover .meta a {
   color: var(--sk-accent);
 }
 
-/* 紐⑸줉 移대뱶 */
+/* 목록 카드 */
 html[data-theme="dark"] .post-item .title,
 html[data-theme="dark"] .cover-thumbnail-1 ul li .title,
 html[data-theme="dark"] .cover-thumbnail-2 ul li .title,
@@ -4977,7 +4979,7 @@ html[data-theme="dark"] .pagination .view-more {
   color: var(--sk-muted);
 }
 
-/* ?쒓렇 쨌 ?섏씠吏?쨌 踰꾪듉 */
+/* 태그 · 페이징 · 버튼 */
 html[data-theme="dark"] .tags a {
   border-color: var(--sk-border);
   background-color: var(--sk-surface);
@@ -5014,7 +5016,7 @@ html[data-theme="dark"] .btn:hover {
   background-color: var(--sk-accent);
 }
 
-/* ?ㅽ봽?쇱씠???꾩씠肄? 諛앹? 諛곌꼍 + 吏숈? ?꾩씠肄???諛섏쟾?댁꽌 ?ㅽ겕??留욎텣??*/
+/* 스프라이트 아이콘: 밝은 배경 + 짙은 아이콘 → 반전해서 다크에 맞춘다 */
 html[data-theme="dark"] #header .util .search:before,
 html[data-theme="dark"] #header .util .search button,
 html[data-theme="dark"] #footer .page-top,
@@ -5030,7 +5032,7 @@ html[data-theme="dark"] #aside .profile ul li:before {
   filter: invert(1) hue-rotate(180deg);
 }
 
-/* ?ъ씠?쒕컮 쨌 ?명꽣 쨌 湲고? */
+/* 사이드바 · 푸터 · 기타 */
 html[data-theme="dark"] #aside {
   background-color: var(--sk-bg);
 }
@@ -5094,7 +5096,8 @@ html[data-theme="dark"] #content .another_category h4 {
 }
 
 /* ---------------------------------------------------------------
- * C. ?ㅻ뜑 / ?대퉬寃뚯씠?? * --------------------------------------------------------------- */
+ * C. 헤더 / 내비게이션
+ * --------------------------------------------------------------- */
 #header {
   transition: box-shadow .25s var(--sk-ease), background-color .25s var(--sk-ease);
 }
@@ -5104,7 +5107,7 @@ html[data-theme="dark"] #content .another_category h4 {
   transition: padding .25s var(--sk-ease), height .25s var(--sk-ease);
 }
 
-/* ?곗뒪?ы넲?먯꽌留??ㅻ뜑 怨좎젙 ??紐⑤컮?쇱? ?먮낯 ?숈옉 ?좎?(?붾㈃?????≪븘癒뱀쓬) */
+/* 데스크톱에서만 헤더 고정 — 모바일은 원본 동작 유지(화면을 덜 잡아먹음) */
 @media (min-width: 768px) {
   #header {
     position: sticky;
@@ -5131,7 +5134,7 @@ html[data-theme="dark"] #content .another_category h4 {
     padding-bottom: 17px;
   }
 
-  /* ?ㅻ뜑媛 以꾩뼱?ㅻ㈃ ?곗륫 ?좏떥(寃?됀룻넗湲쨌?꾨줈????媛숈씠 ?щ씪????쒕떎 */
+  /* 헤더가 줄어들면 우측 유틸(검색·토글·프로필)도 같이 올라와야 한다 */
   #header .util {
     transition: top .25s var(--sk-ease);
   }
@@ -5145,13 +5148,13 @@ html[data-theme="dark"] #content .another_category h4 {
   }
 }
 
-/* 寃?됱갹: ?대졇?????ъ씤??而щ윭 ?뚮몢由?*/
+/* 검색창: 열렸을 때 포인트 컬러 테두리 */
 #header .util .search.on input:focus {
   border-color: var(--sk-accent) !important;
   box-shadow: 0 0 0 3px var(--sk-accent-soft);
 }
 
-/* ?ㅽ겕紐⑤뱶 ?좉? 踰꾪듉 */
+/* 다크모드 토글 버튼 */
 .sk-theme-toggle {
   position: relative;
   z-index: 20;
@@ -5181,18 +5184,19 @@ html[data-theme="dark"] #content .another_category h4 {
   border-radius: 50%;
   background: transparent;
   box-shadow: inset -4px -4px 0 0 #6b7280;
-  /* 珥덉듅??*/
+  /* 초승달 */
   transform: rotate(-25deg);
   transition: box-shadow .25s var(--sk-ease), transform .35s var(--sk-ease);
 }
 
 html[data-theme="dark"] .sk-theme-toggle__icon {
   box-shadow: inset 0 0 0 2px #fbbf24, 0 0 0 2px rgba(251, 191, 36, .28);
-  /* ?쒖뼇 */
+  /* 태양 */
   transform: rotate(0);
 }
 
-/* 紐⑤컮?? ?꾨줈?꾩씠 ?④퀬 寃?됱? ?ㅻⅨ履??뺣젹?섎?濡??좉????ㅻⅨ履쎌쑝濡?遺숈씤??   (?쒕ぉ h1 ??z-index:10 濡??꾩뿉 源붾━湲??뚮Ц???쇱そ???먮㈃ 媛?ㅼ쭊?? */
+/* 모바일: 프로필이 숨고 검색은 오른쪽 정렬되므로 토글도 오른쪽으로 붙인다
+   (제목 h1 이 z-index:10 로 위에 깔리기 때문에 왼쪽에 두면 가려진다) */
 @media (max-width: 767px) {
   .sk-theme-toggle {
     float: right;
@@ -5201,7 +5205,8 @@ html[data-theme="dark"] .sk-theme-toggle__icon {
 }
 
 /* ---------------------------------------------------------------
- * D. ?쎄린 吏꾪뻾瑜?쨌 ?뚮줈??踰꾪듉 쨌 ?좎뒪?? * --------------------------------------------------------------- */
+ * D. 읽기 진행률 · 플로팅 버튼 · 토스트
+ * --------------------------------------------------------------- */
 .sk-progress {
   position: fixed;
   top: 0;
@@ -5263,7 +5268,7 @@ body:not(.sk-post) .sk-progress {
   transition: transform .2s var(--sk-ease), background-color .2s var(--sk-ease), color .2s var(--sk-ease);
 }
 
-/* flex gap ???margin ??援ы삎 ?ы뙆由ъ뿉?쒕룄 媛꾧꺽???좎??쒕떎 */
+/* flex gap 대신 margin — 구형 사파리에서도 간격이 유지된다 */
 .sk-fab__btn+.sk-fab__btn {
   margin-top: 10px;
 }
@@ -5307,7 +5312,7 @@ html[data-theme="dark"] .sk-toast {
 }
 
 /* ---------------------------------------------------------------
- * E. 紐⑹감(TOC) 쨌 紐⑤컮???쒗듃
+ * E. 목차(TOC) · 모바일 시트
  * --------------------------------------------------------------- */
 .sk-toc {
   font-size: 0.8125em;
@@ -5378,7 +5383,7 @@ html[data-theme="dark"] .sk-toast {
   margin-top: -8px;
 }
 
-/* ?곗뒪?ы넲: ?ъ씠?쒕컮 ?곷떒??遺숈뼱 ?곕씪?ㅻ뒗 紐⑹감 */
+/* 데스크톱: 사이드바 상단에 붙어 따라오는 목차 */
 .sk-toc--rail {
   position: sticky;
   top: 128px;
@@ -5396,7 +5401,7 @@ html[data-theme="dark"] .sk-toast {
   }
 }
 
-/* 紐⑤컮?? ?섎떒 ?쒗듃 */
+/* 모바일: 하단 시트 */
 .sk-sheet {
   position: fixed;
   top: 0;
@@ -5474,7 +5479,7 @@ html[data-theme="dark"] .sk-toast {
 
 .sk-sheet .sk-toc__item a {
   padding: 11px 10px 11px 14px;
-  /* 紐⑤컮???곗튂 ?源??뺣낫 */
+  /* 모바일 터치 타깃 확보 */
 }
 
 body.sk-lock {
@@ -5488,7 +5493,7 @@ body.sk-lock {
 }
 
 /* ---------------------------------------------------------------
- * F. ?쎄린 ?꾧뎄 (?쎈뒗 ?쒓컙 쨌 湲???ш린)
+ * F. 읽기 도구 (읽는 시간 · 글자 크기)
  * --------------------------------------------------------------- */
 .post-cover .meta .sk-readtime {
   color: inherit;
@@ -5552,7 +5557,7 @@ body.sk-lock {
   text-align: center;
 }
 
-/* 湲???ш린 ?④퀎 ???몃씪???ㅽ??쇰줈 諛뺥엺 蹂몃Ц ?ш린瑜??④퀎蹂꾨줈 ??뼱?대떎 */
+/* 글자 크기 단계 — 인라인 스타일로 박힌 본문 크기를 단계별로 덮어쓴다 */
 html[data-fs="1"] .entry-content p,
 html[data-fs="1"] .entry-content li {
   font-size: 18.5px !important;
@@ -5582,7 +5587,7 @@ html[data-fs="2"] .entry-content h3 {
 }
 
 /* ---------------------------------------------------------------
- * G. 蹂몃Ц ??댄룷 & ?붿냼
+ * G. 본문 타이포 & 요소
  * --------------------------------------------------------------- */
 .entry-content {
   font-size: 1.0625em;
@@ -5595,7 +5600,7 @@ html[data-fs="2"] .entry-content h3 {
 .entry-content h3,
 .entry-content h4 {
   scroll-margin-top: 124px;
-  /* ?듭빱(紐⑹감) ?대룞 ???ㅽ떚???ㅻ뜑??媛由ъ? ?딄쾶 */
+  /* 앵커(목차) 이동 시 스티키 헤더에 가리지 않게 */
 }
 
 @media (max-width: 767px) {
@@ -5619,7 +5624,7 @@ html[data-fs="2"] .entry-content h3 {
 }
 
 .entry-content .sk-extlink:after {
-  content: "??;
+  content: "↗";
   display: inline-block;
   margin-left: 2px;
   font-size: .82em;
@@ -5627,7 +5632,7 @@ html[data-fs="2"] .entry-content h3 {
   opacity: .6;
 }
 
-/* ?대?吏: 濡쒕뱶 ??遺?쒕읇寃??깆옣 */
+/* 이미지: 로드 후 부드럽게 등장 */
 .entry-content .sk-img {
   opacity: 0;
   transition: opacity .45s var(--sk-ease);
@@ -5646,7 +5651,7 @@ html[data-fs="2"] .entry-content h3 {
   word-break: keep-all;
 }
 
-/* ?? 紐⑤컮??媛濡??ㅽ겕濡?+ ?ㅽ겕濡?媛???뚰듃 */
+/* 표: 모바일 가로 스크롤 + 스크롤 가능 힌트 */
 .sk-tablewrap {
   position: relative;
   overflow-x: auto;
@@ -5666,7 +5671,7 @@ html[data-fs="2"] .entry-content h3 {
 
 @media (max-width: 767px) {
   .sk-tablewrap:after {
-    content: "??醫뚯슦濡??섍꺼蹂댁꽭????;
+    content: "← 좌우로 넘겨보세요 →";
     display: block;
     padding: 4px 2px 2px;
     font-size: 11px;
@@ -5675,7 +5680,7 @@ html[data-fs="2"] .entry-content h3 {
   }
 }
 
-/* 肄붾뱶 釉붾줉 + 蹂듭궗 踰꾪듉 */
+/* 코드 블록 + 복사 버튼 */
 .sk-codewrap {
   position: relative;
 }
@@ -5723,7 +5728,7 @@ html[data-fs="2"] .entry-content h3 {
   }
 }
 
-/* ?몄슜臾?쨌 援щ텇???ㅻ벉湲?*/
+/* 인용문 · 구분선 다듬기 */
 .entry-content blockquote {
   border-left-width: 3px;
   border-left-color: var(--sk-accent-line);
@@ -5767,13 +5772,22 @@ html[data-theme="dark"] .entry-content textarea {
 }
 
 /* ---------------------------------------------------------------
- * H. ?먮룞 ?앹꽦 蹂몃Ц(?몃씪???ㅽ??? ?ㅽ겕 紐⑤뱶 ??? *    蹂몃Ц? ?ㅽ궓怨?臾닿??섍쾶 蹂댁씠?꾨줉 ?몃씪???ㅽ??쇰줈 ?됱씠 諛뺥? ?덈떎.
- *    ?ㅽ겕 紐⑤뱶?먯꽌 '寃? 諛곌꼍 + 寃? 湲??媛 ?섏? ?딄쾶 ?뺥솗???섏쭦?붾떎.
+ * H. 자동 생성 본문(인라인 스타일) 다크 모드 대응
+ *    본문은 스킨과 무관하게 보이도록 인라인 스타일로 색이 박혀 있다.
+ *    다크 모드에서 '검은 배경 + 검은 글씨'가 되지 않게 정확히 되짚는다.
  * --------------------------------------------------------------- */
+/* 제목·박스 제목·표 헤더 (진한 글자) */
 html[data-theme="dark"] .entry-content [style*="color:#111"],
+html[data-theme="dark"] .entry-content [style*="color: #111"],
+html[data-theme="dark"] .entry-content [style*="color:#000"] {
+  color: var(--sk-text-strong) !important;
+}
+
+/* 본문 문단·목록 (기본 글자) */
 html[data-theme="dark"] .entry-content [style*="color:#222"],
 html[data-theme="dark"] .entry-content [style*="color:#333"],
-html[data-theme="dark"] .entry-content [style*="color: #111"],
+html[data-theme="dark"] .entry-content [style*="color:#1f2937"],
+html[data-theme="dark"] .entry-content [style*="color:#3f3f46"],
 html[data-theme="dark"] .entry-content [style*="color: #222"],
 html[data-theme="dark"] .entry-content [style*="color: #333"] {
   color: var(--sk-text) !important;
@@ -5786,25 +5800,25 @@ html[data-theme="dark"] .entry-content [style*="color:#999"] {
   color: var(--sk-muted) !important;
 }
 
-/* ?뚯젣紐?諛묒쨪 */
+/* 소제목 밑줄 */
 html[data-theme="dark"] .entry-content [style*="border-bottom:3px solid #222"],
 html[data-theme="dark"] .entry-content [style*="border-bottom:2px solid #222"] {
   border-bottom-color: var(--sk-border-strong) !important;
 }
 
-/* 援щ텇??*/
+/* 구분선 */
 html[data-theme="dark"] .entry-content [style*="border-top:1px solid #e5e5e5"] {
   border-top-color: var(--sk-border) !important;
 }
 
-/* '??以??뺣━' 諛뺤뒪 */
+/* '한 줄 정리' 박스 */
 html[data-theme="dark"] .entry-content [style*="#f4f6ff"] {
   background: #20244a !important;
   border-left-color: #a78bfa !important;
   color: #e7e9f5 !important;
 }
 
-/* '??湲???듭떖' / '紐⑹감' 諛뺤뒪 */
+/* '이 글의 핵심' / '목차' 박스 */
 html[data-theme="dark"] .entry-content [style*="background:#fafafa"],
 html[data-theme="dark"] .entry-content [style*="background:#fbfbfb"] {
   background: var(--sk-surface) !important;
@@ -5812,14 +5826,14 @@ html[data-theme="dark"] .entry-content [style*="background:#fbfbfb"] {
   color: var(--sk-text) !important;
 }
 
-/* ?뮕 肄쒖븘??*/
+/* 💡 콜아웃 */
 html[data-theme="dark"] .entry-content [style*="#fff8e1"] {
   background: #2b2313 !important;
   border-left-color: #f59e0b !important;
   color: #f0e4cd !important;
 }
 
-/* ??*/
+/* 표 */
 html[data-theme="dark"] .entry-content [style*="background:#f5f5f5"] {
   background: var(--sk-surface-2) !important;
   border-color: var(--sk-border-strong) !important;
@@ -5830,21 +5844,115 @@ html[data-theme="dark"] .entry-content [style*="border:1px solid #ddd"] {
   border-color: var(--sk-border-strong) !important;
 }
 
-/* 蹂몃Ц ??留곹겕(紐⑹감쨌李멸퀬?먮즺)??蹂대씪?????ㅽ겕?먯꽌 諛앹? 蹂대씪濡?*/
+/* 본문 내 링크(목차·참고자료)의 보라색 → 다크에서 밝은 보라로 */
 html[data-theme="dark"] .entry-content [style*="color:#4c1d95"],
 html[data-theme="dark"] .entry-content a[style*="#4c1d95"] {
   color: var(--sk-accent) !important;
 }
 
-/* ?쇱씠??紐⑤뱶?먯꽌??諛뺤뒪???꾩＜ ?낆? 洹몃┝?먮? ?뱀뼱 ?낆껜媛먯쓣 以??*/
+/* 라이트 모드에서도 박스에 아주 옅은 그림자를 얹어 입체감을 준다 */
 .entry-content [style*="border-radius:8px"][style*="background"] {
   box-shadow: var(--sk-shadow-1);
 }
 
 /* ---------------------------------------------------------------
- * I. ?좊뱶?쇱뒪 愿묎퀬 ?곸뿭
- *    - 蹂몃Ц怨??뺤떎??援щ텇?섎뒗 移대뱶 + '愿묎퀬' ?쇰꺼 (?뺤콉 以??
- *    - color-scheme:light : ?ㅽ겕 紐⑤뱶?먯꽌??愿묎퀬 ?대? ?띿뒪??媛?낆꽦 ?좎?
+ * H-2. 티스토리 에디터 기본 요소의 다크 모드
+ *      원본 CSS 가 #article-view (ID 선택자) 로 색을 지정하기 때문에
+ *      같은 ID 를 포함해야 우선순위가 밀리지 않는다.
+ *      (에디터로 직접 쓴 글도 다크 모드에서 깨지지 않게 하는 부분)
+ * --------------------------------------------------------------- */
+html[data-theme="dark"] #article-view {
+  color: var(--sk-text);
+}
+
+html[data-theme="dark"] #article-view h1,
+html[data-theme="dark"] #article-view h2,
+html[data-theme="dark"] #article-view h3,
+html[data-theme="dark"] #article-view h4,
+html[data-theme="dark"] #article-view h5,
+html[data-theme="dark"] #article-view h6,
+html[data-theme="dark"] #article-view strong,
+html[data-theme="dark"] #article-view b {
+  color: var(--sk-text-strong);
+}
+
+html[data-theme="dark"] #article-view a {
+  color: var(--sk-accent);
+}
+
+html[data-theme="dark"] #article-view figcaption,
+html[data-theme="dark"] #article-view div[data-ke-type='moreLess'] .btn-toggle-moreless,
+html[data-theme="dark"] #article-view .btn_more,
+html[data-theme="dark"] #article-view .btn_less {
+  color: var(--sk-muted);
+}
+
+/* 인용문 · 접은 글 · 오픈그래프 카드 · 파일 첨부 · 코드 블록 */
+html[data-theme="dark"] #article-view blockquote {
+  color: var(--sk-text);
+  border-color: var(--sk-border-strong);
+}
+
+html[data-theme="dark"] #article-view div[data-ke-type='moreLess'] {
+  background-color: var(--sk-surface);
+  border-color: var(--sk-border);
+  color: var(--sk-text);
+}
+
+html[data-theme="dark"] #article-view figure[data-ke-type='opengraph'] a,
+html[data-theme="dark"] #article-view figure.fileblock {
+  background-color: var(--sk-surface);
+  border-color: rgba(255, 255, 255, .14);
+  color: var(--sk-text);
+}
+
+html[data-theme="dark"] #article-view figure[data-ke-type='opengraph'] p.og-title {
+  color: var(--sk-text-strong);
+}
+
+html[data-theme="dark"] #article-view figure[data-ke-type='opengraph'] .og-desc,
+html[data-theme="dark"] #article-view figure[data-ke-type='opengraph'] .og-host {
+  color: var(--sk-muted);
+}
+
+html[data-theme="dark"] #article-view figure[data-ke-type='opengraph'] div.og-image {
+  border-right-color: rgba(255, 255, 255, .10);
+}
+
+html[data-theme="dark"] #article-view pre,
+html[data-theme="dark"] #article-view pre code.hljs {
+  background-color: var(--sk-surface-2);
+  border-color: var(--sk-border) !important;
+  color: var(--sk-text);
+}
+
+/* 표: 에디터 표 스타일과 자동 생성 표를 함께 커버 */
+html[data-theme="dark"] #article-view table th {
+  background-color: var(--sk-surface-2) !important;
+  color: var(--sk-text-strong) !important;
+}
+
+html[data-theme="dark"] #article-view table td {
+  color: var(--sk-text) !important;
+}
+
+html[data-theme="dark"] #article-view table th,
+html[data-theme="dark"] #article-view table td {
+  border-color: var(--sk-border-strong) !important;
+}
+
+html[data-theme="dark"] #article-view table caption {
+  color: var(--sk-muted) !important;
+}
+
+html[data-theme="dark"] #article-view hr {
+  border-color: var(--sk-border) !important;
+}
+
+/* ---------------------------------------------------------------
+ * I. 애드센스 광고 영역
+ *    - 본문과 확실히 구분되는 카드 + '광고' 라벨 (정책 준수)
+ *    - color-scheme:light : 다크 모드에서도 광고 내부 텍스트 가독성 유지
  * --------------------------------------------------------------- */
 .sk-ad {
   position: relative;
@@ -5886,7 +5994,7 @@ html[data-theme="dark"] .entry-content a[style*="#4c1d95"] {
   display: none;
 }
 
-/* ?곗뒪?좊━ 湲곕낯 愿묎퀬 ?곸뿭??媛숈? ?щ갚 洹쒖튃???곕Ⅴ寃?*/
+/* 티스토리 기본 광고 영역도 같은 여백 규칙을 따르게 */
 .revenue_unit_wrap.position_list,
 .revenue_unit_wrap {
   margin: 34px auto !important;
@@ -5909,7 +6017,7 @@ html[data-theme="dark"] .sk-ad__label {
 }
 
 /* ---------------------------------------------------------------
- * J. 怨듭쑀 踰꾪듉
+ * J. 공유 버튼
  * --------------------------------------------------------------- */
 .sk-share {
   margin: 44px 0 40px;
@@ -5982,7 +6090,8 @@ html[data-theme="dark"] .sk-ad__label {
 }
 
 /* ---------------------------------------------------------------
- * K. 紐⑸줉 / 移대뱶 / ?쒓렇 / ?섏씠吏? * --------------------------------------------------------------- */
+ * K. 목록 / 카드 / 태그 / 페이징
+ * --------------------------------------------------------------- */
 .post-item .thum,
 .cover-thumbnail-1 ul li figure,
 .cover-thumbnail-2 ul li figure,
@@ -6081,7 +6190,7 @@ html[data-theme="dark"] .sk-ad__label {
   text-decoration: none;
 }
 
-/* '寃??寃곌낵 ?놁쓬' 媛쒖꽑 */
+/* '검색 결과 없음' 개선 */
 .sk-btn-home {
   display: inline-block;
   margin-top: 18px;
@@ -6099,7 +6208,7 @@ html[data-theme="dark"] .sk-ad__label {
   opacity: .92;
 }
 
-/* ?ㅽ겕濡??깆옣 (JS 媛 ?대옒?ㅻ? 遺숈씪 ?뚮쭔 ?곸슜 ??JS ?ㅽ뙣 ???댁슜???⑥? ?딅뒗?? */
+/* 스크롤 등장 (JS 가 클래스를 붙일 때만 적용 → JS 실패 시 내용이 숨지 않는다) */
 .sk-reveal {
   opacity: 0;
   transform: translateY(14px);
@@ -6112,7 +6221,7 @@ html[data-theme="dark"] .sk-ad__label {
 }
 
 /* ---------------------------------------------------------------
- * L. ?ъ씠?쒕컮 쨌 ?볤? 쨌 ?명꽣
+ * L. 사이드바 · 댓글 · 푸터
  * --------------------------------------------------------------- */
 .sidebar .post-list ul li img,
 .sidebar .social-list ul li .avatar {
@@ -6133,7 +6242,7 @@ html[data-theme="dark"] .sk-ad__label {
   transform: translateY(-2px);
 }
 
-/* ?볤?: ?곗뒪?좊━ 湲곕낯 留덊겕???ㅽ겕 紐⑤뱶 ???*/
+/* 댓글: 티스토리 기본 마크업 다크 모드 대응 */
 html[data-theme="dark"] .tt-comments-wrap,
 html[data-theme="dark"] .tt-comment-cont {
   color: var(--sk-text);
@@ -6171,7 +6280,7 @@ html[data-theme="dark"] .tt-comment-cont .tt-btn_register {
 }
 
 /* ---------------------------------------------------------------
- * M. ?묎렐??쨌 紐⑥뀡 쨌 ?몄뇙
+ * M. 접근성 · 모션 · 인쇄
  * --------------------------------------------------------------- */
 a:focus-visible,
 button:focus-visible,
@@ -6194,7 +6303,7 @@ textarea:focus-visible,
   outline-offset: 2px;
 }
 
-/* ?곗튂 ?源?理쒖냼 ?ш린 蹂댁젙 */
+/* 터치 타깃 최소 크기 보정 */
 @media (max-width: 767px) {
 
   #gnb ul li a {
@@ -6278,7 +6387,7 @@ textarea:focus-visible,
   }
 }
 
-/* ?ㅽ겕 紐⑤뱶?먯꽌 ?대?吏쨌?곸긽 ?덈??ъ쓣 ?댁쭩 以꾩씤??*/
+/* 다크 모드에서 이미지·영상 눈부심을 살짝 줄인다 */
 html[data-theme="dark"] .entry-content img,
 html[data-theme="dark"] .post-item .thum img,
 html[data-theme="dark"] .related-articles ul li figure img {

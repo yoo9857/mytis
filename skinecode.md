@@ -901,22 +901,48 @@
       function store(k, v) {
         try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; }
       }
-      var rafPending = false;
+      // 스크롤 핸들러는 rAF 로 묶어 호출을 줄인다.
+      // 대기 플래그는 '등록마다 따로' 둔다 — 공유하면 두 번째 리스너가 실행되지 않는다.
       function onScroll(fn) {
+        var pending = false;
         on(window, 'scroll', function () {
-          if (rafPending) return;
-          rafPending = true;
-          requestAnimationFrame(function () { rafPending = false; fn(); });
+          if (pending) return;
+          pending = true;
+          requestAnimationFrame(function () { pending = false; fn(); });
         }, { passive: true });
       }
-      // 스티키 헤더 높이 보정값 (모바일은 헤더가 고정되지 않아 작게)
-      function headOffset() { return window.innerWidth >= 768 ? 124 : 20; }
+      // 스티키 헤더 높이 보정값 — 실제 헤더 높이를 읽는다(모바일은 고정이 아니라 0)
+      function headOffset() {
+        var h = doc.getElementById('header');
+        if (!h || window.innerWidth < 768) return 16;
+        var pos = getComputedStyle(h).position;
+        return (pos === 'sticky' || pos === 'fixed' ? h.offsetHeight : 0) + 12;
+      }
+      // 앵커 이동 후 제목이 놓일 위치. CSS 의 scroll-margin-top 과 반드시 같은 값이어야 한다.
+      function landing() { return window.innerWidth >= 768 ? 124 : 20; }
       // 구형 사파리는 scrollTo(옵션) 을 무시하므로 지원 여부를 확인해 폴백한다
       var smoothOK = 'scrollBehavior' in root.style;
       function scrollToY(y) {
         y = Math.max(0, Math.round(y));
         if (smoothOK && !reduceMotion) window.scrollTo({ top: y, behavior: 'smooth' });
         else window.scrollTo(0, y);
+      }
+      /**
+       * 목차 등에서 특정 요소로 이동.
+       * scroll-margin-top 이 헤더 높이를 대신 계산해 주고,
+       * 이미지·광고가 뒤늦게 로드되며 위치가 밀리는 경우를 한 번 보정한다.
+       */
+      function goTo(target) {
+        var go = function (behavior) {
+          if (target.scrollIntoView && smoothOK) target.scrollIntoView({ behavior: behavior, block: 'start' });
+          else scrollToY(target.getBoundingClientRect().top + (window.pageYOffset || 0) - landing());
+        };
+        go(reduceMotion ? 'auto' : 'smooth');
+        setTimeout(function () {
+          if (Math.abs(target.getBoundingClientRect().top - landing()) > 28) go('auto');
+        }, 640);
+        target.setAttribute('tabindex', '-1');
+        try { target.focus({ preventScroll: true }); } catch (err) { }
       }
       var toastTimer;
       function toast(msg) {
@@ -1073,9 +1099,7 @@
             if (!target) return;
             e.preventDefault();
             closeSheet();
-            scrollToY(target.getBoundingClientRect().top + (window.pageYOffset || 0) - headOffset());
-            target.setAttribute('tabindex', '-1');
-            try { target.focus({ preventScroll: true }); } catch (err) { }
+            goTo(target);
             if (history.replaceState) history.replaceState(null, '', '#' + id);
           });
         });
