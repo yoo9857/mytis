@@ -58,10 +58,16 @@ export async function generate(topic, cfg) {
 
   // 실제 장면은 공식 영상 임베드로 보여준다. 사진은 저작권 때문에 못 가져오지만
   // 임베드는 유튜브가 제공하는 기능이라 문제가 없고, 현장을 그대로 담는다.
-  try {
-    article.embeds = await fillEmbeds(article, cfg);
-  } catch (err) {
-    log.warn(`영상 임베드 확보 실패: ${err.message}`);
+  // 영상 소재 글은 '같은 영상의 여러 장면'이 이미 임베드로 들어 있다.
+  // 여기서 다른 영상을 덧붙이면 글과 따로 논다.
+  if (article.fromClip) {
+    log.debug(`영상 소재 글 — 장면 임베드 ${(article.embeds || []).length}개 유지 (추가 검색 생략)`);
+  } else {
+    try {
+      article.embeds = await fillEmbeds(article, cfg);
+    } catch (err) {
+      log.warn(`영상 임베드 확보 실패: ${err.message}`);
+    }
   }
 
   const articleFile = saveArticle(article);
@@ -120,6 +126,7 @@ export async function publish({ article, html, imageFiles }, cfg) {
       imageFiles,
       tags: article.tags,
       urlSlug: article.urlSlug,
+      article, // 카테고리 자동 선택의 판단 근거
     });
 
     if (!result.ok) {

@@ -160,7 +160,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["videoId", "title", "channel", "afterSection"],
+        "required": ["videoId", "title", "channel", "afterSection", "startSeconds", "quote", "caption"],
         "properties": {
           "videoId": {
             "type": "string",
@@ -174,6 +174,18 @@
           "afterSection": {
             "type": "integer",
             "description": "몇 번째 섹션 뒤에 넣을지 (1부터 시작)."
+          },
+          "startSeconds": {
+            "type": "integer",
+            "description": "재생을 시작할 지점(초). **제공된 자막에 실제로 있는 시각만** 쓸 것. 지어내면 엉뚱한 장면이 재생된다. 지정할 근거가 없으면 0."
+          },
+          "quote": {
+            "type": "string",
+            "description": "그 지점의 실제 대사 한두 줄. **자막에 있는 말만** 옮길 것. 요약·창작 금지. 없으면 빈 문자열."
+          },
+          "caption": {
+            "type": "string",
+            "description": "이 장면이 왜 볼 만한지 한 줄 설명. 낚시 금지. 없으면 빈 문자열."
           }
         }
       }

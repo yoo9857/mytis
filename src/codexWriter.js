@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { DIRS, FILES, stamp, safeSlug } from './paths.js';
 import { log, fmtDuration } from './log.js';
-import { buildArticlePrompt, buildNewsPrompt } from './prompt.js';
+import { buildArticlePrompt, buildNewsPrompt, buildClipPrompt } from './prompt.js';
 
 /** 주제 문자열이 기사 URL 인지 판별한다. */
 export function isUrl(text) {
@@ -223,6 +223,10 @@ function normalizeArticle(raw, { topic, cfg }) {
       title: str(e?.title),
       channel: str(e?.channel),
       afterSection: Number.isFinite(e?.afterSection) ? Number(e.afterSection) : 1,
+      // 장면 지정 재생 — 실제 자막에 있는 시각인지는 ytClip.snapTimestamps 가 검증한다
+      startSeconds: Number.isFinite(e?.startSeconds) ? Math.max(0, Number(e.startSeconds)) : 0,
+      quote: str(e?.quote),
+      caption: str(e?.caption),
     }))
     .filter((e) => /^[A-Za-z0-9_-]{11}$/.test(e.videoId));
 
@@ -309,9 +313,21 @@ export async function writeArticle({ topic, cfg }) {
   const maxAttempts = 2;
   let lastErr = null;
 
+  // 유튜브 주소면 '영상 소재' 모드 — 자막을 읽어 장면별 임베드를 만든다
+  const { parseYouTube, fetchClip, snapTimestamps } = await import('./ytClip.js');
+  const videoId = fromNews ? parseYouTube(topic) : null;
+  let clip = null;
+  if (videoId) {
+    clip = await fetchClip(topic);
+    if (!clip?.lines?.length) {
+      log.warn('자막을 못 읽어 영상 소재 모드를 쓸 수 없습니다. 일반 기사 모드로 진행합니다.');
+      clip = null;
+    }
+  }
+
   // 기사 기반이면 본문을 먼저 추출해 프롬프트에 실어 보낸다
   let source = null;
-  if (fromNews) {
+  if (fromNews && !clip) {
     const { fetchArticle } = await import('./fetchArticle.js');
     source = await fetchArticle(topic, cfg);
   }
@@ -327,9 +343,11 @@ export async function writeArticle({ topic, cfg }) {
     log.info('검색과 집필에 수 분이 걸립니다. 기다려 주세요...');
 
     try {
-      let prompt = fromNews
-        ? buildNewsPrompt({ url: topic, cfg, source })
-        : buildArticlePrompt({ topic, cfg });
+      let prompt = clip
+        ? buildClipPrompt({ clip, cfg })
+        : fromNews
+          ? buildNewsPrompt({ url: topic, cfg, source })
+          : buildArticlePrompt({ topic, cfg });
       if (attempt > 1 && lastErr) {
         prompt += `\n\n# 재시도 사유\n직전 시도 결과가 기준에 못 미쳤습니다: ${lastErr}\n이번에는 분량과 섹션 수를 반드시 채우세요.`;
       }
@@ -337,6 +355,22 @@ export async function writeArticle({ topic, cfg }) {
       const last = await runCodexExec({ prompt, schemaFile, cfg });
       const raw = extractJson(last);
       const article = normalizeArticle(raw, { topic, cfg });
+
+      // 영상 소재 글: 지어낸 타임스탬프를 실제 자막 시각으로 스냅하고,
+      // 자막에 없는 지점은 0(처음부터)으로 되돌린다.
+      if (clip) {
+        // 영상 소재 글의 임베드는 '같은 영상의 여러 장면'이다.
+        // youtube.js 의 fillEmbeds 가 다른 영상을 덧붙이면 글이 어긋난다.
+        article.fromClip = true;
+        article.clipVideoId = clip.videoId;
+        article.embeds = snapTimestamps(
+          (article.embeds || []).map((e) => ({ ...e, videoId: clip.videoId })),
+          clip
+        );
+        for (const e of article.embeds) {
+          log.ok(`장면 ${Math.floor(e.startSeconds / 60)}:${String(e.startSeconds % 60).padStart(2, '0')} — ${e.caption || e.quote || ''}`.slice(0, 90));
+        }
+      }
 
       // 기사 기반 글은 원문 출처가 반드시 남아 있어야 한다
       if (fromNews && !article.sources.some((s) => s.url === topic)) {
@@ -347,6 +381,55 @@ export async function writeArticle({ topic, cfg }) {
           date: '',
         });
         log.debug('원문 기사 출처를 sources 맨 앞에 추가했습니다.');
+      }
+
+      // 원문 기사의 대표 이미지(og:image)와 매체명을 아티클에 실어 둔다.
+      // images.useSourcePhoto 가 켜져 있을 때 photo.js 가 이걸 대표 이미지로 쓴다.
+      if (fromNews && (source?.image || source?.images?.length)) {
+        article.sourceImage = source.image || '';
+        // 본문 사진까지 넘긴다. 인물 기사는 서로 다른 컷 여러 장을 쓰는 편이 낫다.
+        article.sourceImages = (source.images || []).map((i) => i.url);
+        article.sourcePublisher = source.publisher || '';
+        article.sourceUrl = topic;
+        log.debug(
+          `원문 사진 확보: 대표 ${source.image ? 1 : 0}장 · 본문 ${(source.images || []).length}장`
+        );
+      }
+
+      /* 소재 기사 한 곳만으로는 사진이 부족하다.
+       *
+       * codex 가 sources 에 넣은 다른 기사들도 **같은 사안을 다룬 최신 기사**라
+       * 저마다 그 인물의 최근 사진을 싣고 있다. 여기서 더 긁어오면
+       * "코요태 옛날 단체사진 + 헬스장 스톡" 같은 무관한 그림을 피할 수 있다.
+       *
+       * 기사 한 곳당 브라우저를 한 번 띄우므로 개수를 제한한다. */
+      if (
+        cfg.images?.useSourcePhoto === true &&
+        (article.sourceImages?.length || 0) < 3 &&
+        article.sources?.length > 1
+      ) {
+        const { fetchArticle } = await import('./fetchArticle.js');
+        const extra = article.sources
+          .map((s) => s.url)
+          .filter((u) => u && u !== topic && /^https?:\/\//.test(u))
+          .slice(0, 3);
+
+        for (const url of extra) {
+          if ((article.sourceImages?.length || 0) >= 4) break;
+          try {
+            const s = await fetchArticle(url, cfg, 300);
+            const got = [s?.image, ...(s?.images || []).map((i) => i.url)].filter(Boolean);
+            if (got.length) {
+              article.sourceImages = [...(article.sourceImages || []), ...got];
+              log.debug(`추가 출처 사진 ${got.length}장: ${new URL(url).hostname}`);
+            }
+          } catch (err) {
+            log.debug(`추가 출처 사진 실패 (${url.slice(0, 50)}): ${err.message.slice(0, 60)}`);
+          }
+        }
+        if (article.sourceImages?.length) {
+          log.ok(`관련 기사에서 사진 ${article.sourceImages.length}장 확보`);
+        }
       }
 
       const chars = articleCharCount(article);

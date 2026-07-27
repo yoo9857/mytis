@@ -113,6 +113,16 @@ export async function searchYouTube(queries, { limit = 6, timeoutMs = 45_000 } =
   return found.slice(0, limit);
 }
 
+/**
+ * 어느 글에나 붙는 범용어. 영상이 글과 관련 있다는 **근거로 쓰면 안 된다.**
+ * ("교향곡 입문 추천" 에서 '추천' 이 있는 영상만 찾다가 늘 0개가 됐다)
+ */
+const GENERIC_TERMS = new Set([
+  '추천', '방법', '순서', '정리', '총정리', '비교', '후기', '가이드', '기준',
+  '조건', '종류', '리스트', '모음', '완벽', '최신', '오늘', '이유', '차이',
+  'best', 'top', 'guide', 'tips',
+]);
+
 /** 조사·어미를 떼고 의미 있는 낱말만 남긴다 */
 function keywords(text) {
   return String(text || '')
@@ -126,14 +136,39 @@ function keywords(text) {
  * 영상이 이 글의 사안과 실제로 관련 있는지 본다.
  *
  * 공식 채널이라는 이유만으로 아무 예능 영상을 넣으면 글과 따로 논다.
- * **인물 이름 + 사안 키워드가 모두 제목에 있을 때만** 통과시키고,
- * 관련 영상이 없으면 아예 넣지 않는다.
+ * 그래서 글의 종류에 따라 기준을 다르게 둔다.
+ *
+ * - **인물 글**(entities 있음): 이름이 반드시 제목·채널에 있어야 하고,
+ *   사안 키워드도 하나는 걸려야 한다. (예: "임영웅" + "콘서트")
+ * - **정보성 글**(entities 없음): 이름이라는 개념이 없다. 주제어가
+ *   2개 이상 걸리면 관련 있다고 본다.
+ *
+ * 예전에는 정보성 글에서도 primaryKeyword 를 앞 2단어(=이름)와
+ * 나머지(=주제)로 억지로 쪼개, "교향곡 입문 추천" 의 경우 제목에
+ * "추천" 이 있는 영상만 통과시켰다. 그래서 임베드가 늘 0개였다.
+ * 주제어가 2단어 이하면 topicTerms 가 빈 배열이 되어 아예 전멸했다.
  */
 function isRelevant(video, nameTerms, topicTerms) {
   const hay = `${video.title} ${video.channel}`.toLowerCase();
-  const hasName = nameTerms.some((t) => t && hay.includes(t.toLowerCase()));
-  const hasTopic = topicTerms.some((t) => t && hay.includes(t.toLowerCase()));
-  return hasName && hasTopic;
+  const hit = (terms) => terms.some((t) => t && hay.includes(t.toLowerCase()));
+
+  if (nameTerms.length) {
+    // 인물 글: 이름은 필수. 사안 키워드는 있으면 함께 요구한다.
+    return hit(nameTerms) && (topicTerms.length === 0 || hit(topicTerms));
+  }
+
+  // 정보성 글: 범용어를 뺀 '내용어' 가 하나라도 걸리면 관련 있다고 본다.
+  // 내용어가 없으면(주제어가 전부 범용어면) 주제어 전체로 판단한다.
+  if (!topicTerms.length) return false;
+  const meaningful = topicTerms.filter((t) => !GENERIC_TERMS.has(t.toLowerCase()));
+  const pool = meaningful.length ? meaningful : topicTerms;
+  return pool.some((t) => hay.includes(t.toLowerCase()));
+}
+
+/** 제목·채널에 주제어가 몇 개나 걸리는지 — 관련도가 높은 것을 앞으로 보낸다 */
+function relevanceScore(video, terms) {
+  const hay = `${video.title} ${video.channel}`.toLowerCase();
+  return terms.filter((t) => t && hay.includes(t.toLowerCase())).length;
 }
 
 /**
@@ -147,12 +182,22 @@ export async function fillEmbeds(article, cfg) {
 
   const people = (article.entities || []).map((e) => e.nameKo || e.nameEn).filter(Boolean);
   const subject = people[0] || article.primaryKeyword;
-  const queries = [
-    article.primaryKeyword,
-    people.length > 1 ? `${people[0]} ${people[1]}` : '',
-    subject ? `${subject} 공식` : '',
-    subject ? `${subject} 무대` : '',
-  ].filter(Boolean);
+  // "무대" 같은 검색어는 연예 글에서만 의미가 있다. 정보성 글에는
+  // 주제어와 롱테일 검색어를 그대로 쓴다.
+  const queries = (
+    people.length
+      ? [
+          article.primaryKeyword,
+          people.length > 1 ? `${people[0]} ${people[1]}` : '',
+          `${subject} 공식`,
+          `${subject} 무대`,
+        ]
+      : [
+          article.primaryKeyword,
+          `${article.primaryKeyword} 공식`,
+          ...(article.secondaryKeywords || []).slice(0, 2),
+        ]
+  ).filter(Boolean);
 
   log.step(`공식 영상 검색: ${queries[0]}`);
   const videos = await searchYouTube(queries, { limit: want + 4 });
@@ -162,12 +207,13 @@ export async function fillEmbeds(article, cfg) {
     return article.embeds || [];
   }
 
-  // 인물 이름(한글·영문) 과 사안 키워드를 모두 담은 영상만 고른다
+  // 인물이 있으면 이름 / 사안으로 나눠서 보고, 없으면 전부 주제어로 본다.
+  // (예전엔 인물이 없을 때 앞 2단어를 억지로 '이름'으로 삼아 필터가 늘 실패했다)
   const nameTerms = (article.entities || []).flatMap((e) => [e.nameKo, e.nameEn]).filter(Boolean);
-  if (!nameTerms.length) nameTerms.push(...keywords(article.primaryKeyword).slice(0, 2));
-  const topicTerms = keywords(article.primaryKeyword).filter(
-    (w) => !nameTerms.some((n) => n && n.toLowerCase().includes(w.toLowerCase()))
-  );
+  const allTerms = keywords(article.primaryKeyword);
+  const topicTerms = nameTerms.length
+    ? allTerms.filter((w) => !nameTerms.some((n) => n && n.toLowerCase().includes(w.toLowerCase())))
+    : allTerms;
 
   const relevant = videos.filter((v) => isRelevant(v, nameTerms, topicTerms));
   if (!relevant.length) {
@@ -178,8 +224,14 @@ export async function fillEmbeds(article, cfg) {
     return article.embeds || [];
   }
 
+  // 공식 채널을 우선하되, 그 안에서는 주제어가 많이 걸린 영상을 앞세운다.
+  // (조회수만 보면 주제와 살짝 빗나간 인기 플레이리스트가 먼저 뽑힌다)
+  const scoreTerms = [...nameTerms, ...topicTerms];
   const officials = relevant.filter((v) => v.official);
-  const chosen = (officials.length ? officials : relevant).slice(0, want);
+  const chosen = (officials.length ? officials : relevant)
+    .slice()
+    .sort((a, b) => relevanceScore(b, scoreTerms) - relevanceScore(a, scoreTerms))
+    .slice(0, want);
 
   const sectionCount = Math.max(1, article.sections.length);
   const embeds = chosen.map((v, i) => ({

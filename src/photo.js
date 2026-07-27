@@ -340,12 +340,33 @@ export async function fetchBackgrounds(article, cfg, slots) {
   const prefix = `${stamp()}-${safeSlug(article.title, 'bg')}`;
   const used = new Set();
 
+  /**
+   * 같은 사진인지 판별할 키.
+   *
+   * 언론사는 한 장을 크기별 변형으로 내보낸다.
+   *   SSC_20260727171258.jpg.webp      (og:image)
+   *   SSC_20260727171258_V.jpg.webp    (본문 — 같은 사진)
+   * URL 전체로 비교하면 이 둘이 다른 사진으로 보여 **같은 컷이 두 번 실린다.**
+   * 그래서 파일명에서 확장자와 크기 변형 접미사를 떼고 비교한다.
+   */
+  function photoKey(url) {
+    try {
+      const name = new URL(url).pathname.split('/').pop() || '';
+      return name
+        .replace(/\.(jpe?g|png|webp|avif|gif)(\.(jpe?g|png|webp|avif))?$/i, '')
+        .replace(/([_-])(v|l|s|m|t|org|orig|big|small|thumb|\d{2,4}x\d{2,4})$/i, '')
+        .toLowerCase();
+    } catch {
+      return String(url).split('?')[0];
+    }
+  }
+
   /** 후보 목록에서 하나를 골라 슬롯에 내려받는다. */
   async function tryFill(slot, candidates) {
     if (result[slot]) return true; // 이미 채워진 슬롯은 건드리지 않는다
     for (const cand of candidates) {
       if (!cand?.url) continue;
-      const key = cand.url.split('?')[0];
+      const key = photoKey(cand.url);
       if (used.has(key)) continue;
       if (!cand.trusted && !hostAllowed(cand.url, CODEX_ALLOWED_HOSTS)) {
         log.debug(`제외 (허용되지 않은 도메인): ${String(cand.url).slice(0, 80)}`);
@@ -381,14 +402,178 @@ export async function fetchBackgrounds(article, cfg, slots) {
     return false;
   }
 
+  /* --- 최우선: 원문 기사의 대표 이미지 (images.useSourcePhoto) ------------
+   *
+   * ⚠️ 저작권 주의 — 기본값은 꺼져 있다.
+   *
+   * 여기서 쓰는 것은 언론사가 **공유용으로 스스로 노출하는 og:image** 한 장이다
+   * (기사 본문의 사진 갤러리를 긁는 것이 아니다). 그래도 언론사 보도사진은
+   * 저작권이 있으며, 이 옵션을 켜는 것은 HANDOVER §6 의 방침을 뒤집는 것이다.
+   * 국내 법무법인이 이미지 역검색으로 적발해 청구하는 사례가 있고,
+   * 애드센스가 붙은 블로그가 표적이 된다. **발행자가 위험을 감수하는 선택이다.**
+   *
+   * 켜는 경우 최소한 지켜야 할 것:
+   *   - 매체명과 원문 링크를 크레딧으로 남긴다 (아래에서 자동 처리)
+   *   - 사진 위에 다른 문구를 얹어 원 사진처럼 보이게 하지 않는다
+   */
+  /** 대표로 쓸 만한 사진 고르기 (OpenCV). 없거나 실패하면 예외를 던진다. */
+  async function pickBestThumb(files) {
+    const { spawn } = await import('node:child_process');
+    const script = path.join(DIRS.root, 'scripts', 'pick_face_frame.py');
+    return new Promise((resolve, reject) => {
+      // 한글 경로는 argv 를 거치면 Windows 에서 깨진다 → stdin 으로 UTF-8 로 넘긴다
+      const p = spawn('python', [script, '--thumb'], { windowsHide: true });
+      let out = '';
+      const timer = setTimeout(() => { p.kill(); reject(new Error('시간 초과')); }, 60_000);
+      p.stdin.write(Buffer.from(files.join('\n'), 'utf8'));
+      p.stdin.end();
+      p.stdout.on('data', (d) => (out += d));
+      p.on('error', (e) => { clearTimeout(timer); reject(e); });
+      p.on('close', () => {
+        clearTimeout(timer);
+        try { resolve(JSON.parse(out.trim().split('\n').pop())); }
+        catch { reject(new Error('선별 결과를 읽지 못했습니다')); }
+      });
+    });
+  }
+
+  const sourcePool = [article.sourceImage, ...(article.sourceImages || [])].filter(Boolean);
+  if (cfg.images.useSourcePhoto === true && sourcePool.length) {
+    const publisher = article.sourcePublisher || '원문 기사';
+    log.warn(
+      `원문 기사 사진을 사용합니다 (images.useSourcePhoto=true · ${publisher} · 후보 ${sourcePool.length}장). ` +
+        '언론사 보도사진은 저작권이 있습니다 — 위험은 발행자가 집니다.'
+    );
+    // 사진 위 크레딧은 한글을 쓰지 않는다(카드 위 한글 표기 금지).
+    // 매체 도메인은 항상 ASCII 라 그대로 쓸 수 있고, 한글 매체명은
+    // 본문 하단 '이미지 출처' 목록에만 남는다.
+    let host = '';
+    try {
+      host = new URL(article.sourceUrl || sourcePool[0]).hostname.replace(/^www\.|^m\./, '');
+    } catch {
+      host = publisher;
+    }
+    /**
+     * 더 크고 덜 압축된 원본을 먼저 시도한다.
+     *
+     * 언론사는 목록·본문용으로 축소본을 내보낸다. 실측(서울En):
+     *   SSC_..._V.jpg.webp  660x503  123KB   ← 기사 본문에 박힌 것
+     *   SSC_....jpg.webp    760x580  167KB   ← _V 를 떼면 더 큼
+     *   SSC_....jpg         760x580  380KB   ← .webp 도 떼면 압축이 훨씬 덜 됨
+     *
+     * 축소본을 받아 1200px 로 늘리면 눈에 띄게 뭉개진다.
+     * 그래서 화질 좋은 순서로 후보를 만들어 먼저 걸리는 것을 쓴다.
+     */
+    const upgrade = (url) => {
+      const noV = url.replace(/_[VLS](\.[a-z]+)/i, '$1');
+      return [...new Set([
+        noV.replace(/\.webp$/i, ''),  // 가장 큼 + 압축 적음
+        noV,
+        url.replace(/\.webp$/i, ''),
+        url,                          // 최후 폴백: 원래 주소
+      ])];
+    };
+    // 기사에는 로고·아이콘·기자 프로필 같은 작은 이미지가 섞여 있다.
+    // 파일 크기로 1차 거르고, 대표 선별에서 해상도로 한 번 더 거른다.
+    const looksTiny = (u) => /(logo|icon|profile|badge|btn_|sprite|blank)/i.test(u);
+    const asCandidate = (url) => ({
+      url,
+      trusted: true, // 도메인 화이트리스트를 우회한다(원문 기사 한 곳뿐)
+      source: 'source-article',
+      photographer: host, // 카드에 얹히는 표기 — ASCII
+      license: 'press photo',
+      pageUrl: article.sourceUrl || '',
+      description: `${publisher} 기사 사진`,
+    });
+
+    /* 인물 기사는 같은 사진을 반복하지 않고 **서로 다른 컷**을 쓴다.
+     * tryFill 이 이미 쓴 URL 을 used 로 걸러 주므로, 슬롯마다 앞에서부터
+     * 남은 후보를 넘기면 자연히 다른 사진이 들어간다. */
+    for (let slot = 0; slot < slots; slot++) {
+      if (result[slot]) continue;
+      await tryFill(
+        slot,
+        sourcePool.filter((u) => !looksTiny(u)).flatMap((u) => upgrade(u).map(asCandidate))
+      );
+    }
+
+    /* 대표 이미지(슬롯 0)만 다시 고른다.
+     *
+     * 언론사 og:image 는 한 사람을 두세 컷으로 붙인 **합성본**인 경우가 많다.
+     * 대표 이미지에는 제목 글자가 얹히므로, 합성본을 쓰면 이음새 위에 글씨가
+     * 걸쳐 얼굴 사이에 글자가 끼는 모양이 된다(2026-07-27 실측).
+     *
+     * → 받아 둔 사진들 중 **얼굴 하나가 크게 잡힌 단독 컷**을 대표로 올린다.
+     *   얼굴이 여러 개면 합성본일 가능성이 높아 감점된다.
+     *   파이썬/OpenCV 가 없으면 조용히 기존 순서를 유지한다.
+     */
+    const pressShots = result.map((r, i) => ({ r, i })).filter((x) => x.r?.source === 'source-article');
+    if (pressShots.length > 1) {
+      try {
+        const best = await pickBestThumb(pressShots.map((x) => x.r.file));
+        // 파이썬은 고른 경로를 `best` 키로 돌려준다 (`path` 가 아니다).
+        // 경로 문자열은 인코딩·구분자 때문에 그대로 안 맞을 수 있어 파일명으로 비교한다.
+        const bestName = best?.best ? path.basename(best.best) : '';
+        const hit = pressShots.find((x) => path.basename(x.r.file) === bestName);
+        if (!hit) log.debug(`대표 후보를 찾지 못했습니다 (best=${bestName || '없음'})`);
+        /* 교체는 **확실히 더 나을 때만** 한다.
+         * 얼굴이 아주 작으면(3% 미만) 오탐이거나 배경 인물이라 대표로 못 쓴다.
+         * 애매하면 원래 대표(보통 og:image)를 그대로 두는 편이 안전하다. */
+        const strong = (best?.faces || 0) >= 1 && (best?.biggest || 0) >= 3;
+        if (hit && !strong) {
+          log.debug(`대표 교체 안 함 — 후보 얼굴이 작음 (${best?.biggest || 0}%)`);
+        }
+        if (hit && strong && hit.i !== 0 && result[0]) {
+          log.debug(
+            `대표 이미지 교체: 슬롯 ${hit.i} ← 얼굴 ${best.faces}개, 최대 ${best.biggest}% ` +
+              `(기존 슬롯 0 은 합성본일 가능성)`
+          );
+          const tmp = result[0];
+          result[0] = result[hit.i];
+          result[hit.i] = tmp;
+        }
+      } catch (err) {
+        log.debug(`대표 이미지 얼굴 선별 생략: ${err.message.slice(0, 80)}`);
+      }
+    }
+
+    const got = result.filter((r) => r?.source === 'source-article').length;
+    log.ok(`원문 기사 사진 ${got}장 사용 (${host})`);
+  }
+
   // --- 0순위: 인물 사진 (위키미디어 공용) ---------------------------------
   // 연예 글처럼 주인공이 사람인 경우, 스톡 사진보다 실물 사진이 훨씬 강하다.
-  const people = (article.entities || []).filter((e) => e.nameEn || e.nameKo);
+  /* nameEn 이 있는 인물만 검색한다.
+   *
+   * 프롬프트는 nameEn 을 "**위키백과·위키미디어 공용에 실제로 등재된** 로마자 표기"로
+   * 정의하고, 확실하지 않으면 비우라고 지시한다. 즉 **빈 nameEn 은
+   * '위키미디어에 없는 사람'이라는 신호**다.
+   *
+   * 예전에는 `nameEn || nameKo` 로 한글 이름까지 폴백했다. 그래서 나는 솔로처럼
+   * 일반인이 방송 활동명(정숙·영호·순자)으로 나오는 글에서 위키미디어를
+   * "정숙" 으로 검색해 **전혀 상관없는 사람 사진과 한자 문서 이미지**가 들어갔다.
+   * (2026-07-27 실측)
+   */
+  const people = (article.entities || []).filter((e) => (e.nameEn || '').trim());
   if (cfg.images.usePersonPhotos !== false && people.length) {
     log.info(`인물 사진 검색: ${people.map((p) => p.nameKo || p.nameEn).join(', ')}`);
-    // 대표 이미지(슬롯 0)에 주인공 사진을 우선 배치한다
-    for (let slot = 0; slot < Math.min(slots, people.length + 1); slot++) {
-      const person = people[Math.min(slot, people.length - 1)];
+
+    /* 대표 이미지(슬롯 0)에는 인물 사진을 쓰지 않는다.
+     *
+     * 위키미디어 인물 검색은 "이름 + concert/performance" 로만 찾으므로
+     * 사실상 **공연 무대 사진**이 걸린다. 그런데 대표 이미지에는 글의
+     * 헤드라인이 얹힌다. 그래서 시구 기사에 "메츠 시구, 8-3 승리" 라는
+     * 글자와 콘서트 사진이 겹쳐 나오는 일이 실제로 벌어졌다(2026-07-27).
+     *
+     * 대표 이미지는 자기가 얹은 문구와 맞아야 하므로, 글이 지정한
+     * photoQuery(장면 검색어)를 쓰도록 슬롯 0 은 비워 두고
+     * 인물 사진은 텍스트가 없는 본문 슬롯(1번부터)에만 넣는다.
+     *
+     * images.personPhotoOnThumb: true 로 두면 예전처럼 대표에도 쓴다.
+     */
+    const startSlot = cfg.images.personPhotoOnThumb === true ? 0 : 1;
+    for (let slot = startSlot; slot < Math.min(slots, startSlot + people.length); slot++) {
+      const person = people[Math.min(slot - startSlot, people.length - 1)];
       const name = person.nameEn || person.nameKo;
       const opts = { allowShareAlike: cfg.images.allowShareAlike !== false };
       // 공연 현장 사진이 잘 걸리도록 검색어를 넓혀가며 시도한다

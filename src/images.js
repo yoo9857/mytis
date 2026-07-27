@@ -50,6 +50,68 @@ const MIME = {
   avif: 'image/avif',
 };
 
+/**
+ * 이미지 파일의 실제 픽셀 크기를 헤더에서 읽는다 (JPEG · PNG · WebP).
+ *
+ * 왜 필요한가: 언론사 사진은 660~780px 인 경우가 흔한데, 카드를 1200px 로
+ * 렌더링하면 CSS 가 `background-size: cover` 로 늘려 눈에 띄게 뭉개진다.
+ * 원본보다 크게 만들지 않으려면 원본 크기를 알아야 한다.
+ */
+export function imageSize(file) {
+  try {
+    const b = fs.readFileSync(file);
+    // PNG
+    if (b.length > 24 && b.readUInt32BE(0) === 0x89504e47) {
+      return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+    }
+    // JPEG — SOFn 마커에서 크기를 읽는다
+    if (b[0] === 0xff && b[1] === 0xd8) {
+      let i = 2;
+      while (i + 9 < b.length) {
+        if (b[i] !== 0xff) { i++; continue; }
+        const m = b[i + 1];
+        if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
+          return { w: b.readUInt16BE(i + 7), h: b.readUInt16BE(i + 5) };
+        }
+        i += 2 + b.readUInt16BE(i + 2);
+      }
+    }
+    // WebP
+    const v = b.indexOf('VP8');
+    if (v > 0) {
+      const tag = b.slice(v, v + 4).toString();
+      if (tag === 'VP8X') {
+        return { w: (b.readUIntLE(v + 8, 3) & 0xffffff) + 1, h: (b.readUIntLE(v + 11, 3) & 0xffffff) + 1 };
+      }
+      if (tag === 'VP8L') {
+        const bits = b.readUInt32LE(v + 9);
+        return { w: (bits & 0x3fff) + 1, h: ((bits >> 14) & 0x3fff) + 1 };
+      }
+      return { w: b.readUInt16LE(v + 14) & 0x3fff, h: b.readUInt16LE(v + 16) & 0x3fff };
+    }
+  } catch (err) {
+    log.debug(`이미지 크기 확인 실패 (${file}): ${err.message}`);
+  }
+  return { w: 0, h: 0 };
+}
+
+/**
+ * 원본보다 크게 렌더링하지 않도록 출력 크기를 줄인다.
+ * 비율은 그대로 두고 짧은 변을 기준으로 축소한다.
+ * 약간(15%)의 업스케일은 허용한다 — 그 정도는 눈에 안 띄고, 너무 작게
+ * 내보내면 티스토리 목록·공유 카드에서 되레 흐려진다.
+ */
+function clampToSource(w, h, srcFile) {
+  if (!srcFile) return [w, h];
+  const { w: sw, h: sh } = imageSize(srcFile);
+  if (!sw || !sh) return [w, h];
+  const scale = Math.min((sw * 1.15) / w, (sh * 1.15) / h, 1);
+  if (scale >= 1) return [w, h];
+  const out = [Math.round(w * scale), Math.round(h * scale)];
+  log.debug(`업스케일 방지: ${w}x${h} → ${out[0]}x${out[1]} (원본 ${sw}x${sh})`);
+  return out;
+}
+
 /** 로컬 이미지 파일을 data URI 로 변환한다 (setContent 는 로컬 경로를 못 읽는다). */
 function toDataUri(file) {
   try {
@@ -191,7 +253,11 @@ export async function renderImages(article, cfg) {
 
       // 본문 사진은 텍스트 없이 원본 사진만 쓰고, 비율도 글마다 다르게 섞는다
       if (!isThumb && cfg.images.bodyStyle === 'photo' && bgDataUri) {
-        const [bw, bh] = pickAspect(article.title, i, cfg.images.bodyAspects);
+        // 원본보다 크게 그리면 뭉개진다 — 원본 크기로 상한을 건다
+        const [bw, bh] = clampToSource(
+          ...pickAspect(article.title, i, cfg.images.bodyAspects),
+          bg.file
+        );
         const focus = bg.isPerson ? 'center 25%' : 'center center';
         const p = await renderPlainPhoto(browser, bgDataUri, [bw, bh], focus);
         const file = path.join(DIRS.images, `${prefix}-body${i}.png`);
@@ -220,10 +286,12 @@ export async function renderImages(article, cfg) {
       }
 
       // 대표 이미지는 정사각. 티스토리 목록·공유 카드가 정사각으로 잘린다.
-      const width = isThumb ? cfg.images.thumbSize || 1200 : cfg.images.width;
-      const height = isThumb
-        ? cfg.images.thumbSize || 1200
-        : Math.round(cfg.images.height * 0.75);
+      // 원본보다 크게 그리면 사진이 뭉개지므로 원본 크기로 상한을 건다.
+      const [width, height] = clampToSource(
+        isThumb ? cfg.images.thumbSize || 1200 : cfg.images.width,
+        isThumb ? cfg.images.thumbSize || 1200 : Math.round(cfg.images.height * 0.75),
+        bg?.file
+      );
 
       // 강조 수치: codex 가 준 값 우선, 없으면 본문에서 찾아본다
       let statValue = brief.statValue || '';

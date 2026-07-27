@@ -18,7 +18,8 @@
 ### 1-1. 의존성 설치
 
 ```powershell
-cd C:\moneyti
+git clone https://github.com/yoo9857/mytis.git
+cd mytis
 npm install
 ```
 
@@ -138,6 +139,58 @@ npm run queue -- --count 3    # 3개 연속 발행 (사이 30초 대기)
 
 ---
 
+## 2-1. 스타·연예인 모드 (기사 기반 자동 발행)
+
+연예 기사 URL 하나만 주면 아래가 전부 자동으로 돕니다.
+
+```powershell
+npm run post -- "https://m.entertain.naver.com/..."      # 바로 발행
+npm run draft -- "https://m.entertain.naver.com/..."     # 확인만
+```
+
+| 단계 | 하는 일 |
+|---|---|
+| 사실 확보 | 원문 기사 본문 추출 + 웹 검색으로 교차 검증 |
+| **사진** | 원문 기사 사진 → **부족하면 인용한 다른 기사에서 추가 수집** |
+| 사진 화질 | `_V`·`.webp` 를 떼고 가장 큰 원본. 원본보다 크게 렌더링하지 않음 |
+| 사진 중복 | 같은 사진의 크기 변형을 걸러 **서로 다른 컷**만 |
+| 대표 이미지 | 얼굴 기준 자동 선별. 합성본·로고·작은 이미지는 제외 |
+| 인물 사진 | `entities[].nameEn` 이 있는 인물만 위키미디어에서 |
+| 카테고리 | 글 내용에 맞춰 자동 선택 (`blog.category: "auto"`) |
+| 영상 | 공식 채널 유튜브 임베드 (없으면 생략) |
+
+수동으로 소재를 찾을 필요도 없습니다.
+
+```powershell
+npm run news                      # 화제도 순 후보만 보기
+npm run news -- --add             # 큐에 추가
+npm run news -- --add --now       # 큐에 넣고 1위 기사 바로 발행
+```
+
+### 스케줄러에 걸기
+
+```powershell
+# 매일 09:00 — 연예 기사 5건 수집해서 1건 발행
+powershell -ExecutionPolicy Bypass -File scripts\register-task.ps1 -Star -Time 09:00
+
+# 07:30 / 19:30 두 번, 회당 2건 발행 (8건 수집)
+powershell -ExecutionPolicy Bypass -File scripts\register-task.ps1 -Star -Time 07:30,19:30 -Count 2 -Find 8
+```
+
+`-Star` 를 붙이면 `scripts\run-star.cmd` 가 등록됩니다. 수집(`news --add`) → 발행(`queue`) 순서로 돌고
+결과는 `logs\scheduler.log` 에 쌓입니다. 수집이 실패해도 기존 큐로 발행을 계속합니다.
+
+바로 한 번 돌려보려면:
+
+```powershell
+scripts\run-star.cmd 1 5          # 5건 수집해서 1건 발행
+Get-Content logs\scheduler.log -Tail 40
+```
+
+> **분량 주의**: 짧은 간격으로 대량 발행하면 티스토리 스팸 필터에 걸립니다. 하루 1~3개를 권장합니다.
+
+---
+
 ## 3. 자동 배포 (Windows 작업 스케줄러)
 
 ```powershell
@@ -164,12 +217,32 @@ powershell -ExecutionPolicy Bypass -File scripts\unregister-task.ps1
 
 ---
 
+## 3-1. 스킨 광고 설정 (`skinecode.md` 의 `window.SKIN.adsense`)
+
+애드센스 → **광고 → 광고 단위 기준**에서 단위를 만들고, 코드의 `data-ad-slot="1234567890"` 에서 **숫자만** 복사해 넣습니다. 비워 두면 그 자리 광고는 삽입되지 않습니다(자동 광고는 그대로 동작).
+
+| 키 | 설명 |
+|---|---|
+| `inArticleSlot` | 본문 중간 광고. 소제목(h2/h3) 경계에만, `minGapChars` 간격을 지켜 최대 `maxInArticle` 개 |
+| `bottomSlot` | 본문 하단 디스플레이 광고 |
+| `multiplexSlot` | 본문 하단 멀티플렉스(추천 콘텐츠) |
+| `sidebarSlot` | **사이드바 광고** |
+| `sidebarOn` | 사이드바 광고를 어디에 띄울지. `home`(기본) / `all` / `post` |
+| `sidebarSticky` | 사이드바 광고가 스크롤을 따라오게 할지 (1024px 이상에서 사이드바 전체가 고정됨) |
+| `minBodyChars` | 본문이 이보다 짧으면 중간 광고 생략 (정책상 안전) |
+| `lazy` | 화면에 가까워질 때 로드. 내부 스크롤 영역의 광고는 문서 끝에서 자동 보정 |
+| `label` | 광고 위에 붙는 라벨. 빈 문자열이면 숨김 |
+
+---
+
 ## 4. 설정 (`config.json`)
 
 | 키 | 설명 |
 |---|---|
 | `blog.name` | `myblog.tistory.com` 이면 `myblog`. `.env`의 `TISTORY_BLOG`가 우선 |
-| `blog.category` | 발행할 카테고리 이름. 비우면 미지정 |
+| `blog.category` | 카테고리 이름, 또는 **`auto`**(글 내용에 맞춰 자동 선택). ⚠️ **비워 두지 마세요** — 티스토리는 카테고리를 지정하지 않으면 **직전 글의 카테고리를 물려줍니다** |
+| `blog.categoryFallback` | `auto` 가 확신하지 못했을 때 쓸 카테고리. 비우면 `카테고리 없음` |
+| `blog.categoryAliases` | 카테고리 이름 → 본문에서 찾을 낱말들. 예: `{"방송": ["아이돌","드라마"]}`. `src/category.js` 의 기본 별칭에 더해집니다 |
 | `blog.visibility` | `public` / `protected` / `private` |
 | `blog.publishMode` | `now`(즉시) 또는 `reserve`(예약) |
 | `blog.reserveAfterMinutes` | 예약 모드일 때 몇 분 뒤에 발행할지 |
@@ -184,6 +257,9 @@ powershell -ExecutionPolicy Bypass -File scripts\unregister-task.ps1
 | `images.showCredit` | 카드 우하단에 사진 출처 표기 여부 |
 | `images.layout` | 비우면 글마다 다른 연출 자동 선택. `editorial`/`panel`/`spotlight`/`figure`/`band` 로 고정 가능 |
 | `images.useStats` | 본문 핵심 수치를 카드에 표시할지 |
+| `images.useSourcePhoto` | ⚠️ 소재 기사에 실린 **언론사 사진**을 쓸지. 저작권 위험은 발행자 부담 |
+| `images.usePersonPhotos` | 위키미디어 인물 사진을 쓸지. `entities[].nameEn` 이 있을 때만 동작 |
+| `images.personPhotoOnThumb` | 인물 사진을 대표 이미지에도 쓸지. 기본 `false`(본문에만) |
 | `images.brand` | 이미지 카드에 넣을 브랜드 표기 |
 | `images.palettes` | 그라디언트 폴백 색 조합 · 사진 배경일 때 포인트 색. 글 제목 해시로 자동 선택. **6자리 hex만** |
 | `news.query` | `npm run news` 의 기본 분야 |
@@ -234,18 +310,45 @@ SEO(검색엔진)와 GEO(생성형 검색 인용) 양쪽을 노린 구조로 조
 }
 ```
 
-**사진 소스 우선순위** (전부 무료·상업 이용 가능)
+**사진 소스 우선순위**
 
-| 순위 | 소스 | 키 | 용도 |
-|---|---|---|---|
-| 0 | 위키미디어 공용 | 불필요 | 인물 실물 사진 (`entities`에 인물이 있을 때) |
-| 1 | Pexels API | 무료 발급 | 장면 스톡 사진 |
-| 1 | Unsplash API | 무료 발급 | 〃 |
-| 1 | Pixabay API | 무료 발급 | 〃 |
-| 2 | codex 웹 검색 | 불필요 | 위 API가 없거나 실패했을 때 |
-| 3 | Openverse | 불필요 | 마지막 폴백 |
+| 순위 | 소스 | 키 | 용도 | 라이선스 |
+|---|---|---|---|---|
+| **★** | **원문 기사 사진** | 불필요 | 기사 기반 글의 대표·본문. `images.useSourcePhoto` | ⚠️ **언론사 저작물** |
+| 0 | 위키미디어 공용 | 불필요 | 인물 실물 사진. **`entities[].nameEn` 이 있을 때만** | 상업 이용 가능 |
+| 1 | Pexels / Unsplash / Pixabay | 무료 발급 | 장면 스톡 사진 | 상업 이용 무료 |
+| 2 | codex 웹 검색 | 불필요 | 위 API가 없거나 실패했을 때 | 화이트리스트 도메인만 |
+| 3 | Openverse | 불필요 | 마지막 폴백 | 열린 라이선스 |
 
 전부 실패하면 그라디언트 카드로 폴백하므로 파이프라인이 멈추지 않습니다.
+
+### ⚠️ `images.useSourcePhoto` — 기본 방침을 뒤집는 옵션
+
+`true` 로 두면 **소재 기사에 실린 사진을 그대로 씁니다.** 연예 글에서 "그날 그 장면"을
+보여주는 유일한 현실적 방법이지만, **언론사 보도사진은 저작권이 있습니다.**
+
+이 저장소의 원래 방침(§ 아래 "저작권 처리")은 스톡 사진만 쓰는 것이었습니다.
+이 옵션을 켜는 것은 **발행자가 위험을 감수하겠다는 선택**입니다. 켜면 실행할 때마다
+경고 로그가 찍힙니다.
+
+켠다면 최소한 이것들은 지켜집니다(코드가 자동 처리):
+
+- 매체 도메인이 사진 우하단에 표기됩니다 (`Photo: en.seoul.co.kr · press photo`, 한글 없음)
+- 매체명과 원문 링크가 본문 하단 "이미지 출처"에 남습니다
+- 같은 사진의 크기 변형(`_V` 등)을 걸러 **서로 다른 컷**만 씁니다
+- `_V`·`.webp` 를 떼고 **가장 큰 원본**을 받습니다
+- 원본보다 크게 렌더링하지 않습니다(업스케일 방지)
+
+끄려면 `"images": { "useSourcePhoto": false }`.
+
+### 인물 사진 규칙
+
+- **`entities[].nameEn` 이 있는 인물만** 위키미디어에서 찾습니다.
+  `nameEn` 이 비어 있으면 "위키미디어에 없는 사람"이라는 뜻이라 검색하지 않습니다.
+  한글 이름으로 검색하면 동명이인·한자 문서가 걸립니다.
+- 인물 사진은 **본문 슬롯에만** 들어갑니다. 대표 이미지에는 글이 지정한 장면 사진을 씁니다.
+  (인물 검색은 공연 사진을 물어오는데, 대표 이미지에는 헤드라인이 얹혀 주제와 어긋납니다)
+- 예전처럼 대표에도 쓰려면 `"images": { "personPhotoOnThumb": true }`.
 
 > **국내 연예인 사진의 현실**
 > 위키미디어 공용에 한국 연예인 사진은 거의 없고, 있어도 대부분 광고 스틸입니다.
@@ -341,10 +444,10 @@ PIXABAY_API_KEY=
 | 로그인 | 카카오 자동 로그인 → 쿠키를 `profile/session.json` 에 저장 후 재주입 |
 | 임시저장 팝업 | "이어서 작성하시겠습니까?" confirm 자동 거절 |
 | 모드 전환 | `#editor-mode-html-tistory` / `#editor-mode-kakao-tistory`, 전환 confirm 자동 수락 |
-| 본문 입력 | HTML 모드 CodeMirror `setValue()` 로 직접 주입 |
+| 본문 입력 | **`tinymce.activeEditor.setContent()` 로 위지윅에 직접 주입.** HTML 모드 → 기본모드 복귀 경로를 먼저 시도하지만 실측상 0자로 실패하고, 길이 검증 후 이 폴백이 본문을 채운다 |
 | 이미지 업로드 | 툴바 첨부(`#mceu_0-open`) → "사진" → 파일 선택창 가로채기 |
 | 이미지 삽입 | 업로드 후 HTML 모드에서 `[##_Image\|...\|_##]` 매크로를 회수해 본문에 배치 |
-| 카테고리 | `#category-btn` → `.mce-menu-item` (하위 카테고리는 앞에 `- ` 가 붙음) |
+| 카테고리 | `#category-btn` → `.mce-menu-item` (하위 카테고리는 앞에 `- ` 가 붙음). **지정하지 않으면 직전 글의 카테고리를 물려받는다** |
 | 태그 | `#tagText` 에 입력 후 Enter |
 | 글 주소 | `#urlPublish` 를 영문 슬러그로 덮어씀 |
 | 공개 범위 | `#open20`(공개) / `#open15`(보호) / `#open0`(비공개) |

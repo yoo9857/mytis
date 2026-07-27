@@ -20,13 +20,21 @@ param(
   [int]      $Count = 1,
   [string]   $TaskName = 'MoneytiTistoryAutoPost',
   [int]      $RepeatHours = 0,
-  [switch]   $RunWhenLoggedOff
+  [switch]   $RunWhenLoggedOff,
+  [switch]   $Star,
+  [int]      $Find = 5
 )
+
+# -Star : 스타·연예인 모드. 최신 연예 기사를 자동 수집해서 발행한다.
+#         기사 URL 이 큐에 들어가므로 원문 사진 확보·카테고리 자동 선택이 함께 동작한다.
+# -Find : -Star 일 때 한 번에 수집할 기사 수 (기본 5)
 
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$runner = Join-Path $projectRoot 'scripts\run-queue.cmd'
+# 삼항 연산자는 PowerShell 7+ 전용이라 쓰지 않는다 (이 환경은 5.1)
+if ($Star) { $runner = Join-Path $projectRoot 'scripts\run-star.cmd' }
+else { $runner = Join-Path $projectRoot 'scripts\run-queue.cmd' }
 
 if (-not (Test-Path $runner)) {
   throw "실행 스크립트를 찾을 수 없습니다: $runner"
@@ -51,7 +59,8 @@ foreach ($t in $Time) {
 }
 
 # --- 동작 --------------------------------------------------------------------
-$action = New-ScheduledTaskAction -Execute $runner -Argument "$Count" -WorkingDirectory $projectRoot
+if ($Star) { $taskArgs = "$Count $Find" } else { $taskArgs = "$Count" }
+$action = New-ScheduledTaskAction -Execute $runner -Argument $taskArgs -WorkingDirectory $projectRoot
 
 # --- 설정 --------------------------------------------------------------------
 $settings = New-ScheduledTaskSettingsSet `

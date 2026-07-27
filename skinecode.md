@@ -43,6 +43,9 @@
         inArticleSlot: '',      // 본문 중간 광고 슬롯 ID (예: '1234567890')
         bottomSlot: '',         // 본문 하단 광고 슬롯 ID (선택)
         multiplexSlot: '',      // 하단 '멀티플렉스(추천 콘텐츠)' 슬롯 ID (선택)
+        sidebarSlot: '',        // 사이드바 광고 슬롯 ID (선택)
+        sidebarOn: 'home',      // 사이드바 광고를 어디에 띄울지: 'home' | 'all' | 'post'
+        sidebarSticky: true,    // 스크롤해도 사이드바 광고가 따라오게 할지
         maxInArticle: 3,        // 본문 중간 광고 최대 개수
         minGapChars: 1300,      // 광고 사이 최소 본문 글자수 — 광고가 몰리는 것을 막는다
         minBodyChars: 1800,     // 본문이 이보다 짧으면 중간 광고 생략(정책상 안전)
@@ -672,6 +675,51 @@
               <ol class="sk-toc__list"></ol>
             </nav>
 
+            <!-- 사이드바 광고 자리 (adsense.sidebarSlot 설정 시 표시)
+                 기본값은 홈에서만 노출한다(adsense.sidebarOn). -->
+            <div class="sk-adzone sk-adzone--side" data-sk-adzone="sidebar"></div>
+
+            <!-- 최근글 / 인기글
+                 원래는 사이드바 모듈 블록 안에 있어서, 티스토리 '사이드바 설정'에
+                 해당 모듈을 넣어야만 보였다. 항상 나오도록 바깥으로 꺼냈다.
+                 탭 전환은 JS 가 만든다(원본 스킨에는 탭 스크립트가 없었다). -->
+            <div class="post-list tab-ui" data-sk-tabs>
+              <div id="recent" class="tab-list">
+                <h2>최근글</h2>
+                <ul>
+                  <s_rctps_rep>
+                    <li>
+                      <a href="[##_rctps_rep_link_##]">
+                        <s_rctps_rep_thumbnail>
+                          <img src="//i1.daumcdn.net/thumb/C58x58/?fname=[##_rctps_rep_thumbnail_##]" alt=""
+                            loading="lazy" decoding="async" />
+                        </s_rctps_rep_thumbnail>
+                        <span class="title">[##_rctps_rep_title_##]</span>
+                        <span class="date">[##_rctps_rep_simple_date_##]</span>
+                      </a>
+                    </li>
+                  </s_rctps_rep>
+                </ul>
+              </div>
+              <div id="popular" class="tab-list">
+                <h2>인기글</h2>
+                <ul>
+                  <s_rctps_popular_rep>
+                    <li>
+                      <a href="[##_rctps_rep_link_##]">
+                        <s_rctps_rep_thumbnail>
+                          <img src="//i1.daumcdn.net/thumb/C58x58/?fname=[##_rctps_rep_thumbnail_##]" alt=""
+                            loading="lazy" decoding="async" />
+                        </s_rctps_rep_thumbnail>
+                        <span class="title">[##_rctps_rep_title_##]</span>
+                        <span class="date">[##_rctps_rep_simple_date_##]</span>
+                      </a>
+                    </li>
+                  </s_rctps_popular_rep>
+                </ul>
+              </div>
+            </div>
+
             <div class="sidebar-1">
               <s_sidebar>
                 <s_sidebar_element>
@@ -696,45 +744,6 @@
                       </ul>
                     </div>
                   </s_rct_notice>
-                </s_sidebar_element>
-                <s_sidebar_element>
-                  <!-- 최근글/인기글 -->
-                  <div class="post-list tab-ui">
-                    <div id="recent" class="tab-list">
-                      <h2>최근글</h2>
-                      <ul>
-                        <s_rctps_rep>
-                          <li>
-                            <a href="[##_rctps_rep_link_##]">
-                              <s_rctps_rep_thumbnail>
-                                <img src="//i1.daumcdn.net/thumb/C58x58/?fname=[##_rctps_rep_thumbnail_##]" alt=""
-                                  loading="lazy" decoding="async" />
-                              </s_rctps_rep_thumbnail>
-                              <span class="title">[##_rctps_rep_title_##]</span>
-                              <span class="date">[##_rctps_rep_simple_date_##]</span>
-                            </a>
-                          </li>
-                        </s_rctps_rep>
-                      </ul>
-                    </div>
-                    <div id="popular" class="tab-list">
-                      <h2>인기글</h2>
-                      <ul>
-                        <s_rctps_popular_rep>
-                          <li>
-                            <a href="[##_rctps_rep_link_##]">
-                              <s_rctps_rep_thumbnail>
-                                <img src="//i1.daumcdn.net/thumb/C58x58/?fname=[##_rctps_rep_thumbnail_##]" alt=""
-                                  loading="lazy" decoding="async" />
-                              </s_rctps_rep_thumbnail>
-                              <span class="title">[##_rctps_rep_title_##]</span>
-                              <span class="date">[##_rctps_rep_simple_date_##]</span>
-                            </a>
-                          </li>
-                        </s_rctps_popular_rep>
-                      </ul>
-                    </div>
-                  </div>
                 </s_sidebar_element>
                 <s_sidebar_element>
                   <!-- 최근댓글 -->
@@ -992,9 +1001,30 @@
         var showProgress = isPost && F.progress !== false;
         if (wrapEl && !showProgress) wrapEl.hidden = true;
 
+        /* ── 헤더 축소는 반드시 히스테리시스를 둘 것 ──────────────────────
+         * #header 는 position:sticky 라 **문서 흐름에서 자리를 그대로 차지한다.**
+         * .is-scrolled 가 붙으면 h1 padding 과 #gnb height 가 줄어 헤더가
+         * 약 26px 낮아지고, 그만큼 아래 콘텐츠가 위로 튄다.
+         *
+         * 예전에는 임계값이 y > 8 하나뿐이라, 맨 위에서 조금만 왔다갔다 해도
+         * 클래스가 on/off 를 반복하며 콘텐츠가 26px 씩 튀었다.
+         * transition 이 그걸 애니메이션으로 늘려 **헤더가 흔들리는 것처럼** 보였다.
+         *
+         * → 켜는 지점과 끄는 지점을 벌려 둔다(72 / 24). 그 사이에서는 아무 일도
+         *   일어나지 않으므로 경계에서 진동하지 않는다.
+         * ------------------------------------------------------------- */
+        var ENTER = 72;   // 여기를 넘으면 압축 헤더
+        var EXIT = 24;    // 여기 아래로 내려와야 원래 크기로 복귀
+        var compact = false;
+
         function update() {
           var y = window.pageYOffset || root.scrollTop;
-          if (header) header.classList.toggle('is-scrolled', y > 8);
+
+          if (header) {
+            if (!compact && y > ENTER) compact = true;
+            else if (compact && y < EXIT) compact = false;
+            header.classList.toggle('is-scrolled', compact);
+          }
           if (fabTop) fabTop.parentNode.classList.toggle('is-on', y > 400);
 
           if (showProgress && bar && article) {
@@ -1004,8 +1034,21 @@
             bar.style.width = Math.max(0, Math.min(100, pct)).toFixed(2) + '%';
           }
         }
-        onScroll(update);
-        on(window, 'resize', update);
+
+        /* 사이드바 목차가 헤더 밑에 깔리지 않도록 실제 헤더 높이를 CSS 에 알려준다.
+           (헤더가 압축되면 높이가 달라지므로 전환이 끝난 뒤에도 다시 잰다) */
+        function syncHeaderHeight() {
+          if (!header) return;
+          var h = header.offsetHeight;
+          if (h) root.style.setProperty('--sk-header-now', h + 'px');
+        }
+        if (header) {
+          on(header, 'transitionend', syncHeaderHeight);
+          syncHeaderHeight();
+        }
+
+        onScroll(function () { update(); syncHeaderHeight(); });
+        on(window, 'resize', function () { update(); syncHeaderHeight(); });
         update();
 
         on(fabTop, 'click', function () { scrollToY(0); });
@@ -1271,22 +1314,43 @@
       (function ads() {
         if (!AD.client) return;
 
+        /* ── 지연 로딩과 push 순서 ───────────────────────────────────────
+         * adsbygoogle.push({}) 는 **인자로 넘긴 요소를 채우지 않는다.**
+         * 문서 순서상 아직 안 채워진 첫 번째 <ins> 를 채운다.
+         *
+         * 그래서 "화면에 들어온 광고만 push" 하면 순서가 어긋난다.
+         * 예: 검색결과나 #앵커로 글 중간에 진입 → 3번 광고가 먼저 보임
+         *     → push({}) 가 1번 <ins> 를 채움 → 3번은 영영 안 채워지고
+         *     콘솔에 "All 'ins' elements ... already have ads in them" 이 뜬다.
+         *
+         * → 해결: 광고를 **DOM 순서대로 배열에 쌓아 두고**, i 번째가 화면에
+         *   들어오면 아직 push 하지 않은 0..i 번째를 한꺼번에 순서대로 push 한다.
+         *   push 횟수와 채워지는 <ins> 가 항상 1:1 로 맞는다.
+         * ------------------------------------------------------------- */
+        var units = [];      // DOM 에 넣은 순서 = 문서 순서
+        var pushed = 0;      // 여기까지는 이미 push 했다
+
+        function pushThrough(index) {
+          while (pushed <= index && pushed < units.length) {
+            var wrap = units[pushed];
+            pushed++;
+            if (!wrap) continue;
+            var ins = $('ins.adsbygoogle', wrap);
+            if (!ins || ins.getAttribute('data-sk-pushed')) continue;
+            ins.setAttribute('data-sk-pushed', '1');
+            try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { }
+          }
+        }
+
         var io = null;
         if (AD.lazy !== false && 'IntersectionObserver' in window) {
           io = new IntersectionObserver(function (entries) {
             entries.forEach(function (en) {
               if (!en.isIntersecting) return;
-              push(en.target);
               io.unobserve(en.target);
+              pushThrough(units.indexOf(en.target));
             });
           }, { rootMargin: '600px 0px' });
-        }
-
-        function push(wrap) {
-          var ins = $('ins.adsbygoogle', wrap);
-          if (!ins || ins.getAttribute('data-sk-pushed')) return;
-          ins.setAttribute('data-sk-pushed', '1');
-          try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { }
         }
 
         function build(kind, slot) {
@@ -1318,9 +1382,42 @@
           return wrap;
         }
 
+        /** 광고를 등록만 해 둔다. 실제 감시·push 는 전부 모은 뒤 startAds() 에서. */
         function activate(wrap) {
-          if (!wrap) return;
-          if (io) io.observe(wrap); else push(wrap);
+          if (wrap) units.push(wrap);
+        }
+
+        /**
+         * 등록된 광고를 **문서 순서로 정렬한 뒤** 감시를 건다.
+         *
+         * push({}) 는 문서 순서상 첫 미충전 <ins> 를 채우므로, 배열 순서가
+         * 문서 순서와 다르면 i번째를 노렸는데 다른 자리가 채워진다.
+         * 본문 광고 → 하단 → 사이드바 순으로 만들지만, 사이드바가 마크업상
+         * 본문보다 앞에 오는 레이아웃이면 삽입 순서 ≠ 문서 순서가 된다.
+         */
+        function startAds() {
+          units.sort(function (a, b) {
+            var rel = a.compareDocumentPosition(b);
+            if (rel & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+            if (rel & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+            return 0;
+          });
+          if (!io) { pushThrough(units.length - 1); return; }   // 지연 로딩 끄면 즉시
+          units.forEach(function (w) { io.observe(w); });
+
+          /* 안전장치 — 화면에 영영 안 들어오는 광고를 구제한다.
+           * 사이드바는 내용이 길면 자체 스크롤(overflow-y:auto)이 생긴다.
+           * 그 안쪽 아래에 있는 광고는 페이지를 아무리 스크롤해도
+           * 뷰포트와 교차하지 않아 IntersectionObserver 가 발화하지 않는다.
+           * → 문서 끝 근처에 닿으면 남은 것을 순서대로 밀어 넣는다.
+           *   이 시점이면 본문 광고는 이미 다 지나왔으므로 순서도 안전하다. */
+          onScroll(function () {
+            if (pushed >= units.length) return;
+            var y = window.pageYOffset || root.scrollTop || 0;
+            if (y + window.innerHeight * 2 >= doc.documentElement.scrollHeight) {
+              pushThrough(units.length - 1);
+            }
+          });
         }
 
         // 8-1. 본문 중간 — 섹션(h2/h3) 경계에만, 광고 사이 최소 간격을 지켜서 삽입
@@ -1369,6 +1466,81 @@
             if (unit) { zone.appendChild(unit); activate(unit); }
           });
         }
+
+        /* 8-3. 사이드바
+         * 티스토리는 화면 종류를 body id 로 알려준다 (tt-body-index / -page /
+         * -category / -tag / -search ...). 홈에서만 띄우는 게 기본값이다.
+         * 본문 페이지에서는 같은 자리에 목차 레일이 붙으므로 서로 밀지 않게 둔다. */
+        var sideZone = $('[data-sk-adzone="sidebar"]');
+        if (sideZone && AD.sidebarSlot) {
+          var where = AD.sidebarOn || 'home';
+          var isHome = body.id === 'tt-body-index';
+          var showSide = where === 'all' || (where === 'home' && isHome) || (where === 'post' && isPost);
+
+          if (showSide) {
+            var sideUnit = build('sidebar', AD.sidebarSlot);
+            if (sideUnit) {
+              if (AD.sidebarSticky !== false) sideZone.classList.add('is-sticky');
+              sideZone.appendChild(sideUnit);
+              activate(sideUnit);
+            }
+          } else {
+            sideZone.hidden = true;
+          }
+        } else if (sideZone) {
+          sideZone.hidden = true;
+        }
+
+        startAds();
+      })();
+
+      /* ---------- 8-4. 사이드바 최근글/인기글 탭 ----------
+       * 원본 스킨은 .tab-ui h2 a.current 를 꾸미는 CSS 만 있고
+       * 그 마크업을 만드는 스크립트가 없었다. 그래서 두 목록이 그냥 위아래로
+       * 쌓여 보였다. 여기서 실제 탭으로 만든다.
+       * 글이 하나도 없는 목록은 탭에서 빼고, 둘 다 비면 영역을 숨긴다. */
+      (function postListTabs() {
+        $$('[data-sk-tabs]').forEach(function (box) {
+          var panels = $$('.tab-list', box).filter(function (p) {
+            return $$('li', p).length > 0;      // 빈 목록은 탭으로 만들지 않는다
+          });
+          $$('.tab-list', box).forEach(function (p) {
+            if (panels.indexOf(p) < 0) p.hidden = true;
+          });
+          if (!panels.length) { box.hidden = true; return; }
+
+          // 첫 패널의 h2 를 탭 막대로 바꾸고 나머지 h2 는 감춘다
+          var head = $('h2', panels[0]);
+          if (!head) return;
+          var bar = doc.createElement('h2');
+          bar.className = 'sk-tabbar';
+
+          panels.forEach(function (p, i) {
+            var label = ($('h2', p) || {}).textContent || ('탭 ' + (i + 1));
+            var a = doc.createElement('a');
+            a.href = '#' + (p.id || '');
+            a.textContent = label.trim();
+            a.setAttribute('role', 'tab');
+            a.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+            if (i === 0) a.className = 'current';
+            on(a, 'click', function (e) {
+              e.preventDefault();
+              panels.forEach(function (q, j) {
+                q.classList.toggle('is-on', j === i);
+                $$('a', bar)[j].classList.toggle('current', j === i);
+                $$('a', bar)[j].setAttribute('aria-selected', j === i ? 'true' : 'false');
+              });
+            });
+            bar.appendChild(a);
+
+            var h = $('h2', p);
+            if (h) h.hidden = true;
+            p.classList.toggle('is-on', i === 0);
+          });
+
+          if (panels.length > 1) box.insertBefore(bar, box.firstChild);
+          else { var only = $('h2', panels[0]); if (only) only.hidden = false; }
+        });
       })();
 
       /* ---------- 9. 스크롤 등장 애니메이션 ---------- */

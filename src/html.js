@@ -106,15 +106,40 @@ function renderFigure(img) {
 function renderEmbed(embed) {
   if (!/^[A-Za-z0-9_-]{11}$/.test(embed?.videoId || '')) return '';
   const caption = [embed.title, embed.channel].filter(Boolean).join(' · ');
+  // 장면 지정 재생: ?start=초. 자막에서 확인한 지점만 들어온다(ytClip.snapTimestamps).
+  const start = Math.max(0, parseInt(embed.startSeconds, 10) || 0);
+  const q = start ? `?start=${start}` : '';
+  const at = start ? `${Math.floor(start / 60)}:${String(start % 60).padStart(2, '0')}` : '';
+  // 주의: 티스토리는 저장할 때 **<iframe> 의 style 속성을 지운다.**
+  // (2026-07-27 실측: 발행된 글에서 iframe 의 inline style 이 null 이었다)
+  // 그래서 style 만 믿으면 iframe 이 기본 크기 300×225(4:3)로 쪼그라들어
+  // 검은 16:9 박스 안에 작은 화면이 뜬다.
+  // → width/height **속성**을 함께 주고(속성은 남는다), 최종 채움은 스킨 CSS
+  //   (`#article-view div[style*="padding-bottom:56.25%"] > iframe`)가 담당한다.
+  // 장면 설명 + 실제 대사. 캡처 사진 대신 이 조합이 같은 정보를 준다.
+  const sceneNote = embed.caption
+    ? `<p style="margin:0 0 10px;font-size:17px;line-height:1.75;color:#222;font-weight:600;">${
+        at ? `<span style="color:#4c1d95;">${at}</span> ` : ''
+      }${esc(embed.caption)}</p>`
+    : '';
+  const quote = embed.quote
+    ? `<blockquote style="margin:12px 0 0;padding:14px 18px;background:#f4f6ff;` +
+      `border-left:4px solid #4c1d95;border-radius:6px;font-size:16px;line-height:1.7;color:#1f2937;">` +
+      `“${esc(embed.quote)}”</blockquote>`
+    : '';
+
   return `<div style="margin:28px 0;">
-  <div style="position:relative;width:100%;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:8px;background:#000;">
-    <iframe src="https://www.youtube.com/embed/${esc(embed.videoId)}"
+  ${sceneNote}
+  <div class="sk-embed" style="position:relative;width:100%;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:8px;background:#000;">
+    <iframe src="https://www.youtube.com/embed/${esc(embed.videoId)}${q}"
+      width="1280" height="720"
       style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"
       title="${esc(embed.title || 'YouTube video')}"
       loading="lazy" allowfullscreen
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
   </div>
-  ${caption ? `<p style="${S.figcap}text-align:center;margin-top:8px;">▶ ${esc(caption)}</p>` : ''}
+  ${caption ? `<p style="${S.figcap}text-align:center;margin-top:8px;">▶ ${esc(caption)}${at ? ` · ${at}부터` : ''}</p>` : ''}
+  ${quote}
 </div>`;
 }
 

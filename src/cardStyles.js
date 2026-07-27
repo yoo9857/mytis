@@ -231,11 +231,19 @@ export const TRENDY_LAYOUTS = {
  * 티스토리 목록·공유 카드가 정사각으로 잘리는 것을 감안한 연출로,
  * 사진을 그대로 살리고 오른쪽 아래에 "무슨 글인지"만 짧게 얹는다.
  */
+/**
+ * clean — 사진을 최대한 살리고 제목만 얹는 연출.
+ *
+ * 배치: 좌우 가운데, 상하는 가운데보다 살짝 아래(58%).
+ *   인물 사진은 얼굴이 위쪽 절반에 오는 경우가 많아, 정중앙에 글자를 두면
+ *   얼굴을 가린다. 조금 내리면 얼굴을 피하면서도 시선 중심에 걸린다.
+ *
+ * 액센트 막대(.tick)와 분류 라벨(.eyebrow)은 뺐다 — 사진 위 요소가 적을수록
+ * 보도사진이 원본 그대로 보이고, 2차적저작물 소지도 줄어든다.
+ */
 TRENDY_LAYOUTS.clean = function clean(ctx) {
-  const { width, palette } = ctx;
-  const [, , hot] = palette;
+  const { width } = ctx;
   const pad = Math.round(width * 0.075);
-  const label = ctx.eyebrow || '';
   const size = fit(ctx.headline, Math.round(width * 0.072));
 
   return {
@@ -246,24 +254,22 @@ TRENDY_LAYOUTS.clean = function clean(ctx) {
     css: `
       .grain{position:absolute;inset:0;z-index:3;opacity:.1;pointer-events:none;
              background-image:url("${GRAIN_SVG}");}
-      .scrim{background:linear-gradient(0deg, rgba(0,0,0,.86) 0%, rgba(0,0,0,.45) 26%,
-             rgba(0,0,0,.06) 52%, rgba(0,0,0,.22) 100%);}
-      .content{right:${pad}px;bottom:${pad}px;left:${pad}px;text-align:right;}
-      .tick{display:inline-block;width:${Math.round(width * 0.07)}px;height:4px;
-            background:${hot};border-radius:2px;margin-bottom:${Math.round(width * 0.017)}px;
-            box-shadow:0 0 16px ${hot}cc;}
-      .eyebrow{display:block;font-size:${Math.round(width * 0.019)}px;font-weight:800;
-               letter-spacing:.22em;color:${hot};margin-bottom:${Math.round(width * 0.011)}px;
-               text-shadow:0 2px 10px rgba(0,0,0,.9);}
+      /* 글자가 중앙에 오므로 아래쪽만 어둡게 하면 안 읽힌다.
+         글자 자리만 부드럽게 눌러 사진은 최대한 밝게 남긴다. */
+      .scrim{background:
+             radial-gradient(ellipse 78% 34% at 50% 58%, rgba(0,0,0,.58) 0%,
+                             rgba(0,0,0,.30) 55%, rgba(0,0,0,0) 100%),
+             linear-gradient(0deg, rgba(0,0,0,.50) 0%, rgba(0,0,0,.14) 32%,
+                             rgba(0,0,0,.04) 60%, rgba(0,0,0,.18) 100%);}
+      .content{left:${pad}px;right:${pad}px;top:58%;transform:translateY(-50%);
+               bottom:auto;text-align:center;}
       h1{font-size:${size}px;font-weight:900;line-height:1.2;letter-spacing:-.035em;
-         text-shadow:0 4px 22px rgba(0,0,0,.85);}
-      .mark{display:block;margin-top:${Math.round(width * 0.015)}px;
+         text-shadow:0 4px 22px rgba(0,0,0,.9), 0 2px 6px rgba(0,0,0,.75);}
+      .mark{display:block;margin-top:${Math.round(width * 0.018)}px;
             font-size:${Math.round(width * 0.016)}px;font-weight:700;letter-spacing:.16em;
-            color:rgba(255,255,255,.6);text-shadow:0 2px 8px rgba(0,0,0,.9);}`,
+            color:rgba(255,255,255,.62);text-shadow:0 2px 8px rgba(0,0,0,.9);}`,
     html: `
       <div class="content">
-        <div class="tick"></div>
-        ${label ? `<span class="eyebrow">${esc(label)}</span>` : ''}
         <h1>${esc(ctx.headline)}</h1>
         <span class="mark">${esc(ctx.brand)}</span>
       </div>`,

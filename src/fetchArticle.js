@@ -76,6 +76,31 @@ function extractInPage(noiseSelectors) {
 
   const bodyText = clean(best ? best.innerText : document.body?.innerText || '');
 
+  /* 본문에 실린 사진들.
+   * 로고·아이콘·프로필·광고를 걸러내려고 실제 렌더 크기로 판별한다.
+   * (기사 사진은 보통 가로 400px 이상이다) */
+  const scope = best || document.body;
+  const bodyImages = [...(scope?.querySelectorAll('img') || [])]
+    .map((img) => {
+      const src =
+        img.currentSrc ||
+        img.src ||
+        img.getAttribute('data-src') ||
+        img.getAttribute('data-original') ||
+        '';
+      return {
+        url: src,
+        w: img.naturalWidth || img.width || 0,
+        h: img.naturalHeight || img.height || 0,
+        alt: (img.alt || '').trim().slice(0, 120),
+      };
+    })
+    .filter((i) => /^https?:\/\//.test(i.url))
+    .filter((i) => i.w >= 400 && i.h >= 260)                 // 썸네일·아이콘 제외
+    .filter((i) => !/logo|icon|profile|badge|banner|ad[-_]/i.test(i.url))
+    .filter((i, idx, arr) => arr.findIndex((x) => x.url.split('?')[0] === i.url.split('?')[0]) === idx)
+    .slice(0, 8);
+
   return {
     title: clean(meta('og:title') || document.querySelector('h1')?.innerText || document.title),
     publisher: clean(meta('og:site_name') || location.hostname),
@@ -83,6 +108,12 @@ function extractInPage(noiseSelectors) {
       meta('article:published_time') || meta('datePublished') || meta('pubdate')
     ),
     description: clean(meta('og:description') || meta('description')),
+    // 언론사가 공유용으로 스스로 노출하는 대표 이미지.
+    // images.useSourcePhoto 를 켜면 대표 이미지로 쓴다(§ 저작권 주의 — HANDOVER 참고).
+    image: clean(meta('og:image') || meta('twitter:image')),
+    // 기사 본문에 실린 사진들 (대표 이미지 다음으로 쓴다).
+    // 인물 기사는 같은 사진을 반복하지 않고 서로 다른 컷을 쓰는 게 낫다.
+    images: bodyImages,
     text: bodyText,
   };
 }

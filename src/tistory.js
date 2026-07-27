@@ -3,6 +3,7 @@ import path from 'node:path';
 import { log } from './log.js';
 import { shot, findFirst, clickIfPresent, setDialogPolicy } from './browser.js';
 import { DIRS, stamp } from './paths.js';
+import { pickCategory } from './category.js';
 
 /**
  * 티스토리 글쓰기 화면 자동화.
@@ -466,18 +467,37 @@ export async function openPublishLayer(page) {
 }
 
 /**
- * 카테고리 선택 (이름이 비어 있으면 건너뜀).
+ * 카테고리 선택.
  *
  * 티스토리 카테고리 목록은 TinyMCE 드롭다운(.mce-menu-item)으로 뜨고,
  * 하위 카테고리는 앞에 "- " 가 붙는다. 에디터 모드 메뉴도 같은 클래스를 쓰므로
  * 반드시 '보이는' 메뉴 안에서만 찾아야 한다.
+ *
+ * name 에 "auto" 를 주면 목록을 읽어 **글 내용에 맞는 카테고리를 직접 고른다.**
+ * (config.json 의 blog.category 를 "auto" 로 두면 된다)
+ *
+ * @param {string} name           카테고리 이름 · "auto" · 빈 값
+ * @param {object} [opts]
+ * @param {object} [opts.article] auto 일 때 판단 근거로 쓸 아티클
+ * @param {object} [opts.aliases] 카테고리 별칭 (config.json 의 blog.categoryAliases)
+ * @param {string} [opts.fallback] auto 가 확신하지 못했을 때 쓸 카테고리
  */
-export async function selectCategory(page, name) {
-  if (!name) {
-    log.debug('카테고리 미지정');
-    return false;
+export async function selectCategory(page, name, opts = {}) {
+  // 주의: 티스토리에서 카테고리를 '건드리지 않는 것'은 '분류 없음'이 아니라
+  // **직전에 쓴 카테고리를 그대로 물려받는 것**이다. 설정을 비워 두면 글이
+  // 엉뚱한 카테고리에 조용히 들어간다. 그래서 비어 있으면 명시적으로
+  // "카테고리 없음"을 고른다.
+  const raw = (name || '').trim();
+  if (!raw) {
+    log.warn(
+      '카테고리가 설정되지 않았습니다. 직전 카테고리를 물려받지 않도록 "카테고리 없음"을 지정합니다. ' +
+        '(.env 의 TISTORY_CATEGORY 또는 config.json 의 blog.category 를 채우세요. ' +
+        '"auto" 로 두면 글 내용에 맞춰 자동으로 고릅니다)'
+    );
+    return selectCategory(page, '카테고리 없음');
   }
-  const target = name.trim();
+
+  const isAuto = raw.toLowerCase() === 'auto';
 
   try {
     const btn = await findFirst(page, SEL.categoryButton, { timeout: 6000 });
@@ -492,9 +512,44 @@ export async function selectCategory(page, name) {
       return false;
     }
 
-    // 하위 카테고리 표시("- ")를 떼고 정확히 일치하는 항목을 먼저 찾는다.
+    // 하위 카테고리 표시("- ")를 떼고 목록을 만든다. 깊이도 함께 기억한다.
     // 항목이 수십 개라 한 번에 읽어온다 (하나씩 읽으면 매우 느리다).
-    const names = (await items.allInnerTexts()).map((t) => t.trim().replace(/^-\s*/, ''));
+    const rawNames = await items.allInnerTexts();
+    const entries = rawNames.map((t, index) => {
+      const s = t.trim();
+      const m = s.match(/^(-\s*)+/);
+      return {
+        index,
+        depth: m ? m[0].split('-').length - 1 : 0,
+        name: s.replace(/^(-\s*)+/, ''),
+      };
+    });
+    const names = entries.map((e) => e.name);
+
+    let target = raw;
+    if (isAuto) {
+      const { picked, ranked, ambiguous } = pickCategory(opts.article || {}, entries, {
+        aliases: opts.aliases,
+      });
+      const top = ranked
+        .slice(0, 3)
+        .filter((r) => r.score > 0)
+        .map((r) => `${r.name}(${r.score}${r.hits.length ? ' ← ' + r.hits.join(',') : ''})`)
+        .join(' · ');
+      log.debug(`카테고리 후보: ${top || '(근거 없음)'}`);
+
+      if (picked) {
+        target = picked.name;
+        log.ok(`카테고리 자동 선택: ${target} (점수 ${picked.score} ← ${picked.hits.join(', ')})`);
+      } else {
+        target = (opts.fallback || '').trim() || '카테고리 없음';
+        log.warn(
+          `카테고리를 자동으로 확신하지 못했습니다${ambiguous ? ' (1·2위 점수가 비슷함)' : ''}. ` +
+            `"${target}" 로 발행합니다.` + (top ? ` 후보: ${top}` : '')
+        );
+      }
+    }
+
     const exact = names.findIndex((n) => n === target);
     const partial = names.findIndex((n) => n.includes(target));
 
@@ -669,7 +724,7 @@ export async function publishPost(
   page,
   urls,
   cfg,
-  { title, html, imageFiles = [], tags = [], urlSlug = '' }
+  { title, html, imageFiles = [], tags = [], urlSlug = '', article = null }
 ) {
   await openEditor(page, urls);
 
@@ -700,7 +755,11 @@ export async function publishPost(
 
   // 4) 에디터 화면에 있는 설정 (카테고리·태그)
   //    주의: 발행 레이어를 연 뒤에 이걸 건드리면 레이어가 닫힌다. 반드시 먼저 처리한다.
-  await selectCategory(page, cfg.blog.category);
+  await selectCategory(page, cfg.blog.category, {
+    article: article || { title, tags },
+    aliases: cfg.blog.categoryAliases,
+    fallback: cfg.blog.categoryFallback,
+  });
   await setTags(page, tags);
 
   // 5) 발행 레이어를 열고, 레이어 안에 있는 설정만 다룬다 (글 주소·공개 범위·예약)

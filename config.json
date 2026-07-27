@@ -1,7 +1,9 @@
 {
   "blog": {
     "name": "CHANGE-ME",
-    "category": "",
+    "category": "auto",
+    "categoryFallback": "스타·연예인",
+    "categoryAliases": {},
     "visibility": "public",
     "acceptComment": true,
     "publishMode": "now",
@@ -50,6 +52,8 @@
     "useStats": true,
     "photoTimeoutMs": 300000,
     "usePersonPhotos": true,
+    "personPhotoOnThumb": true,
+    "useSourcePhoto": true,
     "allowShareAlike": true,
     "palettes": [
       ["#1a0b2e", "#7b2cbf", "#ff2e97"],

@@ -39,7 +39,13 @@ function deepMerge(base, override) {
 const DEFAULTS = {
   blog: {
     name: '',
+    // 카테고리 이름, 또는 "auto" (글 내용에 맞춰 자동 선택).
+    // 빈 값이면 티스토리가 직전 글의 카테고리를 물려주므로 "카테고리 없음"으로 강제한다.
     category: '',
+    // "auto" 가 확신하지 못했을 때 쓸 카테고리 (비우면 "카테고리 없음")
+    categoryFallback: '',
+    // 카테고리 이름 → 본문에서 찾을 낱말들. src/category.js 의 기본값에 더해진다.
+    categoryAliases: {},
     visibility: 'public',
     acceptComment: true,
     publishMode: 'now',

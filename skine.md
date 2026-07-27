@@ -5386,8 +5386,10 @@ html[data-theme="dark"] .sk-toast {
 /* 데스크톱: 사이드바 상단에 붙어 따라오는 목차 */
 .sk-toc--rail {
   position: sticky;
-  top: 128px;
-  max-height: calc(100vh - 190px);
+  /* 헤더가 압축되면 높이가 달라진다. JS 가 실제 높이를 --sk-header-now 로 알려준다.
+     고정값(128px)을 쓰면 압축된 헤더 아래에 큰 빈 틈이 생기거나, 반대로 겹친다. */
+  top: calc(var(--sk-header-now, 96px) + 32px);
+  max-height: calc(100vh - var(--sk-header-now, 96px) - 94px);
   overflow-y: auto;
   margin-bottom: 34px;
   padding: 16px 4px 16px 12px;
@@ -5776,42 +5778,67 @@ html[data-theme="dark"] .entry-content textarea {
  *    본문은 스킨과 무관하게 보이도록 인라인 스타일로 색이 박혀 있다.
  *    다크 모드에서 '검은 배경 + 검은 글씨'가 되지 않게 정확히 되짚는다.
  * --------------------------------------------------------------- */
+/* ★ 반드시 알아야 할 것 — 콜론 뒤 공백
+ *
+ * 생성기(src/html.js)는 "color:#555" 처럼 공백 없이 내보내지만,
+ * 티스토리 에디터를 거쳐 저장되면 브라우저가 스타일을 재직렬화해
+ * **"color: #555" (콜론 뒤 공백)** 형태로 바뀐다. 발행된 글을 실측해 확인했다.
+ *
+ * 그래서 [style*="color:#555"] 같은 선택자는 실제 글에서 **하나도 걸리지 않는다.**
+ * (2026-07-27 실측: 26종 중 19종이 죽어 있었고, 다크 모드에서
+ *  '목차'·'이 글의 핵심'·표 헤더가 흰 박스 그대로 남았다)
+ *
+ * → 아래 규칙은 **공백 없는 형태와 공백 있는 형태를 항상 함께** 적는다.
+ *   새 규칙을 추가할 때도 반드시 두 벌을 같이 적을 것.
+ */
+
 /* 제목·박스 제목·표 헤더 (진한 글자) */
 html[data-theme="dark"] .entry-content [style*="color:#111"],
 html[data-theme="dark"] .entry-content [style*="color: #111"],
-html[data-theme="dark"] .entry-content [style*="color:#000"] {
+html[data-theme="dark"] .entry-content [style*="color:#000"],
+html[data-theme="dark"] .entry-content [style*="color: #000"] {
   color: var(--sk-text-strong) !important;
 }
 
 /* 본문 문단·목록 (기본 글자) */
 html[data-theme="dark"] .entry-content [style*="color:#222"],
-html[data-theme="dark"] .entry-content [style*="color:#333"],
-html[data-theme="dark"] .entry-content [style*="color:#1f2937"],
-html[data-theme="dark"] .entry-content [style*="color:#3f3f46"],
 html[data-theme="dark"] .entry-content [style*="color: #222"],
-html[data-theme="dark"] .entry-content [style*="color: #333"] {
+html[data-theme="dark"] .entry-content [style*="color:#333"],
+html[data-theme="dark"] .entry-content [style*="color: #333"],
+html[data-theme="dark"] .entry-content [style*="color:#1f2937"],
+html[data-theme="dark"] .entry-content [style*="color: #1f2937"],
+html[data-theme="dark"] .entry-content [style*="color:#3f3f46"],
+html[data-theme="dark"] .entry-content [style*="color: #3f3f46"] {
   color: var(--sk-text) !important;
 }
 
+/* 보조 글자 (참고자료·표 캡션·사진 설명) */
 html[data-theme="dark"] .entry-content [style*="color:#555"],
+html[data-theme="dark"] .entry-content [style*="color: #555"],
 html[data-theme="dark"] .entry-content [style*="color:#666"],
+html[data-theme="dark"] .entry-content [style*="color: #666"],
 html[data-theme="dark"] .entry-content [style*="color:#777"],
-html[data-theme="dark"] .entry-content [style*="color:#999"] {
+html[data-theme="dark"] .entry-content [style*="color: #777"],
+html[data-theme="dark"] .entry-content [style*="color:#999"],
+html[data-theme="dark"] .entry-content [style*="color: #999"] {
   color: var(--sk-muted) !important;
 }
 
 /* 소제목 밑줄 */
 html[data-theme="dark"] .entry-content [style*="border-bottom:3px solid #222"],
-html[data-theme="dark"] .entry-content [style*="border-bottom:2px solid #222"] {
+html[data-theme="dark"] .entry-content [style*="border-bottom: 3px solid #222"],
+html[data-theme="dark"] .entry-content [style*="border-bottom:2px solid #222"],
+html[data-theme="dark"] .entry-content [style*="border-bottom: 2px solid #222"] {
   border-bottom-color: var(--sk-border-strong) !important;
 }
 
 /* 구분선 */
-html[data-theme="dark"] .entry-content [style*="border-top:1px solid #e5e5e5"] {
+html[data-theme="dark"] .entry-content [style*="border-top:1px solid #e5e5e5"],
+html[data-theme="dark"] .entry-content [style*="border-top: 1px solid #e5e5e5"] {
   border-top-color: var(--sk-border) !important;
 }
 
-/* '한 줄 정리' 박스 */
+/* '한 줄 정리' 박스 — 색상값만 보므로 공백 영향을 받지 않는다 */
 html[data-theme="dark"] .entry-content [style*="#f4f6ff"] {
   background: #20244a !important;
   border-left-color: #a78bfa !important;
@@ -5820,39 +5847,88 @@ html[data-theme="dark"] .entry-content [style*="#f4f6ff"] {
 
 /* '이 글의 핵심' / '목차' 박스 */
 html[data-theme="dark"] .entry-content [style*="background:#fafafa"],
-html[data-theme="dark"] .entry-content [style*="background:#fbfbfb"] {
+html[data-theme="dark"] .entry-content [style*="background: #fafafa"],
+html[data-theme="dark"] .entry-content [style*="background-color:#fafafa"],
+html[data-theme="dark"] .entry-content [style*="background-color: #fafafa"],
+html[data-theme="dark"] .entry-content [style*="background:#fbfbfb"],
+html[data-theme="dark"] .entry-content [style*="background: #fbfbfb"],
+html[data-theme="dark"] .entry-content [style*="background-color:#fbfbfb"],
+html[data-theme="dark"] .entry-content [style*="background-color: #fbfbfb"] {
   background: var(--sk-surface) !important;
   border-color: var(--sk-border) !important;
   color: var(--sk-text) !important;
 }
 
-/* 💡 콜아웃 */
+/* 💡 콜아웃 — 색상값만 보므로 공백 영향 없음 */
 html[data-theme="dark"] .entry-content [style*="#fff8e1"] {
   background: #2b2313 !important;
   border-left-color: #f59e0b !important;
   color: #f0e4cd !important;
 }
 
-/* 표 */
-html[data-theme="dark"] .entry-content [style*="background:#f5f5f5"] {
+/* 표 헤더 */
+html[data-theme="dark"] .entry-content [style*="background:#f5f5f5"],
+html[data-theme="dark"] .entry-content [style*="background: #f5f5f5"],
+html[data-theme="dark"] .entry-content [style*="background-color:#f5f5f5"],
+html[data-theme="dark"] .entry-content [style*="background-color: #f5f5f5"] {
   background: var(--sk-surface-2) !important;
   border-color: var(--sk-border-strong) !important;
   color: var(--sk-text-strong) !important;
 }
 
-html[data-theme="dark"] .entry-content [style*="border:1px solid #ddd"] {
+/* 표 테두리 */
+html[data-theme="dark"] .entry-content [style*="border:1px solid #ddd"],
+html[data-theme="dark"] .entry-content [style*="border: 1px solid #ddd"] {
   border-color: var(--sk-border-strong) !important;
 }
 
 /* 본문 내 링크(목차·참고자료)의 보라색 → 다크에서 밝은 보라로 */
 html[data-theme="dark"] .entry-content [style*="color:#4c1d95"],
+html[data-theme="dark"] .entry-content [style*="color: #4c1d95"],
 html[data-theme="dark"] .entry-content a[style*="#4c1d95"] {
   color: var(--sk-accent) !important;
 }
 
 /* 라이트 모드에서도 박스에 아주 옅은 그림자를 얹어 입체감을 준다 */
-.entry-content [style*="border-radius:8px"][style*="background"] {
+.entry-content [style*="border-radius:8px"][style*="background"],
+.entry-content [style*="border-radius: 8px"][style*="background"] {
   box-shadow: var(--sk-shadow-1);
+}
+
+/* ★ 유튜브 임베드 — 티스토리가 iframe 의 style 속성을 지운다
+ *
+ * 실측(2026-07-27): 발행된 글에서 래퍼 <div> 의 인라인 style 은 남았지만
+ * <iframe> 의 style 은 **null** 이었다. 티스토리 sanitizer 가 지운다.
+ *
+ * 그 결과 position:absolute·width:100%·height:100% 가 사라져 iframe 이
+ * 브라우저 기본 크기인 300×225(4:3)로 쪼그라들고, height:0 인 검은 16:9
+ * 박스 안에 작은 화면이 떠 있는 상태가 된다.
+ *
+ * → iframe 은 인라인 style 이 아니라 **여기 CSS 로** 채운다.
+ *   이미 발행된 글도 이 규칙으로 함께 고쳐진다.
+ *   (콜론 뒤 공백 유무 두 벌을 반드시 함께 적을 것 — H 섹션 머리말 참고)
+ */
+#article-view .sk-embed > iframe,
+#article-view div[style*="padding-bottom:56.25%"] > iframe,
+#article-view div[style*="padding-bottom: 56.25%"] > iframe {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border: 0;
+}
+
+/* 래퍼 없이 들어온 유튜브 임베드(에디터로 직접 넣은 것)도 16:9 로 맞춘다 */
+#article-view > iframe[src*="youtube"],
+#article-view p > iframe[src*="youtube"],
+#article-view figure > iframe[src*="youtube"] {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 8px;
 }
 
 /* ---------------------------------------------------------------
@@ -5992,6 +6068,123 @@ html[data-theme="dark"] #article-view hr {
 
 .sk-adzone:empty {
   display: none;
+}
+
+/* ★ 사이드바 고정은 '전체를 한 덩어리로' 해야 한다
+ *
+ * 예전에는 목차(.sk-toc--rail)만 position:sticky 였다.
+ * sticky 요소는 화면에 붙어 있는 동안에도 **문서 흐름의 자리는 그대로**여서,
+ * 뒤따르는 형제(광고·최근글·카테고리)가 그 밑으로 스크롤해 들어가
+ * **목차가 그것들을 통째로 덮었다.**
+ *
+ * 개별 요소를 각각 sticky 로 만들면 서로 겹칠 수밖에 없다.
+ * → 사이드바 컨테이너 하나만 고정하고, 안쪽은 전부 일반 흐름으로 둔다.
+ *   내용이 화면보다 길면 사이드바 안에서 스크롤된다.
+ */
+@media (min-width: 1024px) {
+  /* 좌·우 배치(.layout-aside-left) 양쪽에서 동일하게 동작한다.
+     둘 다 float 이지만 float + sticky 는 함께 쓸 수 있다. */
+  #aside,
+  .layout-aside-left #aside {
+    position: sticky;
+    top: calc(var(--sk-header-now, 96px) + 24px);
+    max-height: calc(100vh - var(--sk-header-now, 96px) - 48px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    /* 원본은 상단 여백이 75~80px 이다. 고정된 사이드바에서는 그만큼
+       광고·목록이 화면 밖으로 밀려나므로 줄인다. */
+    padding-top: 8px;
+  }
+
+  /* 안쪽 요소는 절대 개별 고정하지 않는다 */
+  #aside .sk-toc--rail,
+  #aside .sk-adzone--side.is-sticky {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* 사이드바가 본문 아래로 내려가는 폭에서는 고정 자체를 하지 않는다 */
+@media (max-width: 1023px) {
+  .sk-toc--rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* 사이드바 최근글/인기글 탭 (JS 가 .sk-tabbar 를 만든다) */
+.post-list.tab-ui .tab-list {
+  display: none;
+}
+
+.post-list.tab-ui .tab-list.is-on {
+  display: block;
+}
+
+.sk-tabbar {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.sk-tabbar a {
+  padding: 2px 0;
+  color: var(--sk-muted);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: color .18s var(--sk-ease), border-color .18s var(--sk-ease);
+}
+
+.sk-tabbar a:hover,
+.sk-tabbar a:focus-visible {
+  color: var(--sk-text);
+  text-decoration: none;
+}
+
+.sk-tabbar a.current {
+  color: var(--sk-text-strong);
+  border-bottom-color: var(--sk-accent);
+}
+
+/* 사이드바 광고
+   - 목차 레일과 같은 열에 있으므로 헤더 높이를 공유해 서로 겹치지 않게 한다
+   - 사이드바는 좁으므로 여백과 모서리를 줄인다 */
+.sk-adzone--side {
+  margin: 0 0 28px;
+}
+
+.sk-adzone--side.is-sticky {
+  position: sticky;
+  top: calc(var(--sk-header-now, 96px) + 32px);
+  z-index: 1;
+}
+
+/* 목차가 떠 있으면 광고는 그 아래에 붙는다 (둘 다 sticky 면 서로 밀어낸다) */
+.sk-toc--rail:not([hidden]) ~ .sk-adzone--side.is-sticky {
+  position: static;
+}
+
+.sk-ad--sidebar {
+  margin: 0;
+  padding: 10px 8px;
+  border-radius: var(--sk-radius);
+}
+
+.sk-ad--sidebar ins {
+  min-height: 250px;
+}
+
+@media (max-width: 1023px) {
+  /* 사이드바가 본문 아래로 내려가는 폭에서는 고정하지 않는다 */
+  .sk-adzone--side.is-sticky {
+    position: static;
+  }
 }
 
 /* 티스토리 기본 광고 영역도 같은 여백 규칙을 따르게 */
