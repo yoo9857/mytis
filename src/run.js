@@ -7,6 +7,7 @@ import { blogUrls, validateForPublish } from './config.js';
 import { writeArticle, saveArticle } from './codexWriter.js';
 import { fillEmbeds } from './youtube.js';
 import { fillSocialEmbeds } from './socialEmbed.js';
+import { MODE_LABEL, detectMode, can } from './mode.js';
 import { renderImages } from './images.js';
 import { buildHtml, previewDocument } from './html.js';
 import { launchBrowser, firstPage, saveSession } from './browser.js';
@@ -111,18 +112,23 @@ export async function generate(topic, cfg) {
   log.banner('1단계 · 글 생성');
   const article = await writeArticle({ topic, cfg });
 
+  /* 이 글이 어떤 용도인지는 writeArticle 이 이미 정해 두었다.
+   * 단계마다 조건을 새로 세우지 말고 `can(mode, ...)` 로 물어본다 — mode.js 참고. */
+  const mode = article.mode || detectMode(topic);
+  log.debug(`용도: ${MODE_LABEL[mode]} 모드`);
+
   // 실제 장면은 공식 영상 임베드로 보여준다. 사진은 저작권 때문에 못 가져오지만
   // 임베드는 유튜브가 제공하는 기능이라 문제가 없고, 현장을 그대로 담는다.
-  // 영상 소재 글은 '같은 영상의 여러 장면'이 이미 임베드로 들어 있다.
-  // 여기서 다른 영상을 덧붙이면 글과 따로 논다.
-  if (article.fromClip) {
-    log.debug(`영상 소재 글 — 장면 임베드 ${(article.embeds || []).length}개 유지 (추가 검색 생략)`);
+  if (!can(mode, 'youtubeEmbeds')) {
+    log.debug(
+      `${MODE_LABEL[mode]} 모드 — 같은 영상의 장면 ${(article.embeds || []).length}개를 씁니다 (추가 영상 검색 생략)`
+    );
 
     /* 임베드가 가리키는 그 순간을 이미지로도 남긴다.
      * 임베드는 본문에서 재생되지만 티스토리 목록·검색결과·공유 카드에는
      * 이미지가 필요하다. 시각은 codex 가 지어낸 값이 아니라
      * snapTimestamps 가 실제 자막 시각으로 검증·보정한 값이다. */
-    if (cfg.images.useClipShots !== false) {
+    if (can(mode, 'clipShots') && cfg.images.useClipShots !== false) {
       /* 장면마다 **사진 한 장씩**을 만든다.
        *
        * 예전에는 장면 수만큼 임베드를 본문에 흩뿌렸는데, 플레이어가 여러 개
@@ -169,14 +175,23 @@ export async function generate(topic, cfg) {
     }
   }
 
-  // 최신 근황은 공식 X·인스타 게시물 임베드로 보여준다.
-  // 사진을 내려받아 올리면 저작권에 약관 위반까지 겹치지만, 임베드는
-  // 원저작자 서버에서 렌더링되므로 문제가 없다. (socialEmbed.js 머리말 참고)
-  try {
-    article.socialEmbeds = await fillSocialEmbeds(article, cfg);
-  } catch (err) {
-    log.warn(`SNS 근황 임베드 확보 실패: ${err.message}`);
+  /* 최신 근황은 공식 X·인스타 게시물 임베드로 보여준다.
+   * 사진을 내려받아 올리면 저작권에 약관 위반까지 겹치지만, 임베드는
+   * 원저작자 서버에서 렌더링되므로 문제가 없다. (socialEmbed.js 머리말 참고)
+   *
+   * 영상 글에서는 건너뛴다. 출연자가 방송용 이름을 쓰는 일반인인 경우가 많아
+   * 공식 계정이 존재하지 않는다. (실측: '영숙·영철·영식·광수·옥순' 으로
+   * 계정을 찾느라 codex 호출 1분을 버렸고 당연히 0건이었다) */
+  if (can(mode, 'socialEmbeds')) {
+    try {
+      article.socialEmbeds = await fillSocialEmbeds(article, cfg);
+    } catch (err) {
+      log.warn(`SNS 근황 임베드 확보 실패: ${err.message}`);
+      article.socialEmbeds = [];
+    }
+  } else {
     article.socialEmbeds = [];
+    log.debug(`${MODE_LABEL[mode]} 모드 — 공식 SNS 근황 검색을 건너뜁니다.`);
   }
 
   const articleFile = saveArticle(article);

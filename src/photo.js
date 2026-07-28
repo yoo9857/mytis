@@ -3,6 +3,7 @@ import path from 'node:path';
 import { DIRS, FILES, stamp, safeSlug } from './paths.js';
 import { log } from './log.js';
 import { runCodexJson } from './codexWriter.js';
+import { MODE, can } from './mode.js';
 
 /**
  * 이미지 카드의 배경으로 쓸 "실사 사진"을 확보한다.
@@ -447,8 +448,9 @@ export async function fetchBackgrounds(article, cfg, slots) {
    *    해설에 필요한 최소한만, 로고·워터마크를 지우지 않고, 채널명을 크레딧으로 남긴다.
    *    켜고 끄는 것은 `images.useClipShots` (기본 켜짐, 영상 글에서만 동작).
    */
+  const mode = article.mode || MODE.TOPIC;
   const clipShots = article.clipShots || [];
-  if (cfg.images.useClipShots !== false && clipShots.length) {
+  if (can(mode, 'clipShots') && cfg.images.useClipShots !== false && clipShots.length) {
     log.warn(
       `영상 장면 캡처 ${clipShots.length}장을 이미지로 사용합니다 (${article.clipChannel || '유튜브'}). ` +
         '방송 화면은 제작사 저작물입니다 — 위험은 발행자가 집니다.'
@@ -475,7 +477,7 @@ export async function fetchBackgrounds(article, cfg, slots) {
   }
 
   const sourcePool = [article.sourceImage, ...(article.sourceImages || [])].filter(Boolean);
-  if (cfg.images.useSourcePhoto === true && sourcePool.length) {
+  if (can(mode, 'sourcePhoto') && cfg.images.useSourcePhoto === true && sourcePool.length) {
     const publisher = article.sourcePublisher || '원문 기사';
     log.warn(
       `원문 기사 사진을 사용합니다 (images.useSourcePhoto=true · ${publisher} · 후보 ${sourcePool.length}장). ` +

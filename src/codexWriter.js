@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { DIRS, FILES, stamp, safeSlug } from './paths.js';
 import { log, fmtDuration } from './log.js';
 import { buildArticlePrompt, buildNewsPrompt, buildClipPrompt } from './prompt.js';
+import { MODE, MODE_LABEL, resolveMode, can } from './mode.js';
 
 /** 주제 문자열이 기사 URL 인지 판별한다. */
 export function isUrl(text) {
@@ -325,9 +326,13 @@ export async function writeArticle({ topic, cfg }) {
     }
   }
 
+  /* 여기서 모드가 확정된다 (유튜브 주소여도 자막이 없으면 기사 모드로 내려간다).
+   * 이후 단계는 조건을 새로 세우지 말고 `can(mode, ...)` 로 물어보세요 — mode.js 참고. */
+  const mode = resolveMode(topic, clip);
+
   // 기사 기반이면 본문을 먼저 추출해 프롬프트에 실어 보낸다
   let source = null;
-  if (fromNews && !clip) {
+  if (mode === MODE.NEWS) {
     const { fetchArticle } = await import('./fetchArticle.js');
     source = await fetchArticle(topic, cfg);
   }
@@ -335,8 +340,7 @@ export async function writeArticle({ topic, cfg }) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const started = Date.now();
     log.step(
-      `codex 로 글 생성 중 (시도 ${attempt}/${maxAttempts})` +
-        `${fromNews ? ' · 기사 기반' : ''}` +
+      `codex 로 글 생성 중 (시도 ${attempt}/${maxAttempts}) · ${MODE_LABEL[mode]} 모드` +
         `${cfg.codex.search ? ' · 웹검색 ON' : ''}${cfg.codex.model ? ` · ${cfg.codex.model}` : ''}`
     );
     log.info(`${fromNews ? '소재 기사' : '주제'}: ${topic}`);
@@ -362,6 +366,7 @@ export async function writeArticle({ topic, cfg }) {
         // 영상 소재 글의 임베드는 '같은 영상의 여러 장면'이다.
         // youtube.js 의 fillEmbeds 가 다른 영상을 덧붙이면 글이 어긋난다.
         article.fromClip = true;
+        article.mode = MODE.CLIP;
         article.clipVideoId = clip.videoId;
         // 장면 캡처를 쓸 때 크레딧으로 남길 출처 (photo.js 의 clip-shot 분기)
         article.clipChannel = clip.channel || '';
@@ -417,9 +422,10 @@ export async function writeArticle({ topic, cfg }) {
        * > 그 위에 "말의 순서가 남긴 간격" 헤드라인이 얹혀 글과 완전히 따로 놀았다.
        * > (HANDOVER ⑦-4 와 같은 구조의 사고다)
        *
-       * 영상 글의 이미지는 `ytShot.captureFrames` 가 잡는 장면 캡처를 쓴다. */
+       * 영상 글의 이미지는 `ytShot.captureFrames` 가 잡는 장면 캡처를 쓴다.
+       * 판단은 mode.js 의 CAPABILITIES 가 한다 — 여기서 따로 조건을 세우지 마세요. */
       if (
-        !clip &&
+        can(mode, 'relatedArticlePhotos') &&
         cfg.images?.useSourcePhoto === true &&
         (article.sourceImages?.length || 0) < 3 &&
         article.sources?.length > 1
