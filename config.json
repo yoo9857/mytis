@@ -55,7 +55,7 @@
     "background": "photo",
     "scrim": 0.55,
     "showCredit": true,
-    "style": "trendy",
+    "style": "mixed",
     "layout": "",
     "useStats": true,
     "photoTimeoutMs": 300000,

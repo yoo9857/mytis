@@ -382,17 +382,32 @@ export async function renderImages(article, cfg) {
       }
 
       const isPerson = !!bg?.isPerson;
-      // 대표 이미지는 정보를 최소화한 clean 연출을 기본으로 쓴다
-      const layout = isThumb
-        ? cfg.images.layout || cfg.images.thumbLayout || 'clean'
-        : pickLayout({
-            title: article.title,
-            slot: i,
-            hasStat: !!statValue,
-            forced: cfg.images.layout,
-            isPerson,
-            style: cfg.images.style || 'trendy',
-          });
+      /* 연출은 **사진 종류에 따라** 고른다.
+       *
+       * 방송 캡처와 보도사진에는 이미 글자가 박혀 있다 — 자막, 포스터 제목,
+       * 방송사 로고. 그 위에 컬러 패널이나 짙은 띠를 얹는 연출을 쓰면
+       * **글자 위에 글자가 겹쳐** 둘 다 못 읽는다. 그래서 사진을 최대한
+       * 살리고 제목만 얹는 `clean` 을 쓴다.
+       *
+       * 반대로 스톡 사진(Pexels·Unsplash·Openverse)은 배경이 깨끗해서
+       * editorial·band·panel 같은 연출이 잘 어울린다. 예전에는 `images.style`
+       * 설정으로만 도달할 수 있어 사실상 쓰이지 않던 연출들이다.
+       *
+       * `images.layout` 으로 강제하면 그 값이 우선한다. */
+      const printedOn = bg?.source === 'clip-shot' || bg?.source === 'source-article';
+      const layout =
+        cfg.images.layout ||
+        (printedOn
+          ? cfg.images.thumbLayout || 'clean'
+          : isThumb
+            ? cfg.images.thumbLayout || 'clean'
+            : pickLayout({
+                title: article.title,
+                slot: i,
+                hasStat: !!statValue,
+                isPerson,
+                style: cfg.images.style || 'trendy',
+              }));
       usedLayouts.push(layout);
 
       const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
