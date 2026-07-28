@@ -98,21 +98,58 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
   const sectionCount = Math.max(1, (article.sections || []).length);
   const oldThumb = (article.imageBriefs || []).find((b) => b.placement === 'thumbnail') || {};
 
-  article.imageBriefs = got.map((s, i) => ({
-    placement: i === 0 ? 'thumbnail' : 'body',
-    headline: i === 0 ? oldThumb.headline || article.title : '',
-    subline: i === 0 ? oldThumb.subline || '' : '',
-    eyebrow: i === 0 ? oldThumb.eyebrow || '' : '',
-    statValue: i === 0 ? oldThumb.statValue || '' : '',
-    statLabel: i === 0 ? oldThumb.statLabel || '' : '',
-    photoQuery: '',
-    caption: i === 0 ? '' : `${mmss(s.sec)} ${s.caption}`.trim(),
-    alt: `${article.title} — ${mmss(s.sec)} 장면`,
-    afterSection:
-      i === 0
-        ? 0
-        : Math.min(sectionCount, Math.max(1, s.afterSection || Math.round((i * sectionCount) / got.length))),
+  /* 본문 사진은 **반드시 시간순**으로 실려야 한다.
+   *
+   * codex 는 장면을 주제별로 묶어 afterSection 을 매기기 때문에, 그대로 두면
+   * 21분 얘기를 하다가 18분으로 되돌아간다. 독자는 바로 걸린다.
+   *
+   * > 2026-07-28 실측 — 광수 글의 사진 배치:
+   * >   [2] 21:06 → [3] **18:45** → 29:24 → [6] 46:25 → [7] **40:14**
+   * >   두 번 뒤로 감겼다.
+   *
+   * 그래서 codex 의 afterSection 을 쓰지 않고 **시간순으로 균등 배분**한다.
+   *
+   * codex 값을 살리면서 뒤로 못 가게 눌러 보기도 했는데, 이상치 하나가
+   * 뒤따르는 장면을 전부 끌고 갔다. 위 사례에서 40:14(7번 섹션 지정) 하나 때문에
+   * 그 뒤 7장이 모두 7번으로 몰리고 5·6번 섹션은 사진이 사라졌다.
+   *
+   * 섹션 자체를 시간순으로 쓰게 지시하고 있으므로(prompt.js 의 서사 규칙),
+   * 균등 배분이면 내용과도 대체로 맞고 사진이 고르게 퍼진다. */
+  const body = got.slice(1).sort((a, b) => a.sec - b.sec);
+  const placed = body.map((s, i) => ({
+    ...s,
+    at: Math.min(sectionCount, Math.max(1, Math.ceil(((i + 1) * sectionCount) / (body.length + 1)))),
   }));
+
+  article.imageBriefs = [
+    {
+      placement: 'thumbnail',
+      headline: oldThumb.headline || article.title,
+      subline: oldThumb.subline || '',
+      eyebrow: oldThumb.eyebrow || '',
+      statValue: oldThumb.statValue || '',
+      statLabel: oldThumb.statLabel || '',
+      photoQuery: '',
+      caption: '',
+      alt: `${article.title} — ${mmss(got[0].sec)} 장면`,
+      afterSection: 0,
+    },
+    ...placed.map((s) => ({
+      placement: 'body',
+      headline: '',
+      subline: '',
+      eyebrow: '',
+      statValue: '',
+      statLabel: '',
+      photoQuery: '',
+      caption: `${mmss(s.sec)} ${s.caption}`.trim(),
+      alt: `${article.title} — ${mmss(s.sec)} 장면`,
+      afterSection: s.at,
+    })),
+  ];
+
+  // 캡처 파일도 같은 순서로 맞춘다 (photo.js 가 슬롯 순서대로 가져간다)
+  article.clipShots = [got[0], ...placed].map((s) => shots.find((x) => x.sec === s.sec)).filter(Boolean);
 
   /* 본문 슬롯 수를 장면 수에 맞춘다.
    *
