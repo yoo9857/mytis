@@ -306,15 +306,21 @@ export async function renderImages(article, cfg) {
 
       // 본문 사진은 텍스트 없이 원본 사진만 쓰고, 비율도 글마다 다르게 섞는다
       if (!isThumb && cfg.images.bodyStyle === 'photo' && bgDataUri) {
-        /* 영상 장면 캡처는 **원본 비율 그대로** 둔다.
+        /* 장면 캡처와 보도사진은 **원본 비율 그대로** 둔다.
          *
-         * 방송 화면에는 자막이 가로로 길게 박혀 있어서 조금만 잘라도
-         * 글자가 중간에서 끊긴다. 연출을 위해 비율을 섞을 대상이 아니다.
+         * 이 사진들에는 글자가 박혀 있다 — 방송 화면에는 자막이, 보도사진에는
+         * 포스터 제목이나 그래픽이 들어간다. 조금만 잘라도 글자가 끊긴다.
+         * 연출을 위해 비율을 섞을 대상이 아니다.
          *
-         * > 2026-07-28 실측: 1920x1080 캡처를 3:2(1200x800)로 담으니
-         * > 좌우 15.6% 가 날아가 자막이 양끝에서 토막났다. */
+         * > 2026-07-28 실측:
+         * >   1920x1080 캡처를 3:2 로 담으니 좌우 15.6% 가 날아가 자막이 토막났다.
+         * >   김부장 포스터(1.78)를 1.50 으로 담으니 제목 "AGENT KIM" 이
+         * >   양쪽에서 잘려 "GENT KI" 만 남았다.
+         *
+         * 비율을 섞는 연출은 **스톡 사진에만** 쓴다. 스톡은 잘려도 손실이 없다. */
+        const keepNative = bg.source === 'clip-shot' || bg.source === 'source-article';
         const [bw, bh] = clampToSource(
-          ...(bg.source === 'clip-shot'
+          ...(keepNative
             ? nativeAspect(bg.file)
             : pickAspect(article.title, i, cfg.images.bodyAspects, bg.file)),
           bg.file

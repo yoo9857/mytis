@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { DIRS, FILES, stamp, safeSlug } from './paths.js';
 import { log } from './log.js';
 import { runCodexJson } from './codexWriter.js';
@@ -328,6 +329,57 @@ function slotQueries(article, slots) {
  * @returns {Promise<Array<{file:string,credit:string,pageUrl:string,description:string}|null>>}
  *          슬롯 순서대로. 확보 실패한 슬롯은 null.
  */
+/**
+ * 확보한 사진들 중 **같은 사진**을 찾아 슬롯을 비운다 (dHash 비교).
+ * 자세한 이유와 임계값 근거는 `scripts/dupe_photos.py` 머리말에 있다.
+ */
+async function dropVisualDupes(result) {
+  const filled = result.map((r, i) => ({ r, i })).filter((x) => x.r?.file);
+  if (filled.length < 2) return;
+
+  try {
+    const { spawn } = await import('node:child_process');
+    const script = path.join(DIRS.root, 'scripts', 'dupe_photos.py');
+    const out = await new Promise((resolve, reject) => {
+      // 한글 경로는 argv 를 거치면 깨진다 → stdin 으로 UTF-8 로 넘긴다
+      const p = spawn('python', [script], { windowsHide: true });
+      let buf = '';
+      const timer = setTimeout(() => {
+        p.kill();
+        reject(new Error('시간 초과'));
+      }, 60_000);
+      p.stdout.on('data', (d) => (buf += d));
+      p.on('error', (e) => {
+        clearTimeout(timer);
+        reject(e);
+      });
+      p.on('close', () => {
+        clearTimeout(timer);
+        try {
+          resolve(JSON.parse(buf.trim().split('\n').pop()));
+        } catch (e) {
+          reject(e);
+        }
+      });
+      p.stdin.write(filled.map((x) => x.r.file).join('\n'), 'utf8');
+      p.stdin.end();
+    });
+
+    for (const [badPath, keepPath, dist] of out?.dupes || []) {
+      const bad = filled.find((x) => path.basename(x.r.file) === path.basename(badPath));
+      const keep = filled.find((x) => path.basename(x.r.file) === path.basename(keepPath));
+      if (!bad || !result[bad.i]) continue;
+      log.debug(
+        `같은 사진이라 슬롯 ${bad.i} 를 비웁니다 (슬롯 ${keep?.i ?? '?'} 와 거리 ${dist})`
+      );
+      fs.rmSync(result[bad.i].file, { force: true });
+      result[bad.i] = null;
+    }
+  } catch (err) {
+    log.debug(`사진 중복 검사 생략: ${String(err.message).slice(0, 70)}`);
+  }
+}
+
 export async function fetchBackgrounds(article, cfg, slots) {
   const result = new Array(slots).fill(null);
   if (slots <= 0) return result;
@@ -378,6 +430,17 @@ export async function fetchBackgrounds(article, cfg, slots) {
       const dest = path.join(DIRS.photos, `${prefix}-bg${slot}.${ext}`);
       try {
         const got = await download(cand.url, dest);
+
+        /* 완전히 같은 파일이 다른 주소로 들어오는 경우는 해시로 막는다.
+         * 크기·크롭만 다른 같은 사진은 이걸로 못 잡으므로, 모든 슬롯을 채운 뒤
+         * `dropVisualDupes` 가 내용을 비교해 한 번 더 걸러낸다. */
+        const contentKey = crypto.createHash('md5').update(fs.readFileSync(got.file)).digest('hex');
+        if (used.has(contentKey)) {
+          fs.rmSync(got.file, { force: true });
+          log.debug(`같은 파일이라 건너뜁니다: ${String(cand.url).slice(0, 70)}`);
+          continue;
+        }
+        used.add(contentKey);
         used.add(key);
         result[slot] = {
           file: got.file,
@@ -732,6 +795,16 @@ export async function fetchBackgrounds(article, cfg, slots) {
       log.debug(`Openverse 실패 (${queries[slot]}): ${err.message}`);
     }
   }
+
+  /* 같은 사진이 두 번 실리는 것을 **내용으로** 걸러낸다.
+   *
+   * 파일명·URL 로는 못 잡는다. 같은 사진을 여러 매체가 서로 다른 크기·크롭으로
+   * 배포하기 때문이다 (실측: 김부장 포스터가 640x360 잘린 것과 1000x700 온전한
+   * 것으로 들어와 본문에 두 번 실렸다).
+   *
+   * 파이썬/OpenCV 가 없으면 조용히 넘어간다 — 중복이 남는 편이 글이 안 나오는
+   * 것보다 낫다. */
+  await dropVisualDupes(result);
 
   const ok = result.filter(Boolean).length;
   if (ok === slots) log.ok(`실사 배경 ${ok}장 확보`);
