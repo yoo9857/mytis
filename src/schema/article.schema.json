@@ -160,8 +160,16 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["videoId", "title", "channel", "afterSection", "startSeconds", "quote", "caption"],
+        "required": ["videoId", "title", "channel", "afterSection", "startSeconds", "quote", "caption", "speaker", "isStudio"],
         "properties": {
+          "speaker": {
+            "type": "string",
+            "description": "이 장면에서 말하고 있는 사람의 이름(방송에 나오는 이름 그대로). 이 장면을 캡처하면 화면에 이 사람이 나올 가능성이 높으므로, 글의 주인공이 실제로 보이는 장면을 고르는 데 쓴다. 자막 맥락으로 판단이 안 되면 빈 문자열."
+          },
+          "isStudio": {
+            "type": "boolean",
+            "description": "스튜디오 MC·패널이 상황을 논평하는 장면이면 true. 데이트·대화 현장이면 false. 스튜디오 컷은 출연자가 화면에 없어 캡처 대상으로 쓸 수 없다. 확실하지 않으면 false."
+          },
           "videoId": {
             "type": "string",
             "description": "유튜브 영상 ID 11자리. watch?v= 뒤의 값. 전체 URL이 아니라 ID만. 검색으로 실제 확인한 것만 넣고 절대 추측하지 말 것."

@@ -15,8 +15,62 @@ import { ensureLoggedIn } from './kakaoLogin.js';
 import { publishPost } from './tistory.js';
 
 /** 렌더링된 이미지들을 업로드 순서대로 정렬하고 자리표시자를 부여한다. */
-/** 영상 글에서 사진으로 만들 장면 수의 상한. 너무 많으면 글이 늘어진다. */
-const MAX_CLIP_SHOTS = 5;
+/** 영상 글에서 사진으로 만들 장면 수의 상한. */
+const MAX_CLIP_SHOTS = 9;
+
+/**
+ * 캡처할 장면을 고른다.
+ *
+ * 스튜디오 컷을 걸러내는 것이 핵심이다. 스튜디오 MC·패널 장면에는 **출연자가
+ * 화면에 없어서**, 캡처하면 글과 무관한 사람이 사진으로 실린다.
+ *
+ * > 2026-07-28 실측: 제목이 "23기 영숙의 침묵" 인 글의 대표 사진에
+ * > 출연자도 아닌 **스튜디오 MC** 가 나왔다.
+ *
+ * 그리고 **주인공이 말하는 장면을 맨 앞으로** 보낸다. 첫 장면이 대표 이미지가
+ * 되는데, 제목의 주인공이 대표 사진에 없으면 글이 무너진다.
+ */
+function pickScenes(article) {
+  const lead = (article.entities || [])[0];
+  const leadName = (lead?.nameKo || lead?.nameEn || '').trim();
+
+  const all = (article.embeds || [])
+    .map((e) => ({
+      sec: Math.max(0, parseInt(e.startSeconds, 10) || 0),
+      caption: e.caption || e.quote || '',
+      afterSection: e.afterSection,
+      speaker: (e.speaker || '').trim(),
+      isStudio: !!e.isStudio,
+    }))
+    .filter((s) => s.sec > 0);
+
+  const usable = all.filter((s) => !s.isStudio);
+  if (all.length && !usable.length) {
+    log.warn('장면이 전부 스튜디오 컷이라 캡처를 건너뜁니다 (출연자가 화면에 없습니다).');
+    return [];
+  }
+  if (usable.length < all.length) {
+    log.debug(`스튜디오 컷 ${all.length - usable.length}개 제외 (출연자가 화면에 없음)`);
+  }
+
+  const byTime = usable.slice().sort((a, b) => a.sec - b.sec);
+  const chosen = byTime.slice(0, MAX_CLIP_SHOTS);
+
+  /* 대표 이미지가 될 첫 장면은 주인공이 말하는 것으로. 나머지는 시간순 그대로. */
+  if (leadName) {
+    const i = chosen.findIndex((s) => s.speaker && s.speaker.includes(leadName));
+    if (i > 0) {
+      const [leadScene] = chosen.splice(i, 1);
+      chosen.unshift(leadScene);
+      log.debug(`대표 장면을 ${leadName} 이(가) 말하는 ${leadScene.sec}초로 앞당깁니다.`);
+    } else if (i < 0) {
+      log.warn(
+        `${leadName} 이(가) 말하는 장면이 없어 대표 사진에 주인공이 안 나올 수 있습니다.`
+      );
+    }
+  }
+  return chosen;
+}
 
 /**
  * 장면 캡처를 본문 이미지로 배치하고, 임베드는 맨 아래 하나만 남긴다.
@@ -54,8 +108,13 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
         : Math.min(sectionCount, Math.max(1, s.afterSection || Math.round((i * sectionCount) / got.length))),
   }));
 
-  // 본문 슬롯 수를 장면 수에 맞춘다 (renderImages 가 이 값으로 자른다)
-  cfg.images.bodyImages = Math.max(0, got.length - 1);
+  /* 본문 슬롯 수를 장면 수에 맞춘다.
+   *
+   * ⚠️ `cfg.images.bodyImages` 를 고치면 안 된다. cfg 는 `loadConfig()` 가
+   * 캐시해 둔 **단일 객체**이고 큐 모드는 같은 객체로 글을 연달아 만든다.
+   * 영상 글 하나가 5장면이면 그 뒤 기사 글들까지 본문 이미지가 4장이 되어
+   * 설정이 조용히 오염된다. 그래서 이 글에만 붙는 값으로 넘긴다. */
+  article.bodyImageCount = Math.max(0, got.length - 1);
 
   /* 임베드는 맨 아래 하나만. 글 전체를 아우르는 첫 장면부터 재생되게 한다.
    * afterSection 이 섹션 범위를 벗어나면 html.js 가 본문 끝에 몰아 넣는다. */
@@ -137,15 +196,7 @@ export async function generate(topic, cfg) {
        *
        * 캡처 시각은 codex 가 지어낸 값이 아니라 snapTimestamps 가 실제 자막
        * 시각으로 검증·보정한 값이라 장면 설명과 어긋나지 않는다. */
-      const scenes = (article.embeds || [])
-        .map((e) => ({
-          sec: Math.max(0, parseInt(e.startSeconds, 10) || 0),
-          caption: e.caption || e.quote || '',
-          afterSection: e.afterSection,
-        }))
-        .filter((s) => s.sec > 0)
-        .sort((a, b) => a.sec - b.sec)
-        .slice(0, MAX_CLIP_SHOTS);
+      const scenes = pickScenes(article);
 
       if (scenes.length) {
         try {

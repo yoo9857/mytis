@@ -266,9 +266,12 @@ export async function renderImages(article, cfg) {
   }
 
   const thumbs = briefs.filter((b) => b.placement === 'thumbnail').slice(0, 1);
+  // 글별 지정(article.bodyImageCount)이 있으면 그걸 쓴다 — cfg 를 고치면
+  // 큐 모드에서 다음 글까지 값이 새어 나간다 (run.js 의 applyClipShotLayout 참고)
+  const bodyCount = article.bodyImageCount ?? cfg.images.bodyImages;
   const bodies = briefs
     .filter((b) => b.placement === 'body')
-    .slice(0, Math.max(0, cfg.images.bodyImages));
+    .slice(0, Math.max(0, bodyCount));
   const targets = [...(cfg.images.thumbnail ? thumbs : []), ...bodies];
 
   if (!targets.length) return result;
