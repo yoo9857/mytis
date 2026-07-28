@@ -334,5 +334,54 @@ node .tmp/check8.mjs <logNo>    → zwspParas > 0 이어야 한다
 선택되지 않고, **항목 안의 `추가` 버튼**을 눌러 담아야 한다(여러 곳을 담을 수 있다).
 그다음 `확인` 이 담긴 목록을 본문에 삽입한다.
 
-→ 다음 세션 첫 작업: `추가` 버튼 셀렉터를 뜨고 `추가 → 확인` 순으로 눌러
-   `placesMap` JSON 을 확보한다. 그 전까지 `naverDoc.js` 에 장소 빌더를 쓰지 않는다.
+### 스키마 — **확보 완료** (2026-07-28)
+
+셀렉터:
+
+| 대상 | 셀렉터 |
+|---|---|
+| 장소 버튼 | `button.se-map-toolbar-button` |
+| 검색 입력 | 레이어 안 `input[type=text]` 첫 번째 |
+| 결과 항목 | `li.se-place-map-search-result-item` |
+| 결과 링크 | `a.se-place-map-search-result-link` |
+| **추가** | **`button.se-place-add-button`** |
+| 확정 | `button:has-text("확인")` |
+
+⚠️ 결과 항목(`li`)이나 링크(`a`)를 클릭하면 **담기지 않는다.** 항목 안의
+`button.se-place-add-button` 을 눌러야 목록에 담긴다. 여러 곳을 담고 한 번에 `확인`.
+
+컴포넌트 JSON:
+
+```json
+{
+  "id": "SE-...",
+  "layout": "default",
+  "searchEngine": "naver",
+  "thumbnail": {
+    "src": "https://simg.pstatic.net/static.map/v2/map/staticmap.bin?caller=smarteditor&markers=…&w=700&h=315&scale=2&dataversion=178.08",
+    "@ctype": "thumbnail"
+  },
+  "places": [
+    {
+      "placeId": "11491438",
+      "name": "성산일출봉",
+      "address": "제주특별자치도 서귀포시 성산읍 성산리 1",
+      "latlng": { "latitude": 33.4588826, "longitude": 126.9408234, "@ctype": "position" },
+      "searchType": "s",
+      "tel": "064-783-0959",
+      "@ctype": "placesMap 안의 place"
+    }
+  ],
+  "@ctype": "placesMap"
+}
+```
+(place 노드의 `@ctype` 은 `place` 다)
+
+**`places` 는 배열이다** — 지도 하나에 여러 장소를 담을 수 있다.
+`thumbnail.src` 는 네이버 정적지도 URL 이고 `caller`·`dataversion` 같은 값이 붙어
+**우리가 만들어 낼 수 없다.**
+
+→ 그래서 **사진과 같은 전략**을 쓴다: 본문 주입 전에 UI 로 장소를 삽입해
+   `placesMap` 컴포넌트를 회수하고, 조립 단계에서 원하는 자리에 끼운다
+   (`naver.js` 의 `uploadImages` 와 같은 구조).
+   장소 이름은 codex 가 아티클에 담아 줘야 한다 (프롬프트 작업과 함께).
