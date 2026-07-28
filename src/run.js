@@ -44,6 +44,7 @@ function pickScenes(article) {
     .map((e) => ({
       sec: Math.max(0, parseInt(e.startSeconds, 10) || 0),
       caption: e.caption || e.quote || '',
+      quote: (e.quote || '').trim(), // 대표 이미지 헤드라인으로 쓴다
       afterSection: e.afterSection,
       speaker: (e.speaker || '').trim(),
       isStudio: !!e.isStudio,
@@ -159,10 +160,24 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
     at: Math.min(sectionCount, Math.max(1, Math.ceil(((i + 1) * sectionCount) / (body.length + 1)))),
   }));
 
+  /* 대표 이미지 헤드라인은 **그 장면의 실제 대사**를 쓴다.
+   *
+   * codex 가 미리 써 둔 thumbnail headline 은 대표로 쓸 장면을 코드가 고르기
+   * 전에 만든 것이라 사진과 어긋난다. 게다가 감상을 압축한 문학적 표현이
+   * 나오기 쉬웠다 — "눈물 뒤의 직진", "말의 속도가 남긴 간격" 처럼 무슨
+   * 글인지 알 수 없고 클릭할 이유가 없는 문구였다.
+   *
+   * 화면에 보이는 사람이 그 순간 한 말을 얹으면 사진과 문구가 정확히 맞고,
+   * 대사 자체가 궁금증을 만든다. 대사가 길거나 없으면 원래 헤드라인을 쓴다. */
+  const leadQuote = (got[0]?.quote || '').replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+  const quoteHeadline =
+    leadQuote && leadQuote.length <= 16 ? `“${leadQuote}”` : '';
+  if (quoteHeadline) log.debug(`대표 헤드라인: ${quoteHeadline} (장면 대사)`);
+
   article.imageBriefs = [
     {
       placement: 'thumbnail',
-      headline: oldThumb.headline || article.title,
+      headline: quoteHeadline || oldThumb.headline || article.title,
       subline: oldThumb.subline || '',
       eyebrow: oldThumb.eyebrow || '',
       statValue: oldThumb.statValue || '',
