@@ -241,16 +241,19 @@ image → text[154] → image → text[59] → image → text[33] → horizontal
 | 콜라주 | `imageGroup { layout:'collage' }` | 549+412px 나란히 |
 | `알 수 없는 컴포넌트` | 0개 | 발행 8회 전부 |
 
-### 미검증 — 다음 세션에서 **가장 먼저** 확인할 것
+### 여백 문단 — **검증 완료**
 
-**여백 문단(제로폭 공백) 이 실제로 들어가는지.**
-`spacedParagraphs([para])` 로 **문단 하나씩** 넘기는 바람에 배열 길이가 항상 1 이어서
-여백이 한 번도 삽입되지 않았다 (발행글 실측: 여백 문단 0개). 세션 끝에 고쳤지만
-**발행으로 확인하지 못했다.** 확인 방법:
+한때 `spacedParagraphs([para])` 로 **문단 하나씩** 넘기는 바람에 배열 길이가 항상 1 이어서
+여백이 한 번도 삽입되지 않았다 (발행글 실측: 여백 문단 0개).
+"문단들 사이" 여백은 호출 단위가 하나면 만들 수 없다 — 당연한데 놓쳤다.
 
+고친 뒤 발행해 확인: **제로폭 공백 문단 14개가 살아남았다** (0 → 14).
+가운데 정렬도 177개 중 163개 적용, 문단 길이 median 25 / p75 29 유지.
+
+재확인 방법:
 ```
-node .tmp/test-naver-publish.mjs → logNo 확인
-node .tmp/check8.mjs <logNo>    → zwspParas 가 0 이 아니어야 한다
+node .tmp/test-naver-publish.mjs → logNo
+node .tmp/check8.mjs <logNo>    → zwspParas > 0 이어야 한다
 ```
 
 ### 아직 손대지 않은 것
