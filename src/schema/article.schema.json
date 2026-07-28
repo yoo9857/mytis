@@ -160,7 +160,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["videoId", "title", "channel", "afterSection", "startSeconds", "quote", "caption", "speaker", "isStudio"],
+        "required": ["videoId", "title", "channel", "afterSection", "startSeconds", "quote", "caption", "speaker", "isStudio", "isHook"],
         "properties": {
           "speaker": {
             "type": "string",
@@ -169,6 +169,10 @@
           "isStudio": {
             "type": "boolean",
             "description": "스튜디오 MC·패널이 상황을 논평하는 장면이면 true. 데이트·대화 현장이면 false. 스튜디오 컷은 출연자가 화면에 없어 캡처 대상으로 쓸 수 없다. 확실하지 않으면 false."
+          },
+          "isHook": {
+            "type": "boolean",
+            "description": "이 장면이 **대표 이미지로 쓸 만한가**. 감정이 터지는 순간(울음·분노·충격·폭소), 표정이 크게 드러나는 클로즈업, 두 사람이 정면으로 부딪히는 대목이면 true. 인물이 걸어오거나 배경만 보이거나 담담히 설명하는 장면은 false. 이 표시가 붙은 장면 중에서 얼굴이 가장 크게 잡힌 것을 대표 이미지로 씁니다. 판단이 안 되면 false."
           },
           "videoId": {
             "type": "string",

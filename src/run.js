@@ -47,6 +47,7 @@ function pickScenes(article) {
       afterSection: e.afterSection,
       speaker: (e.speaker || '').trim(),
       isStudio: !!e.isStudio,
+      isHook: !!e.isHook, // 대표 이미지 후보 (applyClipShotLayout 이 씀)
     }))
     .filter((s) => s.sec > 0);
 
@@ -114,14 +115,25 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
     const shot = shots.find((x) => x.sec === s.sec);
     return (shot?.biggest || 0) * 10 + (shot?.faces || 0);
   };
-  const best = got.reduce((a, b) => (faceScore(b) > faceScore(a) ? b : a), got[0]);
-  if (best !== got[0] && faceScore(best) > 0) {
+
+  /* 후보는 codex 가 isHook 으로 지목한 장면들 — 감정이 터지거나 얼굴이 크게
+   * 잡히거나 정면으로 부딪히는 대목이다. 그중에서 실제로 얼굴이 가장 크게
+   * 잡힌 컷을 코드가 고른다. **의미 판단은 AI, 화면 검증은 코드**로 나눈다.
+   * isHook 이 하나도 없으면 전체에서 얼굴 기준으로 고른다. */
+  const hooks = got.filter((s) => s.isHook);
+  const pool = hooks.length ? hooks : got;
+  const best = pool.reduce((a, b) => (faceScore(b) > faceScore(a) ? b : a), pool[0]);
+
+  if (best && best !== got[0] && faceScore(best) > 0) {
     got = [best, ...got.filter((s) => s !== best)];
     const shot = shots.find((x) => x.sec === best.sec);
     log.debug(
-      `대표 이미지를 ${mmss(best.sec)} 장면으로 바꿉니다 ` +
-        `(얼굴 ${shot?.faces}개 · 최대 ${shot?.biggest}%)`
+      `대표 이미지: ${mmss(best.sec)} ` +
+        `(${hooks.length ? `화제 장면 ${hooks.length}개 중` : '전체 중'} ` +
+        `얼굴 ${shot?.faces}개 · 최대 ${shot?.biggest}%)`
     );
+  } else if (!hooks.length) {
+    log.debug('codex 가 화제 장면(isHook)을 지목하지 않아 얼굴 크기로만 골랐습니다.');
   }
 
   /* 본문 사진은 **반드시 시간순**으로 실려야 한다.
