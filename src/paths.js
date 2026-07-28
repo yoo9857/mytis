@@ -26,6 +26,7 @@ export const FILES = {
   articleSchema: path.join(ROOT, 'src', 'schema', 'article.schema.json'),
   photosSchema: path.join(ROOT, 'src', 'schema', 'photos.schema.json'),
   newsfeedSchema: path.join(ROOT, 'src', 'schema', 'newsfeed.schema.json'),
+  socialSchema: path.join(ROOT, 'src', 'schema', 'social.schema.json'),
 };
 
 export function ensureDirs() {

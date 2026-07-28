@@ -143,6 +143,58 @@ function renderEmbed(embed) {
 </div>`;
 }
 
+/**
+ * 공식 SNS(X·인스타그램) 게시물 임베드.
+ *
+ * 사진을 내려받아 올리는 게 아니라 **원저작자 서버의 게시물을 그대로 띄운다.**
+ * 그래서 저작권·약관 문제가 없고, 원본이 지워지면 임베드도 함께 사라진다.
+ * (근황 사진을 합법적으로 보여주는 유일한 방법 — HANDOVER 6장)
+ *
+ * 크기 처리에 주의할 점이 유튜브와 다르다.
+ * - 티스토리는 `<iframe>` 의 **style 속성을 지운다** (HANDOVER ⑦-2 실측).
+ *   그래서 style 에만 크기를 걸면 300×225 로 쪼그라든다.
+ * - SNS 게시물은 16:9 가 아니고 높이가 내용마다 다르므로 `padding-bottom` 비율
+ *   트릭을 쓸 수 없다. **감싸는 div 에 고정 높이**를 주고(div 의 inline style 은 남는다),
+ *   iframe 은 width/height **속성**으로 버티게 한 뒤 최종 채움은 스킨 CSS
+ *   (`#article-view .sk-social > iframe`)가 담당한다.
+ * - 스크립트 임베드(widgets.js·embed.js)는 티스토리가 `<script>` 를 지울 수 있어
+ *   쓰지 않는다. 둘 다 **스크립트 없이 iframe 만으로 되는 주소**가 있다.
+ */
+function renderSocialEmbed(em) {
+  const platform = em?.platform;
+  let src = '';
+  let label = '';
+  let height = 0;
+
+  if (platform === 'x' && /^\d{10,25}$/.test(String(em.postId || ''))) {
+    // widgets.js 가 내부적으로 띄우는 것과 같은 주소
+    src = `https://platform.twitter.com/embed/Tweet.html?dnt=true&id=${esc(em.postId)}`;
+    label = `X @${em.handle || ''}`;
+    height = 640;
+  } else if (platform === 'instagram' && /^[A-Za-z0-9_-]{5,20}$/.test(String(em.postId || ''))) {
+    src = `https://www.instagram.com/p/${esc(em.postId)}/embed/`;
+    label = `Instagram @${em.handle || ''}`;
+    height = 760;
+  } else {
+    return '';
+  }
+
+  const who = [em.author, em.handle && `@${em.handle}`].filter(Boolean).join(' · ');
+  const caption = `${platform === 'x' ? '𝕏' : '📷'} ${esc(who || label)} 공식 게시물`;
+
+  return `<div style="margin:28px 0;">
+  <div class="sk-social" style="position:relative;width:100%;max-width:550px;height:${height}px;margin:0 auto;overflow:hidden;border-radius:8px;">
+    <iframe src="${src}"
+      width="550" height="${height}"
+      style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"
+      title="${esc(label)}"
+      loading="lazy" scrolling="no" frameborder="0"
+      allowtransparency="true" allow="encrypted-media"></iframe>
+  </div>
+  <p style="${S.figcap}text-align:center;margin-top:8px;">${caption}</p>
+</div>`;
+}
+
 /** CC 라이선스 사진은 저작자·라이선스 표기가 의무다. 본문 하단에 모아서 남긴다. */
 function renderImageCredits(credits) {
   if (!credits.length) return '';
@@ -213,6 +265,7 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
   const out = [];
   const bodyImages = images.body || [];
   const embeds = cfg.seo.includeEmbeds === false ? [] : article.embeds || [];
+  const socials = cfg.social?.enabled === false ? [] : article.socialEmbeds || [];
 
   // 대표 이미지 (본문 맨 위 = 티스토리 대표 이미지 후보)
   if (images.thumbnail?.src || images.thumbnail?.placeholder) {
@@ -280,6 +333,10 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
     for (const em of embeds.filter((e) => e.afterSection === i + 1)) {
       out.push(renderEmbed(em));
     }
+    // 공식 SNS 근황 게시물
+    for (const em of socials.filter((e) => e.afterSection === i + 1)) {
+      out.push(renderSocialEmbed(em));
+    }
   });
 
   // afterSection 이 실제 섹션 범위를 벗어난 이미지는 본문 끝에 몰아 넣는다
@@ -291,6 +348,10 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
   for (const em of embeds) {
     if (em.afterSection >= 1 && em.afterSection <= sectionCount) continue;
     out.push(renderEmbed(em));
+  }
+  for (const em of socials) {
+    if (em.afterSection >= 1 && em.afterSection <= sectionCount) continue;
+    out.push(renderSocialEmbed(em));
   }
 
   // FAQ

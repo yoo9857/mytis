@@ -24,6 +24,14 @@
     "count": 5,
     "hours": 24
   },
+  "social": {
+    "enabled": true,
+    "platforms": ["x", "instagram"],
+    "count": 2,
+    "maxAgeDays": 180,
+    "requirePhoto": true,
+    "handles": {}
+  },
   "seo": {
     "includeEmbeds": true,
     "embedCount": 2,

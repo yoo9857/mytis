@@ -97,6 +97,16 @@ const DEFAULTS = {
     allowShareAlike: true, // CC BY-SA 사진 허용 여부. false 로 두면 CC BY·CC0·PD 만 사용
     palettes: [['#1e1b4b', '#4c1d95', '#7c3aed']],
   },
+  social: {
+    enabled: true,
+    platforms: ['x', 'instagram'], // 최신 근황을 공식 게시물 임베드로 보여준다
+    count: 2,
+    maxAgeDays: 180, // 이보다 오래된 게시물은 '근황'이 아니다
+    requirePhoto: true, // 사진 없는 글은 근황 사진 역할을 못 한다
+    // 공식 계정은 codex 가 웹 검색으로 찾는다(풀오토). 아래는 그 결과를 덮는
+    // 수동 예외용 — 인물명 → @핸들. 평소에는 비워 두면 된다.
+    handles: {},
+  },
   codex: {
     model: '',
     reasoningEffort: 'medium',

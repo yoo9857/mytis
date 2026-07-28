@@ -5919,6 +5919,26 @@ html[data-theme="dark"] .entry-content a[style*="#4c1d95"] {
   border: 0;
 }
 
+/* 공식 SNS(X·인스타) 근황 게시물 임베드.
+ *
+ * 유튜브와 같은 이유로 여기서 채운다 — 티스토리가 iframe 의 style 속성을 지운다.
+ * 다만 SNS 게시물은 16:9 가 아니고 높이가 내용마다 달라서 padding-bottom 비율
+ * 트릭을 못 쓴다. 그래서 감싸는 div 가 **고정 높이**를 갖고(div 의 inline style 은
+ * 살아남는다) iframe 은 그 안을 채우기만 한다.
+ *
+ * 스크립트 임베드(widgets.js·embed.js)는 쓰지 않는다. 티스토리가 <script> 를
+ * 지울 수 있어서, 스크립트 없이 iframe 만으로 되는 주소를 쓴다. */
+#article-view .sk-social > iframe,
+#article-view div[style*="max-width:550px"] > iframe,
+#article-view div[style*="max-width: 550px"] > iframe {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border: 0;
+}
+
 /* 래퍼 없이 들어온 유튜브 임베드(에디터로 직접 넣은 것)도 16:9 로 맞춘다 */
 #article-view > iframe[src*="youtube"],
 #article-view p > iframe[src*="youtube"],

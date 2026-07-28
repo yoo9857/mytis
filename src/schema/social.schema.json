@@ -1,0 +1,69 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["accounts"],
+  "properties": {
+    "accounts": {
+      "type": "array",
+      "description": "요청한 인물·그룹의 공식 SNS 계정. 인물 한 명당 항목 하나. 확인하지 못한 인물은 아예 넣지 않는다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nameKo",
+          "xHandle",
+          "instagramUsername",
+          "recentPosts",
+          "confidence",
+          "evidence"
+        ],
+        "properties": {
+          "nameKo": {
+            "type": "string",
+            "description": "요청받은 인물명을 그대로 되돌려준다. 임의로 바꾸지 않는다."
+          },
+          "xHandle": {
+            "type": "string",
+            "description": "공식 X(트위터) 계정의 @핸들. @ 없이 핸들만. 소속사가 운영하는 공식 계정도 포함한다(예: 아이브 → IVEstarship). 팬 계정·백업 계정·비공식 계정은 절대 넣지 말 것. 웹 검색으로 실제 확인하지 못했으면 빈 문자열."
+          },
+          "instagramUsername": {
+            "type": "string",
+            "description": "공식 인스타그램 계정 아이디. @ 없이. 본인 계정 또는 소속사 공식 계정만. 팬 계정 금지. 확인하지 못했으면 빈 문자열."
+          },
+          "recentPosts": {
+            "type": "array",
+            "description": "위 공식 계정이 올린 최근 게시물. 최대 4개, 최신순. **웹 검색 결과에 실제로 나온 것만** 넣는다. 주소나 ID를 지어내면 독자에게 깨진 박스가 보인다. 없으면 빈 배열.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["url", "date", "hasPhoto"],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "description": "게시물 전체 주소. https://www.instagram.com/p/<코드>/ 또는 https://x.com/<핸들>/status/<숫자ID> 형태."
+                },
+                "date": {
+                  "type": "string",
+                  "description": "게시일 YYYY-MM-DD. **이 글이 '최신 근황'인지 판단하는 기준이라 매우 중요하다.** 특히 인스타그램은 이 값 말고는 게시일을 알아낼 방법이 없어서, 날짜가 없으면 그 게시물은 쓰지 않는다. 검색 결과에서 게시일을 확인하지 못했으면 빈 문자열로 두고 추측하지 말 것. 몇 년 전 게시물을 최근인 것처럼 적으면 안 된다."
+                },
+                "hasPhoto": {
+                  "type": "boolean",
+                  "description": "사진이 포함된 게시물인지. 텍스트만 있는 글은 근황 사진 역할을 못 한다. 확실하지 않으면 false."
+                }
+              }
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "이 계정이 해당 인물의 공식 계정이라는 확신도. 공식 홈페이지·위키백과·언론 보도가 계정을 직접 명시하면 high. 검색 결과 정황만으로 판단했으면 medium. 애매하면 low."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "그렇게 판단한 근거 한 문장. 예: '소속사 큐브엔터테인먼트 공식 사이트 아티스트 페이지에 링크됨'. 근거를 못 대겠으면 빈 문자열."
+          }
+        }
+      }
+    }
+  }
+}

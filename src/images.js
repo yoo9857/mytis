@@ -16,11 +16,51 @@ const ASPECTS = {
   '16:9': [1200, 675],
 };
 
-/** 글·슬롯별로 비율을 고른다 (같은 글은 늘 같은 결과). */
-function pickAspect(title, slot, allowed) {
+/** 크롭으로 잘려나가도 괜찮은 한계. 이걸 넘으면 원본 비율을 그대로 쓴다. */
+const MAX_CROP = 0.2;
+
+/**
+ * 글·슬롯별로 본문 사진의 비율을 고른다 (같은 글은 늘 같은 결과).
+ *
+ * **원본 사진의 방향을 반드시 먼저 본다.** 예전에는 `bodyAspects` 에서 해시로
+ * 아무 비율이나 골랐는데, 가로 사진에 세로 프레임(`3:4`·`2:3`)이 걸리면
+ * `background-size: cover` 가 양옆을 잘라내 인물 얼굴과 자막이 토막났다.
+ *
+ * > 2026-07-28 실측 — 고준희 글 3번째 이미지:
+ * > 544x339 가로 캡처 → 292x390 세로 프레임. 얼굴이 왼쪽 끝에서 반쯤 잘리고
+ * > 오른쪽 인물과 자막 글자가 사라졌다. 짧은 변 기준 축소 탓에 292px 로 작아지기까지 했다.
+ *
+ * 그래서 ① 원본과 방향이 같은 후보만 남기고 ② 그중에서도 잘려나가는 비율이
+ * MAX_CROP 을 넘으면 버린다. 남는 게 없으면 **원본 비율을 그대로** 쓴다.
+ * 연출 다양성보다 사진이 안 잘리는 쪽이 우선이다.
+ */
+function pickAspect(title, slot, allowed, srcFile) {
   const list = (allowed || []).filter((a) => ASPECTS[a]);
   const pool = list.length ? list : ['3:2', '4:3', '3:4'];
-  return ASPECTS[pool[(hash(title) + slot * 7) % pool.length]];
+
+  const { w: sw, h: sh } = srcFile ? imageSize(srcFile) : { w: 0, h: 0 };
+  if (!sw || !sh) return ASPECTS[pool[(hash(title) + slot * 7) % pool.length]];
+
+  const srcRatio = sw / sh;
+  // cover 로 채울 때 짧은 쪽이 얼마나 잘려나가는지 (0 = 손실 없음)
+  const cropLoss = (a) => {
+    const r = ASPECTS[a][0] / ASPECTS[a][1];
+    return 1 - Math.min(srcRatio, r) / Math.max(srcRatio, r);
+  };
+  const sameOrientation = (a) => {
+    const r = ASPECTS[a][0] / ASPECTS[a][1];
+    return (r >= 1 && srcRatio >= 1) || (r <= 1 && srcRatio <= 1);
+  };
+
+  const safe = pool.filter((a) => sameOrientation(a) && cropLoss(a) <= MAX_CROP);
+  if (safe.length) return ASPECTS[safe[(hash(title) + slot * 7) % safe.length]];
+
+  // 쓸 만한 후보가 없다 — 원본 비율을 그대로 살린다.
+  // 긴 변을 1200 으로 맞춰 두면 clampToSource 가 원본 크기까지만 줄여 준다.
+  log.debug(`원본 비율 유지: ${sw}x${sh} (안전한 후보 없음 · 후보 ${pool.join(',')})`);
+  return srcRatio >= 1
+    ? [1200, Math.max(1, Math.round(1200 / srcRatio))]
+    : [Math.max(1, Math.round(1200 * srcRatio)), 1200];
 }
 
 /**
@@ -255,7 +295,7 @@ export async function renderImages(article, cfg) {
       if (!isThumb && cfg.images.bodyStyle === 'photo' && bgDataUri) {
         // 원본보다 크게 그리면 뭉개진다 — 원본 크기로 상한을 건다
         const [bw, bh] = clampToSource(
-          ...pickAspect(article.title, i, cfg.images.bodyAspects),
+          ...pickAspect(article.title, i, cfg.images.bodyAspects, bg.file),
           bg.file
         );
         const focus = bg.isPerson ? 'center 25%' : 'center center';

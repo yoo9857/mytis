@@ -6,6 +6,7 @@ import { log, fmtDuration } from './log.js';
 import { blogUrls, validateForPublish } from './config.js';
 import { writeArticle, saveArticle } from './codexWriter.js';
 import { fillEmbeds } from './youtube.js';
+import { fillSocialEmbeds } from './socialEmbed.js';
 import { renderImages } from './images.js';
 import { buildHtml, previewDocument } from './html.js';
 import { launchBrowser, firstPage, saveSession } from './browser.js';
@@ -68,6 +69,16 @@ export async function generate(topic, cfg) {
     } catch (err) {
       log.warn(`영상 임베드 확보 실패: ${err.message}`);
     }
+  }
+
+  // 최신 근황은 공식 X·인스타 게시물 임베드로 보여준다.
+  // 사진을 내려받아 올리면 저작권에 약관 위반까지 겹치지만, 임베드는
+  // 원저작자 서버에서 렌더링되므로 문제가 없다. (socialEmbed.js 머리말 참고)
+  try {
+    article.socialEmbeds = await fillSocialEmbeds(article, cfg);
+  } catch (err) {
+    log.warn(`SNS 근황 임베드 확보 실패: ${err.message}`);
+    article.socialEmbeds = [];
   }
 
   const articleFile = saveArticle(article);
