@@ -405,6 +405,21 @@ export async function writeArticle({ topic, cfg }) {
       const raw = extractJson(last);
       const article = normalizeArticle(raw, { topic, cfg });
 
+      /* ⚠️ 모드는 **모든 글에** 붙여야 한다.
+       *
+       * 영상 글에만 붙였더니 기사 글이 photo.js 에서 `article.mode || MODE.TOPIC`
+       * 으로 **주제 모드로 판정**됐고, 주제 모드는 `sourcePhoto: false` 라
+       * 원문 기사 사진을 통째로 버렸다.
+       *
+       * > 2026-07-28 실측 — 소지섭 금 선물 기사:
+       * > 원문에 사진이 3장 있었는데 하나도 쓰지 않고, 대신 스톡 사진
+       * > "gold bar calculator desk", "tropical airport luggage beach" 가 실렸다.
+       * > 인물도 사건도 없는 사진이 글의 얼굴이 됐다.
+       *
+       * mode.js 로 판단을 한곳에 모은 뒤에도 **값을 심는 것을 빼먹으면** 같은
+       * 사고가 난다. 새 모드를 추가할 때 이 줄을 잊지 마세요. */
+      article.mode = mode;
+
       // 영상 소재 글: 지어낸 타임스탬프를 실제 자막 시각으로 스냅하고,
       // 자막에 없는 지점은 0(처음부터)으로 되돌린다.
       if (clip) {
@@ -472,7 +487,7 @@ export async function writeArticle({ topic, cfg }) {
       if (
         can(mode, 'relatedArticlePhotos') &&
         cfg.images?.useSourcePhoto === true &&
-        (article.sourceImages?.length || 0) < 3 &&
+        (article.sourceImages?.length || 0) < 6 &&
         article.sources?.length > 1
       ) {
         const { fetchArticle } = await import('./fetchArticle.js');
@@ -482,7 +497,7 @@ export async function writeArticle({ topic, cfg }) {
           .slice(0, 3);
 
         for (const url of extra) {
-          if ((article.sourceImages?.length || 0) >= 4) break;
+          if ((article.sourceImages?.length || 0) >= 8) break;
           try {
             const s = await fetchArticle(url, cfg, 300);
             const got = [s?.image, ...(s?.images || []).map((i) => i.url)].filter(Boolean);

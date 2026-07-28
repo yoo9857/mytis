@@ -44,7 +44,7 @@
   "images": {
     "enabled": true,
     "thumbnail": true,
-    "bodyImages": 2,
+    "bodyImages": 5,
     "brand": "ISSUE",
     "width": 1200,
     "height": 630,
