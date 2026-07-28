@@ -449,6 +449,9 @@ export async function fetchBackgrounds(article, cfg, slots) {
    *    켜고 끄는 것은 `images.useClipShots` (기본 켜짐, 영상 글에서만 동작).
    */
   const mode = article.mode || MODE.TOPIC;
+  /* 원문 사진이 전부 합성본일 때 대표 자리를 비워 인물 사진에 양보한다.
+   * 인물 사진도 못 구하면 이 함수로 되돌린다 (아래 press/person 단계 참고). */
+  let restoreThumb = null;
   const clipShots = article.clipShots || [];
   if (can(mode, 'clipShots') && cfg.images.useClipShots !== false && clipShots.length) {
     log.warn(
@@ -549,18 +552,41 @@ export async function fetchBackgrounds(article, cfg, slots) {
     const pressShots = result.map((r, i) => ({ r, i })).filter((x) => x.r?.source === 'source-article');
     if (pressShots.length > 1) {
       try {
-        const best = await pickBestThumb(pressShots.map((x) => x.r.file));
-        // 파이썬은 고른 경로를 `best` 키로 돌려준다 (`path` 가 아니다).
+        const scored = await pickBestThumb(pressShots.map((x) => x.r.file));
+
+        /* 최고점이 아니라 **얼굴 하나만 잡힌 후보** 중 최고점을 고른다.
+         * 대표 이미지에는 제목이 얹히므로 단독 컷이어야 한다. 점수만 보면
+         * 합성본이 뽑히고, 그러면 합성본을 피하려는 이 교체가 무의미해진다. */
+        const solos = (scored?.all || []).filter((c) => (c.faces || 0) === 1);
+        const best = solos.length ? solos[0] : scored;
+        if (solos.length) {
+          log.debug(`단독 컷 후보 ${solos.length}개 중 최고점을 대표로 검토합니다.`);
+        }
+
+        // 파이썬은 고른 경로를 `best`/`path` 키로 돌려준다.
         // 경로 문자열은 인코딩·구분자 때문에 그대로 안 맞을 수 있어 파일명으로 비교한다.
-        const bestName = best?.best ? path.basename(best.best) : '';
+        const bestPath = best?.path || best?.best || '';
+        const bestName = bestPath ? path.basename(bestPath) : '';
         const hit = pressShots.find((x) => path.basename(x.r.file) === bestName);
         if (!hit) log.debug(`대표 후보를 찾지 못했습니다 (best=${bestName || '없음'})`);
         /* 교체는 **확실히 더 나을 때만** 한다.
-         * 얼굴이 아주 작으면(3% 미만) 오탐이거나 배경 인물이라 대표로 못 쓴다.
+         * - 얼굴이 아주 작으면(3% 미만) 오탐이거나 배경 인물이라 대표로 못 쓴다.
+         * - **얼굴이 2개 이상이면 그것도 합성본이다.** 합성본을 피하려고 교체하는데
+         *   또 합성본을 고르면 아무 의미가 없다.
+         *
+         * > 2026-07-28 실측 — 소지섭 기사:
+         * > "슬롯 5 ← 얼굴 2개, 최대 3.7% (기존 슬롯 0 은 합성본일 가능성)" 으로
+         * > 교체했는데, 바꿔 넣은 것도 위아래로 두 컷을 이어붙인 합성본이었다.
+         * > 이음새 위에 제목이 얹혀 얼굴 사이에 글자가 끼었다.
+         *
          * 애매하면 원래 대표(보통 og:image)를 그대로 두는 편이 안전하다. */
-        const strong = (best?.faces || 0) >= 1 && (best?.biggest || 0) >= 3;
+        const solo = (best?.faces || 0) === 1;
+        const bigEnough = (best?.biggest || 0) >= 3;
+        const strong = solo && bigEnough;
         if (hit && !strong) {
-          log.debug(`대표 교체 안 함 — 후보 얼굴이 작음 (${best?.biggest || 0}%)`);
+          log.debug(
+            `대표 교체 안 함 — ${!solo ? `얼굴 ${best?.faces}개(합성본 의심)` : `얼굴이 작음 (${best?.biggest || 0}%)`}`
+          );
         }
         if (hit && strong && hit.i !== 0 && result[0]) {
           log.debug(
@@ -570,6 +596,30 @@ export async function fetchBackgrounds(article, cfg, slots) {
           const tmp = result[0];
           result[0] = result[hit.i];
           result[hit.i] = tmp;
+        }
+
+        /* 원문 사진에 **단독 컷이 하나도 없으면** 대표 자리를 비운다.
+         *
+         * 언론사는 한 사람을 두세 컷으로 붙인 합성본을 og:image 로 내보내는 일이
+         * 많아, 후보 전부가 합성본인 경우가 생긴다. 그때는 어느 것을 골라도
+         * 이음새 위에 제목이 얹힌다.
+         *
+         * > 2026-07-28 실측 — 소지섭 기사: 후보 5장의 얼굴 수가 2·2·6·6·0 개로
+         * > 단독 컷이 없었다. 위아래로 이어붙인 사진 가운데에 제목이 걸쳐
+         * > 두 얼굴 사이에 글자가 끼었다.
+         *
+         * 슬롯 0 을 비워 두면 뒤따르는 위키미디어 인물 사진 단계가 채운다
+         * (인물 사진은 단독 컷이다). 인물 사진도 못 구하면 아래에서 되돌린다. */
+        if (!solos.length && result[0]) {
+          const freed = result[0];
+          result[0] = null;
+          restoreThumb = () => {
+            if (!result[0]) {
+              result[0] = freed;
+              log.debug('대표 자리를 되돌립니다 — 단독 컷 대체 사진을 못 구했습니다.');
+            }
+          };
+          log.debug('원문 사진에 단독 컷이 없어 대표 자리를 비웁니다 (인물 사진에 양보).');
         }
       } catch (err) {
         log.debug(`대표 이미지 얼굴 선별 생략: ${err.message.slice(0, 80)}`);
@@ -627,6 +677,15 @@ export async function fetchBackgrounds(article, cfg, slots) {
     const got = result.filter(Boolean).length;
     if (got) log.ok(`인물 사진 ${got}장 확보 (위키미디어 공용 · 상업 이용 가능 라이선스)`);
     else log.info('라이선스가 열린 인물 사진을 찾지 못해 스톡 사진으로 진행합니다.');
+  }
+
+  /* 합성본을 피해 비워 둔 대표 자리를 인물 사진이 채웠는지 확인한다.
+   * 못 채웠으면 원문 사진을 되돌린다 — 빈 자리로 두면 그라디언트가 나와
+   * 합성본보다 더 나쁘다. */
+  if (restoreThumb) {
+    if (result[0]) log.debug('대표 이미지를 단독 컷 인물 사진으로 채웠습니다.');
+    restoreThumb();
+    restoreThumb = null;
   }
 
   // --- 1순위: 무료 스톡 API (키가 있는 것부터) ----------------------------
