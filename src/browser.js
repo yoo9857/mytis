@@ -8,50 +8,67 @@ import { log } from './log.js';
  * 티스토리 인증 쿠키(__T_, __T_SECURE)는 만료 시각이 없는 "세션 쿠키"라
  * 브라우저를 닫으면 디스크에 남지 않는다. 프로필 디렉터리만으로는 로그인이 유지되지 않는다.
  * 그래서 로그인 후 쿠키를 따로 저장해 두었다가 다음 실행에서 다시 주입한다.
+ *
+ * 네이버(NID_AUT·NID_SES)도 사정이 같으므로 같은 방식을 쓴다.
+ * 다만 **파일을 플랫폼별로 나눈다.** 하나로 합치면 티스토리만 로그인한 실행이
+ * 네이버 쿠키를 지운 파일로 덮어써서, 다음 네이버 실행이 조용히 로그아웃된다.
  */
-const SESSION_FILE = 'session.json';
+const SESSIONS = {
+  tistory: { file: 'session.json', domains: /tistory|kakao|daum/ },
+  naver: { file: 'session-naver.json', domains: /naver\.com/ },
+};
 
-function sessionPath(cfg) {
-  return path.join(cfg.profileDir, SESSION_FILE);
+export const PLATFORMS = Object.keys(SESSIONS);
+
+function sessionPath(cfg, platform) {
+  return path.join(cfg.profileDir, SESSIONS[platform].file);
 }
 
 /** 현재 컨텍스트의 쿠키를 저장한다. */
-export async function saveSession(ctx, cfg) {
+export async function saveSession(ctx, cfg, platform = 'tistory') {
+  const spec = SESSIONS[platform];
+  if (!spec) throw new Error(`알 수 없는 플랫폼: ${platform}`);
   try {
     const state = await ctx.storageState();
-    const cookies = (state.cookies || []).filter((c) => /tistory|kakao|daum/.test(c.domain));
+    const cookies = (state.cookies || []).filter((c) => spec.domains.test(c.domain));
     if (!cookies.length) {
-      log.debug('저장할 세션 쿠키가 없습니다.');
+      log.debug(`저장할 ${platform} 세션 쿠키가 없습니다.`);
       return false;
     }
     fs.mkdirSync(cfg.profileDir, { recursive: true });
-    fs.writeFileSync(sessionPath(cfg), JSON.stringify({ cookies }, null, 2), 'utf8');
-    log.debug(`세션 쿠키 ${cookies.length}개 저장`);
+    fs.writeFileSync(sessionPath(cfg, platform), JSON.stringify({ cookies }, null, 2), 'utf8');
+    log.debug(`${platform} 세션 쿠키 ${cookies.length}개 저장`);
     return true;
   } catch (err) {
-    log.debug(`세션 저장 실패: ${err.message}`);
+    log.debug(`${platform} 세션 저장 실패: ${err.message}`);
     return false;
   }
 }
 
 /** 저장해 둔 쿠키를 컨텍스트에 다시 주입한다. */
-export async function restoreSession(ctx, cfg) {
-  const file = sessionPath(cfg);
+export async function restoreSession(ctx, cfg, platform) {
+  // 플랫폼을 지정하지 않으면 있는 것을 모두 복원한다. 서로 도메인이 달라 간섭하지 않는다.
+  if (!platform) {
+    let any = false;
+    for (const p of PLATFORMS) any = (await restoreSession(ctx, cfg, p)) || any;
+    return any;
+  }
+  const file = sessionPath(cfg, platform);
   if (!fs.existsSync(file)) return false;
   try {
     const { cookies } = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (!cookies?.length) return false;
     await ctx.addCookies(cookies);
-    log.debug(`세션 쿠키 ${cookies.length}개 복원`);
+    log.debug(`${platform} 세션 쿠키 ${cookies.length}개 복원`);
     return true;
   } catch (err) {
-    log.debug(`세션 복원 실패: ${err.message}`);
+    log.debug(`${platform} 세션 복원 실패: ${err.message}`);
     return false;
   }
 }
 
-export function hasSavedSession(cfg) {
-  return fs.existsSync(sessionPath(cfg));
+export function hasSavedSession(cfg, platform = 'tistory') {
+  return fs.existsSync(sessionPath(cfg, platform));
 }
 
 const STEALTH = `
@@ -158,18 +175,39 @@ export async function shot(page, label) {
   }
 }
 
-/** 여러 셀렉터 후보 중 먼저 보이는 것을 찾는다. */
+/**
+ * 여러 셀렉터 후보 중 먼저 보이는 것을 찾는다.
+ *
+ * 한 셀렉터가 여러 요소에 걸릴 때 **첫 번째만 보고 포기하지 않는다.**
+ * 예전에는 `.first()` 만 확인했는데, 화면에 따라 같은 마크업을 여러 벌 렌더링하고
+ * 한 벌만 보이게 하는 사이트에서 조용히 실패했다.
+ *
+ * > 2026-07-28 실측 — 네이버 로그인: `button:has-text("로그인")` 의 첫 매치가
+ * > **숨겨진** 패스키 버튼이라 8초를 헛돌고 "셀렉터를 찾지 못했습니다" 로 끝났다.
+ * > 정작 바로 뒤에 보이는 로그인 버튼이 있었다.
+ *
+ * 보이는 것을 찾는 게 목적이므로 앞쪽 몇 개를 훑는다. 이렇게 바꿔도 예전에
+ * 성공했던 경우의 결과는 같다(첫 번째가 보이면 그것을 그대로 쓴다).
+ */
+const SCAN_LIMIT = 5;
+
 export async function findFirst(scope, selectors, { timeout = 8000, state = 'visible' } = {}) {
   const deadline = Date.now() + timeout;
   let lastErr = null;
   while (Date.now() < deadline) {
     for (const sel of selectors) {
       try {
-        const loc = scope.locator(sel).first();
+        const all = scope.locator(sel);
         if (state === 'attached') {
-          if ((await loc.count()) > 0) return { locator: loc, selector: sel };
-        } else if (await loc.isVisible({ timeout: 250 }).catch(() => false)) {
-          return { locator: loc, selector: sel };
+          if ((await all.count()) > 0) return { locator: all.first(), selector: sel };
+          continue;
+        }
+        const n = Math.min(await all.count(), SCAN_LIMIT);
+        for (let i = 0; i < n; i++) {
+          const loc = all.nth(i);
+          if (await loc.isVisible({ timeout: 250 }).catch(() => false)) {
+            return { locator: loc, selector: i ? `${sel} [${i}]` : sel };
+          }
         }
       } catch (err) {
         lastErr = err;

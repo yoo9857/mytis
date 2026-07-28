@@ -3,7 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DIRS, stamp, safeSlug } from './paths.js';
 import { log, fmtDuration } from './log.js';
-import { blogUrls, validateForPublish } from './config.js';
+import { blogUrls, naverUrls, validateForPublish, validateNaverForPublish } from './config.js';
 import { writeArticle, saveArticle } from './codexWriter.js';
 import { fillEmbeds } from './youtube.js';
 import { fillSocialEmbeds } from './socialEmbed.js';
@@ -12,7 +12,9 @@ import { renderImages } from './images.js';
 import { buildHtml, previewDocument } from './html.js';
 import { launchBrowser, firstPage, saveSession } from './browser.js';
 import { ensureLoggedIn } from './kakaoLogin.js';
+import { ensureLoggedIn as naverEnsureLoggedIn } from './naverLogin.js';
 import { publishPost } from './tistory.js';
+import { publishPost as naverPublishPost } from './naver.js';
 
 /** 렌더링된 이미지들을 업로드 순서대로 정렬하고 자리표시자를 부여한다. */
 /**
@@ -253,7 +255,16 @@ function mapImages(rendered) {
     .map((i) => i.background)
     .filter((b) => b && (b.photographer || b.credit));
 
-  return { files, withPlaceholders, withLocalSrc, credits };
+  /* `files` 와 **같은 순서**의 캡션·배치 정보.
+   * 네이버는 HTML 자리표시자를 쓸 수 없어(에디터에 HTML 입구가 없다) 업로드한
+   * 이미지 컴포넌트를 코드가 직접 본문 사이에 끼운다. 그때 이 배열을 참조한다. */
+  const meta = ordered.map((img, idx) => ({
+    alt: img.alt || '',
+    caption: idx === 0 ? '' : img.caption || '', // 대표 이미지에는 캡션을 달지 않는다
+    afterSection: idx === 0 ? 0 : img.afterSection,
+  }));
+
+  return { files, withPlaceholders, withLocalSrc, credits, meta };
 }
 
 /**
@@ -408,9 +419,71 @@ export async function publish({ article, html, imageFiles }, cfg) {
 }
 
 /**
- * 주제 하나를 끝까지(생성 → 발행) 처리한다.
+ * 이미 만들어진 아티클을 **네이버 블로그**에 발행한다.
+ *
+ * 티스토리와 인자가 다르다 — `html` 을 받지 않는다.
+ * 네이버 에디터에는 HTML 입구가 없어서 아티클 JSON 을 컴포넌트로 직접 조립한다
+ * (`naverDoc.js`). 그래서 `html.js` 결과물은 네이버 경로에서 쓰이지 않는다.
  */
-export async function runTopic(topic, cfg, { publish: doPublish = true } = {}) {
+export async function publishToNaver({ article, imageFiles, imageMeta, credits }, cfg) {
+  const problems = validateNaverForPublish(cfg);
+  if (problems.length) {
+    // 계정이 없어도 저장된 세션으로 발행될 수 있으므로 경고만 남긴다
+    for (const p of problems) log.warn(p);
+    if (!cfg.naver?.blogId) {
+      throw new Error('네이버 블로그 아이디가 없어 발행할 수 없습니다.');
+    }
+  }
+
+  const urls = naverUrls(cfg);
+  log.banner('4단계 · 네이버 발행');
+  log.info(`대상 블로그: blog.naver.com/${urls.blogId}`);
+
+  const ctx = await launchBrowser(cfg);
+  try {
+    const page = await firstPage(ctx);
+    await naverEnsureLoggedIn(page, cfg, urls);
+    await saveSession(ctx, cfg, 'naver');
+
+    const result = await naverPublishPost(page, urls, cfg, {
+      article,
+      imageFiles,
+      imageMeta,
+      credits,
+    });
+    if (!result.ok) throw new Error(result.reason || '발행에 실패했습니다.');
+    return result;
+  } finally {
+    await new Promise((r) => setTimeout(r, 1200));
+    await ctx.close().catch(() => {});
+  }
+}
+
+/** 플랫폼 이름 → 발행 함수. 새 플랫폼을 붙일 때 여기만 늘리면 된다. */
+const PUBLISHERS = {
+  tistory: (gen, cfg) =>
+    publish({ article: gen.article, html: gen.html, imageFiles: gen.images.files }, cfg),
+  naver: (gen, cfg) =>
+    publishToNaver(
+      {
+        article: gen.article,
+        imageFiles: gen.images.files,
+        imageMeta: gen.images.meta,
+        credits: gen.images.credits,
+      },
+      cfg
+    ),
+};
+
+export const PLATFORM_LABEL = { tistory: '티스토리', naver: '네이버 블로그' };
+
+/**
+ * 주제 하나를 끝까지(생성 → 발행) 처리한다.
+ *
+ * 글 생성은 플랫폼과 무관하게 **한 번만** 한다. codex 호출이 비싸기 때문이다.
+ * 여러 플랫폼을 주면 같은 아티클을 각각의 방식으로 발행한다.
+ */
+export async function runTopic(topic, cfg, { publish: doPublish = true, platforms = ['tistory'] } = {}) {
   const started = Date.now();
   log.banner(`주제: ${topic}`);
 
@@ -424,17 +497,36 @@ export async function runTopic(topic, cfg, { publish: doPublish = true } = {}) {
     return { ...gen, published: false };
   }
 
-  const result = await publish(
-    { article: gen.article, html: gen.html, imageFiles: gen.images.files },
-    cfg
-  );
+  const targets = platforms.filter((p) => PUBLISHERS[p]);
+  if (!targets.length) throw new Error(`발행할 플랫폼이 없습니다: ${platforms.join(', ')}`);
+
+  const results = {};
+  const failed = [];
+  for (const platform of targets) {
+    try {
+      results[platform] = await PUBLISHERS[platform](gen, cfg);
+    } catch (err) {
+      /* 한 플랫폼이 실패해도 나머지는 발행한다.
+       * 둘 다 실패하면 아래에서 예외를 던진다 — 조용히 성공한 척하지 않는다. */
+      log.error(`${PLATFORM_LABEL[platform]} 발행 실패: ${err.message.split('\n')[0]}`);
+      failed.push({ platform, error: err.message });
+    }
+  }
 
   log.banner('완료');
   log.ok(`제목: ${gen.article.title}`);
   log.ok(`태그: ${gen.article.tags.join(', ')}`);
-  if (result.postUrl) log.ok(`발행 주소: ${result.postUrl}`);
-  else log.ok(`발행 완료 (${result.url})`);
+  for (const [platform, r] of Object.entries(results)) {
+    log.ok(`${PLATFORM_LABEL[platform]}: ${r.postUrl || r.url}`);
+  }
+  for (const f of failed) log.warn(`${PLATFORM_LABEL[f.platform]}: 실패 — ${f.error.split('\n')[0]}`);
   log.info(`소요 시간: ${fmtDuration(Date.now() - started)}`);
 
-  return { ...gen, published: true, result };
+  if (!Object.keys(results).length) {
+    throw new Error(`모든 플랫폼 발행이 실패했습니다: ${failed.map((f) => f.platform).join(', ')}`);
+  }
+
+  // 기존 호출부(큐·news)가 result.postUrl 을 읽으므로 첫 성공 결과를 그대로 노출한다
+  const first = Object.values(results)[0];
+  return { ...gen, published: true, result: first, results, failed };
 }

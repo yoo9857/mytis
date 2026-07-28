@@ -61,6 +61,24 @@ const DEFAULTS = {
     audience: '해당 주제를 처음 검색해 본 한국 일반 독자',
     extraInstructions: '',
   },
+  /**
+   * 네이버 블로그. 티스토리와 **별도 블록**으로 둔다.
+   *
+   * 왜 blog 블록에 섞지 않는가: 카테고리 이름·공개 범위 값·태그 상한이 서로 다르고
+   * (네이버는 태그 30개, '이웃공개' 라는 제3의 공개 범위가 있다), 무엇보다
+   * 한 플랫폼 설정을 고치다 다른 쪽을 조용히 바꿔 버리는 일을 막아야 한다.
+   */
+  naver: {
+    blogId: '', // blog.naver.com/{여기}
+    category: '', // 게시판(카테고리) 이름. "auto" 면 글 내용에 맞춰 고른다
+    categoryFallback: '',
+    categoryAliases: {},
+    visibility: 'public', // 'public' | 'neighbor'(이웃공개) | 'private'
+    allowComment: true,
+    allowSearch: true, // '검색 허용' — 끄면 네이버 검색에 안 잡힌다
+    tagCount: 10, // 네이버 상한은 30개
+    publishMode: 'now',
+  },
   news: {
     query: '한국 연예 뉴스',
     count: 5,
@@ -147,12 +165,16 @@ export function loadConfig({ reload = false } = {}) {
   // .env 가 config.json 을 덮어씀
   if (env.TISTORY_BLOG) cfg.blog.name = env.TISTORY_BLOG;
   if (env.TISTORY_CATEGORY) cfg.blog.category = env.TISTORY_CATEGORY;
+  if (env.NAVER_BLOG) cfg.naver.blogId = env.NAVER_BLOG;
+  if (env.NAVER_CATEGORY) cfg.naver.category = env.NAVER_CATEGORY;
   if (env.MONEYTI_HEADLESS === '1') cfg.browser.headless = true;
   if (env.MONEYTI_HEADLESS === '0') cfg.browser.headless = false;
 
   cfg.secrets = {
     kakaoId: env.KAKAO_ID || '',
     kakaoPw: env.KAKAO_PW || '',
+    naverId: env.NAVER_ID || '',
+    naverPw: env.NAVER_PW || '',
     pexelsApiKey: env.PEXELS_API_KEY || '',
     unsplashApiKey: env.UNSPLASH_ACCESS_KEY || '',
     pixabayApiKey: env.PIXABAY_API_KEY || '',
@@ -181,6 +203,52 @@ export function blogUrls(cfg) {
     manage: `https://${host}/manage/posts`,
     login: 'https://www.tistory.com/auth/login',
   };
+}
+
+/**
+ * 네이버 블로그 URL 묶음.
+ *
+ * 글쓰기 주소는 후보를 둘 준다. 네이버가 신·구 경로를 둘 다 살려 두고 있고
+ * 계정에 따라 한쪽이 리다이렉트로만 동작하는 경우가 있어서다.
+ * 실제로 어느 쪽이 열리는지는 `npm run probe:naver` 로 확인한다.
+ */
+export function naverUrls(cfg) {
+  const id = (cfg.naver?.blogId || '').trim().replace(/^https?:\/\/blog\.naver\.com\//, '').replace(/\/.*$/, '');
+  if (!id) {
+    throw new Error(
+      '네이버 블로그 아이디가 없습니다. .env 의 NAVER_BLOG 또는 config.json 의 naver.blogId 를 채워주세요. ' +
+        '(blog.naver.com/myblog 이면 myblog)'
+    );
+  }
+  return {
+    platform: 'naver',
+    blogId: id,
+    host: 'blog.naver.com',
+    home: `https://blog.naver.com/${id}`,
+    // 새 경로 → 구 경로 순으로 시도한다
+    writeCandidates: [
+      `https://blog.naver.com/${id}/postwrite`,
+      `https://blog.naver.com/PostWriteForm.naver?blogId=${id}`,
+    ],
+    newPost: `https://blog.naver.com/${id}/postwrite`,
+    manage: `https://admin.blog.naver.com/${id}`,
+    /* `mode=form` 을 붙이지 않는다. 그걸 붙이면 **이미 로그인된 세션도** 로그인 폼을
+     * 그대로 보여줘서, 자동화가 아무 일도 없는 폼 앞에서 대기 시간을 다 태운다. */
+    login: 'https://nid.naver.com/nidlogin.login?url=https%3A%2F%2Fwww.naver.com',
+  };
+}
+
+export function validateNaverForPublish(cfg) {
+  const problems = [];
+  if (!cfg.naver?.blogId) {
+    problems.push('naver.blogId (config.json) 또는 NAVER_BLOG (.env) 가 비어 있습니다.');
+  }
+  if (!cfg.secrets.naverId || !cfg.secrets.naverPw) {
+    problems.push(
+      'NAVER_ID / NAVER_PW (.env) 가 비어 있습니다. 자동 로그인을 쓰지 않으려면 먼저 `npm run login:naver` 로 수동 로그인하세요.'
+    );
+  }
+  return problems;
 }
 
 export function validateForPublish(cfg) {

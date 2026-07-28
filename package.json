@@ -13,9 +13,13 @@
     "queue": "node src/cli.js queue",
     "news": "node src/cli.js news",
     "probe": "node src/cli.js probe",
+    "login:naver": "node src/cli.js login:naver",
+    "probe:naver": "node src/cli.js probe:naver",
     "verify": "node src/cli.js verify",
     "doctor": "node src/cli.js doctor",
-    "postinstall": "playwright install chromium"
+    "postinstall": "playwright install chromium",
+    "post:naver": "node src/cli.js post --naver",
+    "post:both": "node src/cli.js post --both"
   },
   "dependencies": {
     "playwright": "^1.49.0"

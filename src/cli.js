@@ -3,11 +3,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ensureDirs, DIRS, FILES } from './paths.js';
 import { log } from './log.js';
-import { loadConfig, blogUrls, validateForPublish } from './config.js';
-import { runTopic, generate, publish } from './run.js';
+import { loadConfig, blogUrls, naverUrls, validateForPublish } from './config.js';
+import { runTopic, generate, publish, publishToNaver, PLATFORM_LABEL } from './run.js';
 import { launchBrowser, firstPage, saveSession } from './browser.js';
 import { ensureLoggedIn, isLoggedIn, discoverBlog, genericUrls } from './kakaoLogin.js';
+import {
+  ensureLoggedIn as naverEnsureLoggedIn,
+  isLoggedIn as naverIsLoggedIn,
+  discoverBlogId,
+  genericUrls as naverGenericUrls,
+} from './naverLogin.js';
 import { probeEditor } from './tistory.js';
+import { probeEditor as probeNaverEditor } from './naver.js';
 import { verifySelectors } from './verifySelectors.js';
 import { renderImages } from './images.js';
 import { buildHtml } from './html.js';
@@ -29,6 +36,13 @@ const HELP = `
   npm run probe                        에디터 구조 덤프 (셀렉터가 깨졌을 때 진단)
   npm run doctor                       설정·환경 점검
 
+  네이버 블로그
+  npm run login:naver                  네이버 로그인 · 세션 저장 · 블로그 아이디 자동 탐지
+  npm run probe:naver                  네이버 에디터 구조 덤프 (셀렉터 확정용)
+  npm run post -- "주제" --naver         네이버에만 발행
+  npm run post -- "주제" --both          티스토리 + 네이버 (글은 한 번만 생성)
+  npm run publish -- out/xxx.json --naver   이미 만든 아티클을 네이버에 발행
+
   뉴스 소재 수집
   npm run news                         최신 기사를 훑어 소재 후보를 보여줌
   npm run news -- --add                찾은 기사를 topics.txt 큐에 추가
@@ -45,6 +59,9 @@ const HELP = `
   --no-publish      생성까지만 하고 발행하지 않음
   --private         이번 실행만 비공개로 발행 (테스트용)
   --public          이번 실행만 공개로 발행
+  --platform <이름>  tistory (기본) · naver · both
+  --naver           --platform naver 와 같음
+  --both            --platform both 와 같음
   --verbose         상세 로그 (codex 진행 상황 포함)
 `;
 
@@ -65,16 +82,42 @@ function parseArgs(argv) {
     else if (a === '--public') flags.visibility = 'public';
     else if (a === '--visibility') flags.visibility = argv[++i];
     else if (a.startsWith('--visibility=')) flags.visibility = a.split('=')[1];
+    else if (a === '--platform') flags.platform = argv[++i];
+    else if (a.startsWith('--platform=')) flags.platform = a.split('=')[1];
+    else if (a === '--naver') flags.platform = 'naver';
+    else if (a === '--both') flags.platform = 'both';
     else if (a.startsWith('--')) flags[a.slice(2)] = true;
     else positional.push(a);
   }
   return { flags, positional };
 }
 
+/**
+ * `--platform` 값을 발행 대상 목록으로 바꾼다.
+ *
+ * 기본은 티스토리다 — 네이버를 붙였다고 기존 명령의 동작이 바뀌면 안 된다.
+ */
+function resolvePlatforms(flags) {
+  const raw = String(flags.platform || 'tistory').toLowerCase();
+  if (raw === 'both' || raw === 'all') return ['tistory', 'naver'];
+  const list = raw
+    .split(/[,+]/)
+    .map((s) => s.trim())
+    .filter((s) => ['tistory', 'naver'].includes(s));
+  if (!list.length) {
+    throw new Error(
+      `알 수 없는 플랫폼: "${flags.platform}". tistory · naver · both 중에서 고르세요.`
+    );
+  }
+  return [...new Set(list)];
+}
+
 function applyFlags(cfg, flags) {
   if (flags.headless !== undefined) cfg.browser.headless = flags.headless;
   if (flags.visibility && ['public', 'protected', 'private'].includes(flags.visibility)) {
     cfg.blog.visibility = flags.visibility;
+    // 네이버는 값 이름이 다르다 — 'protected' 는 없고 '이웃공개' 계열이 그 자리다
+    cfg.naver.visibility = flags.visibility === 'protected' ? 'neighbor' : flags.visibility;
   }
   if (flags.verbose) {
     cfg.verbose = true;
@@ -131,15 +174,77 @@ async function cmdLogin(cfg) {
   }
 }
 
-async function cmdPost(cfg, topic, { noPublish }) {
+/**
+ * 네이버 로그인 · 세션 저장.
+ *
+ * 카카오와 같은 흐름이지만 세션 파일이 따로 저장된다(profile/session-naver.json).
+ * 캡차·2단계 인증이 뜨면 열린 브라우저에서 직접 통과시켜야 한다.
+ */
+async function cmdLoginNaver(cfg) {
+  cfg.browser.headless = false; // 로그인은 반드시 화면을 띄운다
+
+  let urls;
+  let knowsBlog = true;
+  try {
+    urls = naverUrls(cfg);
+  } catch {
+    knowsBlog = false;
+    urls = naverGenericUrls();
+    log.info('네이버 블로그 아이디가 아직 없습니다. 로그인 후 자동으로 찾겠습니다.');
+  }
+
+  const ctx = await launchBrowser(cfg);
+  try {
+    const page = await firstPage(ctx);
+    await naverEnsureLoggedIn(page, cfg, urls, { interactive: true });
+    await saveSession(ctx, cfg, 'naver');
+
+    if (!knowsBlog) {
+      const id = await discoverBlogId(page, cfg);
+      if (id) {
+        updateEnvFile('NAVER_BLOG', id);
+        log.ok(`블로그를 찾았습니다: blog.naver.com/${id} — .env 에 저장했습니다.`);
+      } else {
+        log.warn('블로그 아이디를 자동으로 찾지 못했습니다. .env 의 NAVER_BLOG 를 직접 채워주세요.');
+      }
+    }
+
+    log.ok('네이버 세션이 profile/ 에 저장되었습니다.');
+  } finally {
+    await new Promise((r) => setTimeout(r, 1500));
+    await ctx.close().catch(() => {});
+  }
+}
+
+/** 네이버 에디터 구조 덤프 — 셀렉터를 추측하지 않고 실측으로 확정하기 위한 도구 */
+async function cmdProbeNaver(cfg) {
+  cfg.browser.headless = false;
+  const urls = naverUrls(cfg);
+  const ctx = await launchBrowser(cfg);
+  try {
+    const page = await firstPage(ctx);
+    await naverEnsureLoggedIn(page, cfg, urls, { interactive: true });
+    await saveSession(ctx, cfg, 'naver');
+    await probeNaverEditor(page, urls);
+  } finally {
+    await new Promise((r) => setTimeout(r, 1000));
+    await ctx.close().catch(() => {});
+  }
+}
+
+async function cmdPost(cfg, topic, flags) {
   if (!topic) {
     throw new Error(
       '주제 또는 기사 URL 을 입력하세요.\n' +
         '  예)  npm run post -- "2026년 청년도약계좌 조건"\n' +
-        '  예)  npm run post -- "https://enews.imbc.com/News/RetrieveNewsInfo/512756"'
+        '  예)  npm run post -- "https://enews.imbc.com/News/RetrieveNewsInfo/512756"\n' +
+        '  예)  npm run post -- "주제" --naver           (네이버에만)\n' +
+        '  예)  npm run post -- "주제" --both            (티스토리 + 네이버)'
     );
   }
-  await runTopic(topic, cfg, { publish: !noPublish });
+  const platforms = resolvePlatforms(flags);
+  if (!flags.noPublish) log.info(`발행 대상: ${platforms.map((p) => PLATFORM_LABEL[p]).join(' + ')}`);
+  await runTopic(topic, cfg, { publish: !flags.noPublish, platforms });
 }
 
 async function cmdNews(cfg, args, flags) {
@@ -175,7 +280,7 @@ async function cmdNews(cfg, args, flags) {
   }
 }
 
-async function cmdPublishFile(cfg, file) {
+async function cmdPublishFile(cfg, file, flags = {}) {
   if (!file) throw new Error('아티클 JSON 경로를 입력하세요.  예)  npm run publish -- out/xxx.json');
   const abs = path.isAbsolute(file) ? file : path.resolve(process.cwd(), file);
   if (!fs.existsSync(abs)) throw new Error(`파일을 찾을 수 없습니다: ${abs}`);
@@ -183,26 +288,43 @@ async function cmdPublishFile(cfg, file) {
   const article = JSON.parse(fs.readFileSync(abs, 'utf8'));
   log.info(`아티클 로드: ${article.title}`);
 
+  const platforms = resolvePlatforms(flags);
+  log.info(`발행 대상: ${platforms.map((p) => PLATFORM_LABEL[p]).join(' + ')}`);
+
   const rendered = await renderImages(article, cfg);
   const ordered = [rendered.thumbnail, ...rendered.body].filter(Boolean);
-  const images = {
-    thumbnail: rendered.thumbnail
-      ? { placeholder: '{{IMAGE_0}}', alt: rendered.thumbnail.alt, caption: '' }
-      : null,
-    body: rendered.body.map((b, i) => ({
-      placeholder: `{{IMAGE_${(rendered.thumbnail ? 1 : 0) + i}}}`,
-      alt: b.alt,
-      caption: b.caption,
-      afterSection: b.afterSection,
-    })),
-  };
-  const html = buildHtml(article, { cfg, images });
+  const imageFiles = ordered.map((i) => i.file);
+  const imageMeta = ordered.map((img, idx) => ({
+    alt: img.alt || '',
+    caption: idx === 0 ? '' : img.caption || '',
+    afterSection: idx === 0 ? 0 : img.afterSection,
+  }));
+  const credits = ordered.map((i) => i.background).filter((b) => b && (b.photographer || b.credit));
 
-  const result = await publish(
-    { article, html, imageFiles: ordered.map((i) => i.file) },
-    cfg
-  );
-  log.ok(`발행 완료: ${result.postUrl || result.url}`);
+  const results = {};
+  for (const platform of platforms) {
+    if (platform === 'tistory') {
+      const images = {
+        thumbnail: rendered.thumbnail
+          ? { placeholder: '{{IMAGE_0}}', alt: rendered.thumbnail.alt, caption: '' }
+          : null,
+        body: rendered.body.map((b, i) => ({
+          placeholder: `{{IMAGE_${(rendered.thumbnail ? 1 : 0) + i}}}`,
+          alt: b.alt,
+          caption: b.caption,
+          afterSection: b.afterSection,
+        })),
+      };
+      const html = buildHtml(article, { cfg, images, imageCredits: credits });
+      results.tistory = await publish({ article, html, imageFiles }, cfg);
+    } else {
+      results.naver = await publishToNaver({ article, imageFiles, imageMeta, credits }, cfg);
+    }
+  }
+
+  for (const [platform, r] of Object.entries(results)) {
+    log.ok(`${PLATFORM_LABEL[platform]} 발행 완료: ${r.postUrl || r.url}`);
+  }
 }
 
 async function cmdQueue(cfg, { count = 1, noPublish }) {
@@ -419,15 +541,19 @@ async function main() {
     case 'post':
       return cmdPost(cfg, rest.join(' '), flags);
     case 'draft':
-      return cmdPost(cfg, rest.join(' '), { noPublish: true });
+      return cmdPost(cfg, rest.join(' '), { ...flags, noPublish: true });
     case 'publish':
-      return cmdPublishFile(cfg, rest[0]);
+      return cmdPublishFile(cfg, rest[0], flags);
     case 'news':
       return cmdNews(cfg, rest, flags);
     case 'queue':
       return cmdQueue(cfg, { count: flags.count || 1, noPublish: flags.noPublish });
     case 'probe':
       return cmdProbe(cfg);
+    case 'login:naver':
+      return cmdLoginNaver(cfg);
+    case 'probe:naver':
+      return cmdProbeNaver(cfg);
     case 'verify': {
       const ok = await verifySelectors(cfg);
       if (!ok) process.exitCode = 1;
