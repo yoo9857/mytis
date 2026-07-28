@@ -242,9 +242,34 @@ export const TRENDY_LAYOUTS = {
  * 보도사진이 원본 그대로 보이고, 2차적저작물 소지도 줄어든다.
  */
 TRENDY_LAYOUTS.clean = function clean(ctx) {
-  const { width } = ctx;
+  const { width, height } = ctx;
   const pad = Math.round(width * 0.075);
-  const size = fit(ctx.headline, Math.round(width * 0.072));
+
+  /* 글자는 **가운데 정사각 안**에만 둔다.
+   *
+   * 티스토리 목록·공유 카드는 대표 이미지를 **정사각으로 잘라서** 보여준다.
+   * 16:9 이미지의 좌우가 날아가므로, 가로 전체를 쓰면 글자가 양끝에서 끊긴다.
+   *
+   * > 2026-07-28 실측 — 발행된 글의 목록 카드:
+   * >   "스펙 다 갖췄는데 0표"  →  "펙 다 갖췄는데"
+   * >   "눈물보다 빨랐던 마음"  →  "보다 빨랐던"
+   * > 같은 목록의 기사 글(정사각 1200x1200)은 문구가 온전히 보였다.
+   *
+   * 그래서 안전폭 = 짧은 변(정사각 크롭의 폭)의 90%.
+   * 글자 크기도 카드 너비가 아니라 **이 안전폭**을 기준으로 잡는다.
+   * 16:9 는 그대로 유지된다 — 본문에서는 방송 화면이 잘리지 않는다. */
+  const safeW = Math.round(Math.min(width, height || width) * 0.9);
+
+  /* 글자 크기는 **안전폭에 실제로 들어가도록** 잡는다.
+   * 한글은 글자당 대략 폭 = 글자크기 이므로, 한 줄에 담기려면
+   * 글자크기 ≈ 안전폭 / 글자수. 두 줄까지는 허용하되 낱말 하나만
+   * 다음 줄로 떨어지는 모양("…갖췄는데 / 0표")은 보기 나쁘므로
+   * 한 줄에 담기는 쪽으로 계산한다. */
+  const chars = Math.max(1, [...String(ctx.headline || '')].length);
+  const size = Math.min(
+    fit(ctx.headline, Math.round(safeW * 0.125)),
+    Math.round((safeW / chars) * 1.05)
+  );
 
   return {
     bgPosition: 'center 32%',
@@ -261,13 +286,17 @@ TRENDY_LAYOUTS.clean = function clean(ctx) {
                              rgba(0,0,0,.30) 55%, rgba(0,0,0,0) 100%),
              linear-gradient(0deg, rgba(0,0,0,.50) 0%, rgba(0,0,0,.14) 32%,
                              rgba(0,0,0,.04) 60%, rgba(0,0,0,.18) 100%);}
-      .content{left:${pad}px;right:${pad}px;top:58%;transform:translateY(-50%);
-               bottom:auto;text-align:center;}
+      /* 좌우 여백이 아니라 **가운데 고정폭**으로 둔다 (정사각 크롭 대비) */
+      .content{left:50%;width:${safeW}px;right:auto;top:58%;
+               transform:translate(-50%,-50%);bottom:auto;text-align:center;}
       h1{font-size:${size}px;font-weight:900;line-height:1.2;letter-spacing:-.035em;
          text-shadow:0 4px 22px rgba(0,0,0,.9), 0 2px 6px rgba(0,0,0,.75);}
-      .mark{display:block;margin-top:${Math.round(width * 0.018)}px;
-            font-size:${Math.round(width * 0.016)}px;font-weight:700;letter-spacing:.16em;
-            color:rgba(255,255,255,.62);text-shadow:0 2px 8px rgba(0,0,0,.9);}`,
+      /* 방송 화면에는 아래쪽에 자막이 박혀 있다. 라벨을 헤드라인에 붙여 두면
+         그 자막과 겹쳐 둘 다 읽기 어려워진다 (실측: "취업하지~않고" 사이에 끼었다).
+         헤드라인 바로 아래에 짧게 붙인다. */
+      .mark{display:block;margin-top:${Math.round(width * 0.008)}px;
+            font-size:${Math.round(width * 0.014)}px;font-weight:700;letter-spacing:.16em;
+            color:rgba(255,255,255,.5);text-shadow:0 2px 8px rgba(0,0,0,.9);}`,
     html: `
       <div class="content">
         <h1>${esc(ctx.headline)}</h1>
