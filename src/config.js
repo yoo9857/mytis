@@ -106,6 +106,9 @@ const DEFAULTS = {
     bodyAspects: ['3:2', '4:3', '3:4', '1:1', '2:3'], // 세로 사진도 섞이게
     background: 'photo', // 'photo' = 실사 사진 배경, 'gradient' = 그라디언트만
     scrim: 0.55, // 사진 위 어둡게 덮는 정도 (0~1). 글자 가독성용
+    // 사진 색보정(룩). 'none' | 'neutral' | 'canon'(따뜻·고채도) | 'film'
+    // 출처가 다른 사진들의 톤을 통일한다. images.js 의 LOOKS 참고
+    look: 'neutral',
     showCredit: true, // 사진 출처를 카드 구석에 표기
     style: 'trendy', // 'trendy'(팬 콘텐츠 감성) | 'editorial'(정보성 사설 톤) | 'mixed'
     layout: '', // 비우면 글마다 자동으로 다른 연출. 고정하려면 레이아웃 이름

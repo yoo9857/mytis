@@ -74,17 +74,48 @@ function pickAspect(title, slot, allowed, srcFile) {
 }
 
 /**
+ * 사진 색보정(룩) — **새 의존성 없이 CSS 필터로 한다.**
+ *
+ * 이미지는 Playwright 로 HTML 을 렌더해 스크린샷으로 뽑는다. 그래서 sharp·canvas
+ * 같은 이미지 처리 라이브러리를 들이지 않고 `filter` 한 줄로 톤을 통일할 수 있다.
+ *
+ * `canon` — 캐논 색감. 특징은 **따뜻한 색온도 + 높은 채도 + 부드러운 콘트라스트**다.
+ *   · `sepia` 를 아주 살짝 섞고 `hue-rotate` 로 되돌리면 **색온도만 따뜻해진다**
+ *     (sepia 만 쓰면 누렇게 죽는다. 되돌리는 각도가 핵심이다)
+ *   · 채도는 올리되 콘트라스트는 과하게 올리지 않는다 — 온천·실내처럼 어두운
+ *     장면에서 콘트라스트를 올리면 그림자가 뭉개진다
+ *
+ * 여러 출처(원문 사진·스톡·위키미디어)에서 온 사진이 섞이면 톤이 제각각이라
+ * 글이 산만해 보인다. 같은 룩을 씌우면 한 사람이 같은 카메라로 찍은 것처럼 묶인다.
+ */
+const LOOKS = {
+  none: '',
+  // 기존 기본값. 밋밋하지만 원본을 가장 덜 건드린다
+  neutral: 'contrast(1.06) saturate(1.08)',
+  // 캐논 느낌 — 따뜻하고 채도가 살아 있으며 그림자가 부드럽다
+  canon: 'brightness(1.02) contrast(1.04) saturate(1.16) sepia(0.10) hue-rotate(-8deg)',
+  // 필름 느낌 — 채도를 살짝 낮추고 콘트라스트를 올린다
+  film: 'contrast(1.12) saturate(0.94) sepia(0.06) hue-rotate(-4deg)',
+};
+
+export function photoLook(cfg) {
+  const name = cfg?.images?.look || 'neutral';
+  const filter = LOOKS[name] ?? LOOKS.neutral;
+  return filter ? `filter:${filter};` : '';
+}
+
+/**
  * 텍스트 없이 사진만 잘라서 내보낸다.
  * 본문 사진은 카드보다 "그냥 현장 사진"처럼 보이는 편이 자연스럽다.
  */
-async function renderPlainPhoto(browser, bgDataUri, [w, h], focus) {
+async function renderPlainPhoto(browser, bgDataUri, [w, h], focus, look = LOOKS.neutral) {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
   await page.setContent(
     `<!doctype html><html><head><meta charset="utf-8"><style>
       *{margin:0;padding:0}
       html,body{width:${w}px;height:${h}px;overflow:hidden;background:#000}
       .p{position:absolute;inset:0;background-size:cover;background-repeat:no-repeat;
-         background-position:${focus};filter:contrast(1.06) saturate(1.08);}
+         background-position:${focus};${look ? `filter:${look};` : ''}}
     </style></head><body><div class="p" style="background-image:url('${bgDataUri}')"></div></body></html>`,
     { waitUntil: 'load' }
   );
@@ -326,7 +357,7 @@ export async function renderImages(article, cfg) {
           bg.file
         );
         const focus = bg.isPerson ? 'center 25%' : 'center center';
-        const p = await renderPlainPhoto(browser, bgDataUri, [bw, bh], focus);
+        const p = await renderPlainPhoto(browser, bgDataUri, [bw, bh], focus, LOOKS[cfg.images.look] ?? LOOKS.neutral);
         const file = path.join(DIRS.images, `${prefix}-body${i}.png`);
         await p.screenshot({ path: file, type: 'png' });
         await p.close();

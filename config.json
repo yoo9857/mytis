@@ -37,7 +37,10 @@
   },
   "social": {
     "enabled": true,
-    "platforms": ["x", "instagram"],
+    "platforms": [
+      "x",
+      "instagram"
+    ],
     "count": 2,
     "maxAgeDays": 180,
     "requirePhoto": true,
@@ -62,7 +65,13 @@
     "thumbSize": 1200,
     "thumbLayout": "clean",
     "bodyStyle": "photo",
-    "bodyAspects": ["3:2", "4:3", "3:4", "1:1", "2:3"],
+    "bodyAspects": [
+      "3:2",
+      "4:3",
+      "3:4",
+      "1:1",
+      "2:3"
+    ],
     "background": "photo",
     "scrim": 0.55,
     "showCredit": true,
@@ -75,13 +84,38 @@
     "useSourcePhoto": true,
     "allowShareAlike": true,
     "palettes": [
-      ["#1a0b2e", "#7b2cbf", "#ff2e97"],
-      ["#0b132b", "#1c7ed6", "#22d3ee"],
-      ["#2b0a12", "#c9184a", "#ffb703"],
-      ["#0d1b2a", "#0f766e", "#5eead4"],
-      ["#1c1917", "#7c2d12", "#fb923c"],
-      ["#111827", "#4338ca", "#a78bfa"]
-    ]
+      [
+        "#1a0b2e",
+        "#7b2cbf",
+        "#ff2e97"
+      ],
+      [
+        "#0b132b",
+        "#1c7ed6",
+        "#22d3ee"
+      ],
+      [
+        "#2b0a12",
+        "#c9184a",
+        "#ffb703"
+      ],
+      [
+        "#0d1b2a",
+        "#0f766e",
+        "#5eead4"
+      ],
+      [
+        "#1c1917",
+        "#7c2d12",
+        "#fb923c"
+      ],
+      [
+        "#111827",
+        "#4338ca",
+        "#a78bfa"
+      ]
+    ],
+    "look": "canon"
   },
   "codex": {
     "model": "gpt-5.6-terra",
