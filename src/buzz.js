@@ -47,21 +47,45 @@ const UA =
 /** 어디를 뒤질 것인가. 한 곳이 막혀도 나머지로 굴러가게 둔다. */
 const SOURCES = [
   {
+    /* 언론 보도. 커뮤니티보다 인용하기 좋다 — 매체명과 날짜가 분명하다.
+     * codex 재량에 맡기면 실행마다 결과가 갈렸다. 같은 소재로 돌렸는데
+     * 한 번은 매일경제·OSEN 기사를 찾고 다음 번엔 하나도 못 찾았다.
+     * 그래서 커뮤니티와 같은 방식으로 코드가 직접 모은다. */
+    name: '뉴스',
+    kind: 'news',
+    url: (q) => `https://search.naver.com/search.naver?where=news&query=${encodeURIComponent(q)}`,
+    /* 네이버 뉴스 검색에서 **제목 링크는 언론사 사이트로 직접** 간다
+     * (예: tvreport.co.kr/broadcast/article/1063221). 네이버 도메인만 잡으면
+     * 정작 기사를 놓친다. 그래서 외부 링크를 폭넓게 받고 NOT_ARTICLE 로 걸러낸다. */
+    linkPattern: /^https?:\/\//,
+  },
+  {
     name: '네이버카페',
+    kind: 'community',
     url: (q) => `https://search.naver.com/search.naver?where=article&query=${encodeURIComponent(q)}`,
     linkPattern: /cafe\.naver\.com/,
   },
   {
     name: '네이트판',
+    kind: 'community',
     url: (q) => `https://pann.nate.com/search/talk?searchType=A&q=${encodeURIComponent(q)}`,
     linkPattern: /pann\.nate\.com\/talk\/\d+/,
   },
   {
     name: '인스티즈',
+    kind: 'community',
     url: (q) => `https://www.instiz.net/name?category=1&k=${encodeURIComponent(q)}`,
     linkPattern: /instiz\.net\/(name|pt)\/\d+/,
   },
 ];
+
+/** 검색 결과에 섞여 오는 네이버 자체 링크·언론사 홈은 기사가 아니다. */
+const NOT_ARTICLE =
+  /nid\.naver|keep\.naver|help\.naver|search\.naver|media\.naver\.com|blog\.naver|cafe\.naver|section\.naver|\/main\/|naver\.com\/?$/;
+
+/** 링크 글자가 제목이 아닌 것들 (언론사명·UI 라벨) */
+const NOT_TITLE =
+  /^(네이버뉴스|새 창 열림|Keep에 바로가기|관련뉴스|더보기|언론사별|최신순|오래된순|관련도순)/;
 
 /** 조롱·비하가 담긴 글은 애초에 가져오지 않는다 (HANDOVER §6). */
 const ABUSIVE =
@@ -71,6 +95,45 @@ const ABUSIVE =
 function seasonTokens(season) {
   const n = String(season || '').match(/\d+/)?.[0];
   return n ? [`${n}기`, `${n} 기`] : [];
+}
+
+/**
+ * 이 결과가 **우리가 찾는 기수**의 것인가.
+ *
+ * 커뮤니티와 뉴스에 서로 다른 기준이 필요하다.
+ *
+ * - **커뮤니티**: 제목에 기수가 있어야 한다. 스니펫까지 허용하면 검색 결과에서
+ *   글과 나란히 붙어 있는 **카페 이름 링크**가 같은 스니펫을 물고 통과해 같은
+ *   글이 두 번 실린다. (실측: "인천맘 쏙", "야구 24시-(KIA…" 가 제목 자리에 들어왔다)
+ *   카페 이름에는 기수가 없으므로 이 조건 하나로 중복도 함께 걸러진다.
+ *
+ * - **뉴스**: 제목이 기수를 생략하는 경우가 많다
+ *   ("얽히고설켰다…대환장 러브라인으로 시청률 4.3% 돌파"). 제목에서 요구하면
+ *   정작 관련 기사가 다 탈락한다. 그래서 **제목이 다른 기수를 가리키는 경우만
+ *   거부**하고, 그 밖에는 스니펫에 기수가 있으면 받는다.
+ *   > 실측: "'피부과 일반의' **27기** 광수, 오늘 결혼" 이 23기 검색에 올라왔다.
+ *   > 제목에 27기가 박혀 있으니 이 규칙으로 정확히 걸러진다.
+ */
+function seasonOk(item, tokens, kind) {
+  const marks = item.title.match(/\d+\s*기/g) || [];
+
+  /* 제목에 기수가 여러 개 나오면 **맨 처음 것이 그 기사의 기수**다.
+   *
+   * 검색 결과의 링크 글자가 제목이 아니라 **본문 조각**인 경우가 있어서,
+   * 우리 기수가 어딘가 섞여 있다는 이유로 통과시키면 엉뚱한 기사가 들어온다.
+   *
+   * > 실측 — 23기를 찾는데 통과해 버린 것들:
+   * >   "24기 영식, **27기** 상철, 23기 영숙, 27기 영자…"  ← 27기 광수 결혼 기사
+   * >   "**27기** 상철과 공개 열애 중인 23기 영숙도 축하합니다"  ← 같은 기사
+   * > 둘 다 첫 기수가 우리 기수가 아니다. 이 규칙 하나로 정확히 걸러진다.
+   */
+  if (marks.length) return tokens.some((t) => marks[0].replace(/\s/g, '') === t.replace(/\s/g, ''));
+
+  // 커뮤니티는 제목에 기수가 없으면 버린다 (중복 방지 — 위 함수 주석 참고)
+  if (kind !== 'news') return false;
+
+  // 뉴스 제목은 기수를 생략하는 경우가 많아 스니펫까지 본다
+  return tokens.some((t) => item.snippet.includes(t));
 }
 
 /**
@@ -110,15 +173,23 @@ export async function collectBuzz({ program, season, names = [], limit = 12, tim
     });
     page.setDefaultTimeout(timeoutMs);
 
+    /* 종류별로 자리를 나눈다.
+     * 뉴스가 먼저 돌기 때문에 한 통에 담으면 뉴스가 limit 을 다 써버리고
+     * 커뮤니티가 0건이 된다 (실측). 뉴스는 인용하기 좋아 조금 더 준다. */
+    const quota = { news: Math.ceil(limit * 0.6), community: Math.floor(limit * 0.4) };
+    const taken = { news: 0, community: 0 };
+
     for (const src of SOURCES) {
       for (const q of queries) {
-        if (found.length >= limit) break;
+        if (taken[src.kind] >= quota[src.kind]) break;
         try {
           await page.goto(src.url(q), { waitUntil: 'domcontentloaded' });
           await page.waitForTimeout(2000);
           const items = await page.evaluate(
-            (patternSource) => {
+            ({ patternSource, notArticleSource, notTitleSource }) => {
               const re = new RegExp(patternSource);
+              const notArticle = new RegExp(notArticleSource);
+              const notTitle = new RegExp(notTitleSource);
               const clean = (s) =>
                 (s || '')
                   .trim()
@@ -128,8 +199,10 @@ export async function collectBuzz({ program, season, names = [], limit = 12, tim
 
               document.querySelectorAll('a').forEach((a) => {
                 if (!a.href || !re.test(a.href)) return;
+                if (notArticle.test(a.href)) return;
                 const title = clean(a.innerText);
                 if (title.length < 10 || title.length > 300) return;
+                if (notTitle.test(title)) return;
 
                 /* 스니펫(본문 미리보기)을 함께 가져온다.
                  *
@@ -160,8 +233,23 @@ export async function collectBuzz({ program, season, names = [], limit = 12, tim
                 let date = '';
                 let scan = el;
                 for (let i = 0; i < 3 && scan && !date; i++) {
-                  const m = clean(scan.innerText).match(/(\d{2})\.(\d{2})\.(\d{2})\.?(?!\d)/);
-                  if (m) date = `20${m[1]}-${m[2]}-${m[3]}`;
+                  const t = clean(scan.innerText);
+                  const abs = t.match(/(\d{2})\.(\d{2})\.(\d{2})\.?(?!\d)/);
+                  if (abs) {
+                    date = `20${abs[1]}-${abs[2]}-${abs[3]}`;
+                    break;
+                  }
+                  /* 네이버 뉴스는 "5일 전", "2주 전" 처럼 상대 표기를 쓴다.
+                   * 그대로 넘기면 codex 가 언제 일인지 알 수 없다. */
+                  const rel = t.match(/(\d+)(분|시간|일|주|개월)\s*전/);
+                  if (rel) {
+                    const n = Number(rel[1]);
+                    const days =
+                      { 분: 0, 시간: 0, 일: 1, 주: 7, 개월: 30 }[rel[2]] * n;
+                    const d = new Date(Date.now() - days * 86_400_000);
+                    date = d.toISOString().slice(0, 10);
+                    break;
+                  }
                   scan = scan.parentElement;
                 }
 
@@ -178,23 +266,22 @@ export async function collectBuzz({ program, season, names = [], limit = 12, tim
               });
               return out.slice(0, 40);
             },
-            src.linkPattern.source
+            {
+              patternSource: src.linkPattern.source,
+              notArticleSource: NOT_ARTICLE.source,
+              notTitleSource: NOT_TITLE.source,
+            }
           );
 
           for (const it of items) {
-            if (found.length >= limit) break;
+            if (taken[src.kind] >= quota[src.kind]) break;
             const key = it.url.split('?')[0];
             if (seen.has(key)) continue;
 
-            /* ⚠️ 기수 필터 — 이 파일에서 가장 중요한 줄이다.
-             * 이름만 걸린 결과는 **다른 기수의 다른 사람**이다.
-             *
-             * **제목에서** 요구한다. 스니펫까지 허용하면 검색 결과에 글과 나란히
-             * 붙어 있는 **카페 이름 링크**가 같은 스니펫을 물고 통과해 같은 글이
-             * 두 번 실린다. (실측: "인천맘 쏙", "야구 24시-(KIA…" 가 제목 자리에 들어왔다)
-             * 카페 이름에는 기수가 없으므로 이 조건 하나로 함께 걸러진다. */
+            /* ⚠️ 기수 필터 — 이 파일에서 가장 중요한 부분이다.
+             * 이름만 걸린 결과는 **다른 기수의 다른 사람**이다. */
             const hay = `${it.title} ${it.snippet}`;
-            if (!tokens.some((t) => it.title.includes(t))) continue;
+            if (!seasonOk(it, tokens, src.kind)) continue;
             if (ABUSIVE.test(hay)) {
               log.debug(`제외(비하 표현): ${it.title.slice(0, 40)}`);
               continue;
@@ -214,8 +301,10 @@ export async function collectBuzz({ program, season, names = [], limit = 12, tim
 
             seen.add(key);
             seen.add(bodyKey);
+            taken[src.kind]++;
             found.push({
               source: src.name,
+              kind: src.kind,
               title: it.title,
               snippet: it.snippet,
               date: it.date,
@@ -245,19 +334,27 @@ export async function collectBuzz({ program, season, names = [], limit = 12, tim
 /** 프롬프트에 실을 수 있는 형태로 정리한다. 없으면 빈 문자열. */
 export function buzzBlock(items) {
   if (!items?.length) return '';
-  const lines = items
-    .map(
-      (b, i) =>
-        `${i + 1}. [${b.source}] ${b.title}\n` +
-        `   작성일: ${b.date || '확인 안 됨'}\n` +
-        `   내용: ${b.snippet}\n` +
-        `   출처: ${b.url}`
-    )
-    .join('\n\n');
+  const fmt = (b, i) =>
+    `${i + 1}. [${b.source}] ${b.title}\n` +
+    `   작성일: ${b.date || '확인 안 됨'}\n` +
+    `   내용: ${b.snippet}\n` +
+    `   출처: ${b.url}`;
+
+  const news = items.filter((b) => b.kind === 'news');
+  const community = items.filter((b) => b.kind !== 'news');
+
+  let block = '\n# 방송 밖 자료 — 직접 수집했습니다 (기수까지 대조함)\n';
+  if (news.length) {
+    block += `\n## 언론 보도 ${news.length}건 — 인용하기 가장 좋습니다\n\n${news.map(fmt).join('\n\n')}\n`;
+  }
+  if (community.length) {
+    block += `\n## 커뮤니티 반응 ${community.length}건\n\n${community.map(fmt).join('\n\n')}\n`;
+  }
   return (
-    `\n# 방송 밖 반응 — 커뮤니티에서 실제로 수집했습니다\n\n${lines}\n\n` +
-    `**작성일을 반드시 확인하고 쓰세요.** 오래된 기수의 글은 1~2년 전 것입니다.\n` +
-    `"지금 화제" 처럼 쓰면 안 되고, "방송 당시", "2024년 11월 당시" 처럼\n` +
-    `시점을 밝혀 주세요. 작성일이 '확인 안 됨' 인 글은 시점을 단정하지 마세요.\n`
+    block +
+    `\n**작성일을 반드시 확인하고 쓰세요.** 오래된 기수의 자료는 1~2년 전 것입니다.\n` +
+    `"지금 화제" 처럼 쓰면 안 되고, "방송 당시", "2024년 11월 보도" 처럼\n` +
+    `시점을 밝혀 주세요. 작성일이 '확인 안 됨' 이면 시점을 단정하지 마세요.\n` +
+    `언론 보도는 **매체명을 밝혀** 인용하세요("○○ 보도에 따르면").\n`
   );
 }
