@@ -195,17 +195,56 @@ function renderSocialEmbed(em) {
 </div>`;
 }
 
+/**
+ * 영상 글의 맨 아래에 두는 **원본 영상 링크**.
+ *
+ * 왜 플레이어가 아니라 링크인가:
+ *   영상 글에는 이미 장면 캡처가 20장쯤 실린다. 독자는 무슨 일이 있었는지
+ *   다 본 상태이고, 하단 영상은 "직접 확인하고 싶은 사람" 을 위한 출처다.
+ *
+ *   게다가 플레이어는 깨질 수 있다. 임베드가 막힌 영상이거나 origin 이
+ *   허용되지 않으면 유튜브가 **"오류 153 · 동영상 플레이어 구성 오류"** 를
+ *   띄운다. 글 맨 아래에 빨간 오류 박스가 남는 것보다 링크 한 줄이 낫다.
+ *   (미리보기를 file:// 로 열면 origin 이 null 이라 반드시 이 오류가 난다)
+ */
+function renderVideoLink(em) {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(em?.videoId || '')) return '';
+  const url = `https://www.youtube.com/watch?v=${esc(em.videoId)}`;
+  const who = em.channel ? `${esc(em.channel)} 공식 영상` : '공식 영상';
+  return `<div style="margin:32px 0;padding:18px 20px;border:1px solid #e5e7eb;border-radius:10px;background:#fafafa;">
+  <p style="margin:0 0 8px;font-size:15px;color:#666;">${who}</p>
+  <p style="margin:0;font-size:17px;line-height:1.6;">
+    <a href="${url}" target="_blank" rel="noopener" style="color:#4c1d95;font-weight:700;text-decoration:none;">▶ ${esc(em.title || '유튜브에서 원본 보기')}</a>
+  </p>
+</div>`;
+}
+
 /** CC 라이선스 사진은 저작자·라이선스 표기가 의무다. 본문 하단에 모아서 남긴다. */
 function renderImageCredits(credits) {
   if (!credits.length) return '';
-  const items = credits
+
+  /* 같은 출처는 한 줄로 묶는다.
+   *
+   * 영상 글은 사진이 20장이고 전부 같은 영상에서 캡처한 것이라, 그대로 늘어놓으면
+   * "YouTube · broadcast still · 원본 보기" 가 **20번 반복**돼 독자에게 방해만 된다.
+   * 저작자 표기 의무는 출처를 한 번 밝히면 충족된다. */
+  const merged = new Map();
+  for (const c of credits) {
+    const who = c.photographer || c.credit || '작자 미상';
+    const key = `${who}|${c.license || ''}|${c.pageUrl || ''}`;
+    const cur = merged.get(key);
+    if (cur) cur.count++;
+    else merged.set(key, { ...c, who, count: 1 });
+  }
+
+  const items = [...merged.values()]
     .map((c) => {
-      const who = c.photographer || c.credit || '작자 미상';
       const lic = c.license ? ` · ${esc(c.license)}` : '';
+      const many = c.count > 1 ? ` · 사진 ${c.count}장` : '';
       const link = c.pageUrl
         ? `<a href="${esc(c.pageUrl)}" target="_blank" rel="noopener nofollow">원본 보기</a>`
         : '';
-      return `<li>${esc(who)}${lic}${link ? ` · ${link}` : ''}</li>`;
+      return `<li>${esc(c.who)}${lic}${many}${link ? ` · ${link}` : ''}</li>`;
     })
     .join('\n');
   return `<h3 data-ke-size="${KE.h3}" style="${S.h3}">이미지 출처</h3>
@@ -368,9 +407,12 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
     if (img.afterSection >= 1 && img.afterSection <= sectionCount) continue;
     out.push(renderFigure(img));
   }
+  /* 영상 글은 장면 캡처가 이미 본문을 채우므로, 하단 영상은 링크로 둔다
+   * (renderVideoLink 머리말 참고). 기사·주제 글의 임베드는 플레이어를 유지한다. */
+  const bottomAsLink = article.mode === 'clip' || article.fromClip;
   for (const em of embeds) {
     if (em.afterSection >= 1 && em.afterSection <= sectionCount) continue;
-    out.push(renderEmbed(em));
+    out.push(bottomAsLink ? renderVideoLink(em) : renderEmbed(em));
   }
   for (const em of socials) {
     if (em.afterSection >= 1 && em.afterSection <= sectionCount) continue;

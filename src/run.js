@@ -180,7 +180,10 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
       statValue: '',
       statLabel: '',
       photoQuery: '',
-      caption: `${mmss(s.sec)} ${s.caption}`.trim(),
+      /* 캡션에 시각(`21:27`)을 붙이지 않는다.
+       * 사진마다 숫자가 앞에 붙으면 독자가 읽는 흐름을 끊는다. 어느 대목인지는
+       * 사진과 앞뒤 문단이 이미 말해 준다. 시각은 alt 에만 남겨 둔다. */
+      caption: s.caption,
       alt: `${article.title} — ${mmss(s.sec)} 장면`,
       afterSection: s.at,
     })),
