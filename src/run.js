@@ -14,6 +14,60 @@ import { ensureLoggedIn } from './kakaoLogin.js';
 import { publishPost } from './tistory.js';
 
 /** 렌더링된 이미지들을 업로드 순서대로 정렬하고 자리표시자를 부여한다. */
+/** 영상 글에서 사진으로 만들 장면 수의 상한. 너무 많으면 글이 늘어진다. */
+const MAX_CLIP_SHOTS = 5;
+
+/**
+ * 장면 캡처를 본문 이미지로 배치하고, 임베드는 맨 아래 하나만 남긴다.
+ *
+ * 왜 이렇게 하나: 장면마다 유튜브 플레이어를 박으면 글이 무거워지고 읽는
+ * 흐름이 끊긴다. 사진이 그 장면을 대신 보여주고, 영상은 "직접 확인하고 싶은
+ * 독자" 를 위한 출처로 맨 끝에 하나만 두는 편이 읽기 좋다.
+ *
+ * 첫 장면은 대표 이미지, 나머지는 각자 원래 임베드가 있던 자리에 들어간다.
+ * 캡션에는 codex 가 쓴 장면 설명과 시각을 함께 남긴다 — 어느 대목인지
+ * 독자가 알 수 있어야 하고, 출처 표기이기도 하다.
+ */
+function applyClipShotLayout(article, cfg, scenes, shots) {
+  const bySec = new Map(shots.map((s) => [s.sec, s]));
+  const got = scenes.filter((s) => bySec.has(s.sec));
+  if (!got.length) return;
+
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+  const sectionCount = Math.max(1, (article.sections || []).length);
+  const oldThumb = (article.imageBriefs || []).find((b) => b.placement === 'thumbnail') || {};
+
+  article.imageBriefs = got.map((s, i) => ({
+    placement: i === 0 ? 'thumbnail' : 'body',
+    headline: i === 0 ? oldThumb.headline || article.title : '',
+    subline: i === 0 ? oldThumb.subline || '' : '',
+    eyebrow: i === 0 ? oldThumb.eyebrow || '' : '',
+    statValue: i === 0 ? oldThumb.statValue || '' : '',
+    statLabel: i === 0 ? oldThumb.statLabel || '' : '',
+    photoQuery: '',
+    caption: i === 0 ? '' : `${mmss(s.sec)} ${s.caption}`.trim(),
+    alt: `${article.title} — ${mmss(s.sec)} 장면`,
+    afterSection:
+      i === 0
+        ? 0
+        : Math.min(sectionCount, Math.max(1, s.afterSection || Math.round((i * sectionCount) / got.length))),
+  }));
+
+  // 본문 슬롯 수를 장면 수에 맞춘다 (renderImages 가 이 값으로 자른다)
+  cfg.images.bodyImages = Math.max(0, got.length - 1);
+
+  /* 임베드는 맨 아래 하나만. 글 전체를 아우르는 첫 장면부터 재생되게 한다.
+   * afterSection 이 섹션 범위를 벗어나면 html.js 가 본문 끝에 몰아 넣는다. */
+  const first = article.embeds?.[0];
+  if (first) {
+    article.embeds = [{ ...first, afterSection: sectionCount + 1, caption: '', quote: '' }];
+  }
+
+  log.info(
+    `장면 ${got.length}장을 본문 사진으로 배치하고, 영상 임베드는 맨 아래 1개만 남깁니다.`
+  );
+}
+
 function mapImages(rendered) {
   const ordered = [rendered.thumbnail, ...rendered.body].filter(Boolean);
   const files = ordered.map((i) => i.file);
@@ -69,21 +123,38 @@ export async function generate(topic, cfg) {
      * 이미지가 필요하다. 시각은 codex 가 지어낸 값이 아니라
      * snapTimestamps 가 실제 자막 시각으로 검증·보정한 값이다. */
     if (cfg.images.useClipShots !== false) {
-      const secs = [...new Set(
-        (article.embeds || [])
-          .map((e) => Math.max(0, parseInt(e.startSeconds, 10) || 0))
-          .filter((s) => s > 0)
-      )].sort((a, b) => a - b);
+      /* 장면마다 **사진 한 장씩**을 만든다.
+       *
+       * 예전에는 장면 수만큼 임베드를 본문에 흩뿌렸는데, 플레이어가 여러 개
+       * 박히면 글이 무거워지고 읽는 흐름이 끊긴다. 사진이 그 자리를 대신하고,
+       * 영상은 "직접 보고 싶은 사람" 을 위해 **맨 아래 하나만** 남긴다.
+       *
+       * 캡처 시각은 codex 가 지어낸 값이 아니라 snapTimestamps 가 실제 자막
+       * 시각으로 검증·보정한 값이라 장면 설명과 어긋나지 않는다. */
+      const scenes = (article.embeds || [])
+        .map((e) => ({
+          sec: Math.max(0, parseInt(e.startSeconds, 10) || 0),
+          caption: e.caption || e.quote || '',
+          afterSection: e.afterSection,
+        }))
+        .filter((s) => s.sec > 0)
+        .sort((a, b) => a.sec - b.sec)
+        .slice(0, MAX_CLIP_SHOTS);
 
-      if (secs.length) {
+      if (scenes.length) {
         try {
           const { captureFrames } = await import('./ytShot.js');
-          const want = 1 + (cfg.images.bodyImages ?? 2); // 대표 1 + 본문 N
           // 캡처는 항상 headless — 창을 띄우면 장면마다 브라우저가 깜빡인다
-          article.clipShots = await captureFrames(article.clipVideoId, secs.slice(0, want), {
-            title: article.title,
-            headless: true,
-          });
+          const shots = await captureFrames(
+            article.clipVideoId,
+            scenes.map((s) => s.sec),
+            { title: article.title, headless: true }
+          );
+          article.clipShots = shots;
+
+          if (shots.length) {
+            applyClipShotLayout(article, cfg, scenes, shots);
+          }
         } catch (err) {
           log.warn(`장면 캡처 실패 — 스톡 사진으로 진행합니다: ${err.message.split('\n')[0]}`);
           article.clipShots = [];

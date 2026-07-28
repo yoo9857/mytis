@@ -19,6 +19,16 @@ const ASPECTS = {
 /** 크롭으로 잘려나가도 괜찮은 한계. 이걸 넘으면 원본 비율을 그대로 쓴다. */
 const MAX_CROP = 0.2;
 
+/** 원본 비율을 그대로 쓰되 긴 변을 1200 에 맞춘다 (clampToSource 가 다시 줄인다). */
+function nativeAspect(srcFile) {
+  const { w, h } = imageSize(srcFile);
+  if (!w || !h) return [1200, 800];
+  const r = w / h;
+  return r >= 1
+    ? [1200, Math.max(1, Math.round(1200 / r))]
+    : [Math.max(1, Math.round(1200 * r)), 1200];
+}
+
 /**
  * 글·슬롯별로 본문 사진의 비율을 고른다 (같은 글은 늘 같은 결과).
  *
@@ -293,9 +303,17 @@ export async function renderImages(article, cfg) {
 
       // 본문 사진은 텍스트 없이 원본 사진만 쓰고, 비율도 글마다 다르게 섞는다
       if (!isThumb && cfg.images.bodyStyle === 'photo' && bgDataUri) {
-        // 원본보다 크게 그리면 뭉개진다 — 원본 크기로 상한을 건다
+        /* 영상 장면 캡처는 **원본 비율 그대로** 둔다.
+         *
+         * 방송 화면에는 자막이 가로로 길게 박혀 있어서 조금만 잘라도
+         * 글자가 중간에서 끊긴다. 연출을 위해 비율을 섞을 대상이 아니다.
+         *
+         * > 2026-07-28 실측: 1920x1080 캡처를 3:2(1200x800)로 담으니
+         * > 좌우 15.6% 가 날아가 자막이 양끝에서 토막났다. */
         const [bw, bh] = clampToSource(
-          ...pickAspect(article.title, i, cfg.images.bodyAspects, bg.file),
+          ...(bg.source === 'clip-shot'
+            ? nativeAspect(bg.file)
+            : pickAspect(article.title, i, cfg.images.bodyAspects, bg.file)),
           bg.file
         );
         const focus = bg.isPerson ? 'center 25%' : 'center center';
