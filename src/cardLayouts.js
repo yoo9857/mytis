@@ -342,9 +342,17 @@ export function renderCard(ctx) {
   } = build({ ...ctx, accent, deep, hasPhoto });
   const bgPosition = ctx.bgPosition || layoutBgPosition;
 
+  /* 전역 룩(후지·캐논…)을 레이아웃 자기 필터 **뒤에** 붙인다 — 레이아웃 의도가 먼저다.
+   *
+   * 단, **흑백으로 간 레이아웃은 건드리지 않는다.** `grayscale(1)` 뒤에 `sepia` 를
+   * 붙이면 색이 되살아나 갈색으로 물든다 (실측: neon 레이아웃이
+   * `grayscale(1) contrast(1.25) brightness(0.72)` + fujiSoft 로 갈변했다).
+   * 흑백은 연출 의도가 분명한 선택이라 톤을 얹을 대상이 아니다. */
+  const monochrome = /grayscale|invert/.test(photoFilter);
+  const cardFilter = [photoFilter, monochrome ? '' : ctx.photoLook].filter(Boolean).join(' ');
   const photoLayer = hasPhoto
     ? `<div class="photo" style="background-image:url('${bgDataUri}');background-position:${bgPosition};${
-        photoFilter ? `filter:${photoFilter};` : ''
+        cardFilter ? `filter:${cardFilter};` : ''
       }"></div>`
     : `<div class="photo" style="background:linear-gradient(135deg, ${c1} 0%, ${c2} 55%, ${c3} 100%);"></div>
        <div class="photo" style="opacity:.08;background-image:
