@@ -97,6 +97,10 @@ const DEFAULTS = {
     allowShareAlike: true, // CC BY-SA 사진 허용 여부. false 로 두면 CC BY·CC0·PD 만 사용
     palettes: [['#1e1b4b', '#4c1d95', '#7c3aed']],
   },
+  buzz: {
+    enabled: true, // 영상 글에서 커뮤니티 반응·목격담을 모아 프롬프트에 실어 준다
+    count: 12,
+  },
   social: {
     enabled: true,
     platforms: ['x', 'instagram'], // 최신 근황을 공식 게시물 임베드로 보여준다

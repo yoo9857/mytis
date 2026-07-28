@@ -193,6 +193,29 @@ export async function runCodexJson({ prompt, schemaFile, cfg, timeoutMs, search 
   return extractJson(last);
 }
 
+/**
+ * 영상 제목·자막에서 프로그램명·기수·출연자 이름을 추려낸다.
+ *
+ * 커뮤니티 검색에 **기수가 반드시 필요**하기 때문이다. 기수 없이 이름만으로
+ * 찾으면 다른 기수의 동명이인이 쏟아진다 (buzz.js 머리말 참고).
+ *
+ * 나는솔로 계열은 출연자가 고정된 가명을 쓰므로 그 목록으로 잡아낸다.
+ * 다른 프로그램이면 이름을 못 찾아 빈 배열이 되고, 그때는 프로그램+기수로만 찾는다.
+ */
+const SOLO_ALIASES = [
+  '영수', '영호', '영식', '영철', '광수', '상철', '경수', '동수',
+  '영자', '정숙', '순자', '영숙', '옥순', '현숙', '정순', '영옥',
+];
+
+function guessShow(clip) {
+  const hay = `${clip?.title || ''} ${clip?.channel || ''}`;
+  const program = /나는\s*솔로|나솔/.test(hay) ? '나는솔로' : (clip?.title || '').split(/[\[\]|·]/)[0].trim();
+  const season = hay.match(/(\d+)\s*기/)?.[1] || '';
+  const text = `${hay} ${clip?.transcript || ''}`;
+  const names = SOLO_ALIASES.filter((n) => text.includes(n));
+  return { program, season, names };
+}
+
 /** 스키마 결과를 안전한 형태로 다듬는다 (누락 필드 보정). */
 function normalizeArticle(raw, { topic, cfg }) {
   const arr = (v) => (Array.isArray(v) ? v : []);
@@ -337,6 +360,28 @@ export async function writeArticle({ topic, cfg }) {
     source = await fetchArticle(topic, cfg);
   }
 
+  /* 영상 글은 **방송 밖 반응**을 미리 모아 프롬프트에 실어 준다.
+   *
+   * codex 에게 "커뮤니티를 찾아보라" 고만 하면 잘 못 찾는다. 검색 결과에
+   * 다른 기수 같은 이름이 섞여 들어오기 때문이다 (buzz.js 머리말 참고).
+   * 그래서 기수까지 대조한 목록을 우리가 만들어 넘긴다. */
+  let buzz = '';
+  if (mode === MODE.CLIP && cfg.buzz?.enabled !== false) {
+    try {
+      const { collectBuzz, buzzBlock } = await import('./buzz.js');
+      const { program, season, names } = guessShow(clip);
+      const items = await collectBuzz({
+        program,
+        season,
+        names,
+        limit: cfg.buzz?.count ?? 12,
+      });
+      buzz = buzzBlock(items);
+    } catch (err) {
+      log.debug(`방송 밖 반응 수집 실패: ${err.message.split('\n')[0]}`);
+    }
+  }
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const started = Date.now();
     log.step(
@@ -348,7 +393,7 @@ export async function writeArticle({ topic, cfg }) {
 
     try {
       let prompt = clip
-        ? buildClipPrompt({ clip, cfg })
+        ? buildClipPrompt({ clip, cfg, buzz })
         : fromNews
           ? buildNewsPrompt({ url: topic, cfg, source })
           : buildArticlePrompt({ topic, cfg });
