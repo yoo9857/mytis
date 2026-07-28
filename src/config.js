@@ -109,6 +109,10 @@ const DEFAULTS = {
     // 사진 색보정(룩). 'none' | 'neutral' | 'canon'(따뜻·고채도) | 'film'
     // 출처가 다른 사진들의 톤을 통일한다. images.js 의 LOOKS 참고
     look: 'neutral',
+    /* 스톡 사진(Pexels·Unsplash·Openverse) 사용 여부.
+     * **특정 장소를 다루는 글(여행·호텔·시설)에서는 false 로 끄세요.**
+     * 그 장소가 아닌 아무 사진이 실려 독자를 속이게 됩니다 — photo.js 주석 참고. */
+    stockPhotos: true,
     showCredit: true, // 사진 출처를 카드 구석에 표기
     style: 'trendy', // 'trendy'(팬 콘텐츠 감성) | 'editorial'(정보성 사설 톤) | 'mixed'
     layout: '', // 비우면 글마다 자동으로 다른 연출. 고정하려면 레이아웃 이름

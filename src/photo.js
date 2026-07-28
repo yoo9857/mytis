@@ -751,6 +751,36 @@ export async function fetchBackgrounds(article, cfg, slots) {
     restoreThumb = null;
   }
 
+  /* --- 스톡 사진을 쓸지 결정한다 -----------------------------------------
+   *
+   * ⚠️ **특정 장소를 다루는 글에서는 스톡 사진을 쓰면 안 된다.**
+   *
+   * 스톡 티어는 원래 연예 글용 설계다. 거기서는 사진이 '분위기' 역할이라
+   * 무관해도 티가 나지 않았다. 그런데 여행·시설 글은 **그 장소**를 보여줘야 한다.
+   * `japanese sauna wooden interior` 로 검색해 나온 아무 사우나 사진은,
+   * 라쿠아 글에서는 독자를 속이는 사진이다.
+   *
+   * > 2026-07-28 실측 — 스파 라쿠아 글에 사진 15장을 채웠더니:
+   * >   원문 라쿠아 페이지 9장 (실제 시설) ✅
+   * >   Unsplash·Pexels 3장 — 라쿠아가 아닌 아무 온천·거리 사진 ❌
+   * >   Openverse 1장 — **두바이 소피텔 호텔** ❌ (도쿄 스파 글이다)
+   * >   그라디언트 카드 2장 — 사진을 아예 못 찾음
+   *
+   * 무관한 사진으로 자리를 채우는 것보다 **실물 9장이 낫다.**
+   * 부족한 자리는 공식 SNS 게시물 임베드로 메운다.
+   *
+   * `images.stockPhotos: false` 로 끈다. 주제 글(재테크·생활정보)처럼 특정 장소가
+   * 없는 글에서는 스톡이 여전히 맞으므로 기본값은 켜 둔다. */
+  const useStock = cfg.images.stockPhotos !== false;
+  if (!useStock) {
+    const got = result.filter(Boolean).length;
+    log.info(
+      `스톡 사진을 쓰지 않습니다 (images.stockPhotos: false). 확보 ${got}/${slots}장 — ` +
+        '특정 장소 글에서는 무관한 스톡 사진보다 비우는 편이 낫습니다.'
+    );
+    return result;
+  }
+
   // --- 1순위: 무료 스톡 API (키가 있는 것부터) ----------------------------
   const apiTiers = [
     ['Pexels', cfg.secrets.pexelsApiKey, fromPexels],
