@@ -512,6 +512,93 @@ export async function fetchBackgrounds(article, cfg, slots) {
    *    켜고 끄는 것은 `images.useClipShots` (기본 켜짐, 영상 글에서만 동작).
    */
   const mode = article.mode || MODE.TOPIC;
+
+  /* --- 최우선: 눈으로 골라 둔 로컬 사진 폴더 (images.localPhotoDir) --------
+   *
+   * 여행 글에서 스톡 사진은 기준을 통과하지 못한다. 실측에서 스톡은 "아무 사우나",
+   * "두바이 호텔" 을 물어왔다 — 장소·아이템·히트 요소는 정의상 **그 장소의 사진**
+   * 이어야 하기 때문이다. 그래서 사람이 먼저 후보를 모으고(`scripts/ig-photos.mjs`)
+   * 눈으로 고른 뒤, 그 폴더를 여기로 넘긴다.
+   *
+   * 어느 사진을 어느 슬롯에 쓸지는 아티클이 정한다 — `imageBriefs[].photo` 에
+   * **파일 이름**을 적는다. 적지 않은 슬롯은 폴더 순서대로 남은 사진이 들어간다.
+   * 크레딧은 폴더의 `manifest.json`(수집기가 남긴 shortcode·owner·permalink)에서
+   * 되짚는다. 파일명만으로는 출처를 알 수 없다.
+   *
+   * ⚠️ 저작권 — 이 폴더의 사진은 **원저작자 것**이다. 수집은 후보를 눈으로 고르기
+   *    위한 것이고 발행 허가가 아니다(manifest.json 의 note). 실제 게시는
+   *    ① 임베드/oglink ② 공식·라이선스 사진 ③ 작성자 허락 중 하나로 가야 한다.
+   *    이 옵션을 켜는 것은 프리뷰로 배치를 확인하기 위한 용도이며,
+   *    그대로 발행하는 위험은 발행자가 진다.
+   */
+  /* 아티클이 지정한 폴더(`article.photoDir`)가 설정값보다 우선한다.
+   * 아티클 JSON 하나만 넘겨도 사진이 따라오게 하려는 것이다 —
+   * `node src/cli.js publish out/<글>.json --naver` 로 같은 사진이 다시 실린다. */
+  const localDir = article.photoDir || cfg.images.localPhotoDir;
+  if (localDir && fs.existsSync(localDir)) {
+    const names = fs
+      .readdirSync(localDir)
+      .filter((n) => /\.(jpe?g|png|webp)$/i.test(n))
+      .sort();
+    let manifest = {};
+    try {
+      manifest = JSON.parse(fs.readFileSync(path.join(localDir, 'manifest.json'), 'utf8'));
+    } catch {
+      log.debug('로컬 사진 폴더에 manifest.json 이 없습니다 — 크레딧을 비웁니다.');
+    }
+    const byFile = new Map((manifest.items || []).map((it) => [it.file, it]));
+
+    // 슬롯 순서 = 대표 먼저, 그다음 본문 (slotQueries 와 같은 순서)
+    const briefs = [
+      ...(article.imageBriefs || []).filter((b) => b.placement === 'thumbnail'),
+      ...(article.imageBriefs || []).filter((b) => b.placement === 'body'),
+    ];
+    const taken = new Set();
+    const pick = (slot) => {
+      const want = briefs[slot]?.photo;
+      if (want) {
+        const hit = names.find((n) => n === want || n === path.basename(want));
+        if (hit) return hit;
+        log.warn(`로컬 사진을 찾지 못했습니다: ${want} (슬롯 ${slot})`);
+      }
+      return names.find((n) => !taken.has(n));
+    };
+
+    log.warn(
+      `로컬 사진 ${names.length}장을 이미지로 사용합니다 (${path.basename(localDir)}). ` +
+        '원저작자 사진입니다 — 발행 허가가 아니며 위험은 발행자가 집니다.'
+    );
+    for (let slot = 0; slot < slots; slot++) {
+      const name = pick(slot);
+      if (!name) break;
+      taken.add(name);
+      const it = byFile.get(name) || {};
+      /* 크레딧은 사진의 출처에 따라 다르게 만든다.
+       *   위키미디어 공용 → 저작자 + 라이선스 (CC 는 표기가 의무다)
+       *   인스타          → @계정
+       * 카드 구석에 얹는 `credit` 은 ASCII 만 쓴다 — 한글·일본어 저작자명은
+       * 본문 하단 '이미지 출처' 에 그대로 남는다(`photographer`). */
+      const isWm = it.source === 'wikimedia';
+      const who = isWm ? it.author || '작자 미상' : it.owner ? `@${it.owner}` : '';
+      const license = isWm ? it.license || 'Wikimedia Commons' : it.permalink ? 'Instagram' : '';
+      result[slot] = {
+        file: path.join(localDir, name),
+        credit: isWm
+          ? [license, 'Wikimedia Commons'].filter(Boolean).join(' · ')
+          : [who, license].filter(Boolean).join(' · '),
+        photographer: who,
+        license,
+        source: 'local-photo',
+        pageUrl: it.permalink || '',
+        description: briefs[slot]?.alt || it.alt || '',
+        isPerson: false,
+      };
+      log.debug(`슬롯 ${slot}: ${name}${who ? ` (${who}${isWm ? ` · ${license}` : ''})` : ''}`);
+    }
+    if (result.some(Boolean)) log.ok(`로컬 사진 ${result.filter(Boolean).length}장 사용`);
+    return result; // 로컬 폴더를 쓸 때는 스톡 검색으로 섞지 않는다
+  }
+
   /* 원문 사진이 전부 합성본일 때 대표 자리를 비워 인물 사진에 양보한다.
    * 인물 사진도 못 구하면 이 함수로 되돌린다 (아래 press/person 단계 참고). */
   let restoreThumb = null;

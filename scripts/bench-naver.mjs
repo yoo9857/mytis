@@ -32,7 +32,16 @@ const r = await frame.evaluate(() => {
 
   const comps = [...root.querySelectorAll('.se-component')];
   const kindOf = (el) => {
-    const m = el.className.match(/se-(documentTitle|sectionTitle|text|image|imageGroup|quotation|horizontalLine|oglink|table|code|sticker|map|video|placesMap)/);
+    /* ⚠️ **`imageGroup` 을 `image` 보다 먼저 써야 한다.** 정규식 선택지는 왼쪽부터
+     * 맞으므로 `image` 가 앞에 있으면 `se-imageGroup` 이 `image` 로 잡힌다.
+     *
+     * > 2026-07-29 실측으로 발각: 우리 발행글에 콜라주 4개를 넣었는데 이 도구는
+     * > `imageGroup 0 · image 18` 로 보고했다. 폭이 412/601/599/481 로 섞여 있어
+     * > 나란히 배치된 것이 분명한데도 0개였다.
+     *
+     * 이 버그가 표본 측정을 오염시켰다 — "표본 6편 모두 콜라주 0개" 라는 결론(법칙 ⑨)이
+     * 여기서 나왔다. 순서를 고쳐 다시 재면 상위 여행 글은 **콜라주를 쓴다**. */
+    const m = el.className.match(/se-(documentTitle|sectionTitle|text|imageGroup|image|quotation|horizontalLine|oglink|table|code|sticker|map|video|placesMap)/);
     return m ? m[1] : el.className.slice(0, 40);
   };
 

@@ -262,6 +262,9 @@ function mapImages(rendered) {
     alt: img.alt || '',
     caption: idx === 0 ? '' : img.caption || '', // 대표 이미지에는 캡션을 달지 않는다
     afterSection: idx === 0 ? 0 : img.afterSection,
+    // 아티클이 지정한 배치 — 문단 위치와 사진 묶음(imageGroup)
+    afterParagraph: idx === 0 ? null : img.afterParagraph ?? null,
+    group: idx === 0 ? '' : img.group || '',
   }));
 
   return { files, withPlaceholders, withLocalSrc, credits, meta };

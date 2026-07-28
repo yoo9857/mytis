@@ -87,20 +87,102 @@ function pickAspect(title, slot, allowed, srcFile) {
  *
  * 여러 출처(원문 사진·스톡·위키미디어)에서 온 사진이 섞이면 톤이 제각각이라
  * 글이 산만해 보인다. 같은 룩을 씌우면 한 사람이 같은 카메라로 찍은 것처럼 묶인다.
+ *
+ * ---
+ *
+ * 후지필름 계열을 넣으려면 **필터만으로는 부족하다.**
+ *
+ * 필름 톤의 정체는 채도·콘트라스트가 아니라 **들린 블랙(faded black)** 이다.
+ * 가장 어두운 부분이 완전한 검정으로 떨어지지 않고 회색·청록에서 멈춘다.
+ * CSS `filter` 에는 커브도 채널별 조정도 없어서 이걸 만들 수 없다 —
+ * `brightness` 를 올리면 어두운 곳만이 아니라 **사진 전체가 밝아진다.**
+ *
+ * 그래서 룩은 세 겹으로 쓴다:
+ *   · `filter`  — 채도·콘트라스트·색온도 (기존과 동일)
+ *   · `overlay` — 위에 얹는 반투명 레이어. `mix-blend-mode:screen` 은
+ *                 **어두운 픽셀만 밀어 올린다**(밝은 곳은 거의 안 변한다).
+ *                 이게 블랙을 들어 올려 필름처럼 보이게 하는 실제 장치다.
+ *   · `glow`    — **사진을 한 겹 더 깔아 흐리게 만든 뒤 `screen` 으로 얹는다.**
+ *                 밝은 부분이 은은하게 번진다. 보정 앱이 "예쁘게" 만들 때 쓰는
+ *                 소프트 글로우가 이것이고, **색 조정만으로는 절대 안 나온다.**
+ *
+ * 오버레이·글로우는 **본문 사진 전용**이다. 카드(대표 이미지)에는 스크림·글자가
+ * 이미 얹혀 있어 한 겹 더 깔면 글자 대비가 무너진다. 카드에는 `filter` 만 간다.
  */
 const LOOKS = {
-  none: '',
+  none: { filter: '' },
   // 기존 기본값. 밋밋하지만 원본을 가장 덜 건드린다
-  neutral: 'contrast(1.06) saturate(1.08)',
+  neutral: { filter: 'contrast(1.06) saturate(1.08)' },
   // 캐논 느낌 — 따뜻하고 채도가 살아 있으며 그림자가 부드럽다
-  canon: 'brightness(1.02) contrast(1.04) saturate(1.16) sepia(0.10) hue-rotate(-8deg)',
+  canon: { filter: 'brightness(1.02) contrast(1.04) saturate(1.16) sepia(0.10) hue-rotate(-8deg)' },
   // 필름 느낌 — 채도를 살짝 낮추고 콘트라스트를 올린다
-  film: 'contrast(1.12) saturate(0.94) sepia(0.06) hue-rotate(-4deg)',
+  film: { filter: 'contrast(1.12) saturate(0.94) sepia(0.06) hue-rotate(-4deg)' },
+
+  /* 후지필름 클래식크롬 — 채도를 **낮추고** 콘트라스트를 올린다. 캐논의 반대편이다.
+   * 다큐멘터리 톤이라 정보 전달에 강하고 촌스러워지지 않는다.
+   * 그림자에 청록을 살짝 섞는 게 클래식크롬의 지문이다. */
+  fuji: {
+    filter: 'contrast(1.14) saturate(0.86) brightness(1.01) sepia(0.04) hue-rotate(6deg)',
+    overlay: 'background:rgba(24,42,52,0.10);mix-blend-mode:screen;',
+  },
+  /* 후지 감성 (에어리·파스텔) — 여행 감성글에서 쓰는 그 톤.
+   * 콘트라스트를 **내리고** 블랙을 크게 들어 올려 뽀얗게 만든다.
+   * 채도는 거의 그대로 둔다 — 낮추면 감성이 아니라 그냥 흐린 사진이 된다. */
+  fujiSoft: {
+    filter: 'contrast(0.93) saturate(1.04) brightness(1.03) sepia(0.05) hue-rotate(-3deg)',
+    overlay: 'background:rgba(255,241,232,0.14);mix-blend-mode:screen;',
+  },
+  /* 후지 벨비아 — 풍경용 고채도. 야경·조명·수영장 물색이 살아난다.
+   * 인물에는 쓰지 않는다 (피부가 붉게 뜬다). */
+  velvia: {
+    filter: 'contrast(1.16) saturate(1.34) brightness(0.99) sepia(0.03) hue-rotate(-5deg)',
+  },
+  /* 후지 에테르나 — 시네마 톤. 채도·콘트라스트 모두 낮은 평탄한 화면.
+   * 사진 여러 장을 한 흐름으로 묶을 때 가장 안정적이다. */
+  eterna: {
+    filter: 'contrast(0.96) saturate(0.88) brightness(1.02)',
+    overlay: 'background:rgba(30,38,46,0.12);mix-blend-mode:screen;',
+  },
+
+  /* ── 인스타 감성 (여성 독자 타깃) ─────────────────────────────
+   * 이 톤들의 정체는 색이 아니라 **소프트 글로우**다. 밝은 부분이 은은하게
+   * 번져 화면이 부드러워지는 것 — 보정 앱이 "예쁘게" 만들 때 쓰는 그 장치다.
+   * `glow` 는 사진을 한 겹 더 깔아 흐리게(blur) 만든 뒤 `screen` 으로 얹는다.
+   * 색만 만지면 절대 이 느낌이 안 난다. */
+
+  /* 로지 파스텔 — 살구·핑크를 얹어 뽀얗게. 조명·수증기가 예쁘게 뜬다.
+   * 야간 조명이 있는 장면에서 가장 강하다. */
+  instaRosy: {
+    filter: 'contrast(0.96) saturate(1.06) brightness(1.00) sepia(0.07) hue-rotate(-8deg)',
+    overlay: 'background:linear-gradient(160deg,rgba(255,214,224,0.10),rgba(255,236,214,0.06));mix-blend-mode:screen;',
+    glow: { blur: 18, opacity: 0.16 },
+  },
+  /* 청량 글로우 — 민트·블루를 살짝. 물·유리·야경이 시원하게 빠진다.
+   * 수영장·노천탕 사진에 맞고, 실내 목재 톤에는 차갑게 나온다. */
+  instaAiry: {
+    filter: 'contrast(0.97) saturate(1.10) brightness(1.00) hue-rotate(4deg)',
+    overlay: 'background:linear-gradient(200deg,rgba(214,240,255,0.10),rgba(255,255,255,0.05));mix-blend-mode:screen;',
+    glow: { blur: 22, opacity: 0.16 },
+  },
+  /* 골든아워 — 해질녘 금빛. 창가·석양·조명등 사진을 가장 예쁘게 만든다.
+   * 흐린 날 사진에 쓰면 누렇게 뜬다. */
+  goldenHour: {
+    filter: 'contrast(0.98) saturate(1.14) brightness(1.00) sepia(0.12) hue-rotate(-12deg)',
+    overlay: 'background:linear-gradient(180deg,rgba(255,206,150,0.10),rgba(255,170,120,0.05));mix-blend-mode:screen;',
+    glow: { blur: 16, opacity: 0.15 },
+  },
 };
 
+/** 룩 이름 → { filter, overlay, glow }. 없는 이름은 neutral 로 떨어진다 */
+export function resolveLook(name) {
+  const look = LOOKS[name] || LOOKS.neutral;
+  return { filter: look.filter || '', overlay: look.overlay || '', glow: look.glow || null };
+}
+
+export const LOOK_NAMES = Object.keys(LOOKS);
+
 export function photoLook(cfg) {
-  const name = cfg?.images?.look || 'neutral';
-  const filter = LOOKS[name] ?? LOOKS.neutral;
+  const { filter } = resolveLook(cfg?.images?.look || 'neutral');
   return filter ? `filter:${filter};` : '';
 }
 
@@ -110,17 +192,40 @@ export function photoLook(cfg) {
  */
 async function renderPlainPhoto(browser, bgDataUri, [w, h], focus, look = LOOKS.neutral) {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
-  await page.setContent(
-    `<!doctype html><html><head><meta charset="utf-8"><style>
-      *{margin:0;padding:0}
-      html,body{width:${w}px;height:${h}px;overflow:hidden;background:#000}
-      .p{position:absolute;inset:0;background-size:cover;background-repeat:no-repeat;
-         background-position:${focus};${look ? `filter:${look};` : ''}}
-    </style></head><body><div class="p" style="background-image:url('${bgDataUri}')"></div></body></html>`,
-    { waitUntil: 'load' }
-  );
+  await page.setContent(photoHtml(bgDataUri, w, h, focus, look), { waitUntil: 'load' });
   await page.waitForTimeout(400);
   return page;
+}
+
+/**
+ * 사진 한 장을 룩과 함께 그리는 HTML. **비교 도구(`scripts/look-compare.mjs`)가
+ * 같은 함수를 쓴다** — 비교 화면과 실제 결과가 어긋나면 비교가 의미를 잃는다.
+ *
+ * 레이어 순서: 사진 → 글로우(흐린 사진 복사본) → 색 오버레이.
+ *
+ * 글로우 레이어는 **일부러 사진보다 크게** 잡는다 — `blur(n)` 의 번짐이 대략 `3n` 까지
+ * 퍼지므로 여백을 `3n` 으로 준다. 같은 크기로 흐리면 가장자리가 투명과 섞여
+ * **테두리에 띠가 생긴다**(액자처럼 보인다). 퍼센트로 주면 작은 사진에서 여백이
+ * 모자라므로 픽셀로 준다.
+ */
+export function photoHtml(bgDataUri, w, h, focus, look) {
+  const { filter, overlay, glow } =
+    typeof look === 'string' ? { filter: look, overlay: '', glow: null } : look || {};
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+      *{margin:0;padding:0}
+      html,body{width:${w}px;height:${h}px;overflow:hidden;background:#000}
+      .w{position:absolute;inset:0;overflow:hidden}
+      .p{position:absolute;inset:0;background-size:cover;background-repeat:no-repeat;
+         background-position:${focus};${filter ? `filter:${filter};` : ''}}
+      .g{position:absolute;inset:${glow ? -glow.blur * 3 : 0}px;background-size:cover;
+         background-repeat:no-repeat;background-position:${focus};pointer-events:none;
+         ${glow ? `filter:blur(${glow.blur}px) brightness(1.06);opacity:${glow.opacity};mix-blend-mode:screen;` : ''}}
+      .o{position:absolute;inset:0;pointer-events:none;${overlay}}
+    </style></head><body><div class="w">
+      <div class="p" style="background-image:url('${bgDataUri}')"></div>
+      ${glow ? `<div class="g" style="background-image:url('${bgDataUri}')"></div>` : ''}
+      ${overlay ? '<div class="o"></div>' : ''}
+    </div></body></html>`;
 }
 
 const MIME = {
@@ -349,7 +454,12 @@ export async function renderImages(article, cfg) {
          * >   양쪽에서 잘려 "GENT KI" 만 남았다.
          *
          * 비율을 섞는 연출은 **스톡 사진에만** 쓴다. 스톡은 잘려도 손실이 없다. */
-        const keepNative = bg.source === 'clip-shot' || bg.source === 'source-article';
+        /* 눈으로 골라 둔 로컬 사진도 원본 비율로 둔다.
+         * 여행 글의 사진은 **간판·안내판이 장소를 증명하는 컷**이라(라쿠아 실측:
+         * `東京ドーム天然温泉 Spa LaQua` 금색 간판, `OTONA Beach` 나무 간판)
+         * 비율을 바꿔 자르면 증거가 프레임 밖으로 나간다. */
+        const keepNative =
+          bg.source === 'clip-shot' || bg.source === 'source-article' || bg.source === 'local-photo';
         const [bw, bh] = clampToSource(
           ...(keepNative
             ? nativeAspect(bg.file)
@@ -357,7 +467,7 @@ export async function renderImages(article, cfg) {
           bg.file
         );
         const focus = bg.isPerson ? 'center 25%' : 'center center';
-        const p = await renderPlainPhoto(browser, bgDataUri, [bw, bh], focus, LOOKS[cfg.images.look] ?? LOOKS.neutral);
+        const p = await renderPlainPhoto(browser, bgDataUri, [bw, bh], focus, resolveLook(cfg.images.look));
         const file = path.join(DIRS.images, `${prefix}-body${i}.png`);
         await p.screenshot({ path: file, type: 'png' });
         await p.close();
@@ -368,6 +478,8 @@ export async function renderImages(article, cfg) {
           alt: brief.alt || brief.headline || article.title,
           caption: brief.caption || '',
           afterSection: brief.afterSection || i,
+          afterParagraph: brief.afterParagraph ?? null,
+          group: brief.group || '',
           layout: 'photo',
           background: {
             credit: bg.credit,
@@ -392,14 +504,21 @@ export async function renderImages(article, cfg) {
        * > 2026-07-28 실측 — 나는솔로 캡처를 1200x1200 으로 자른 대표 이미지:
        * > "그래도 데이트할 때 / 여행 갔을 때 여자친구…" 가 양옆에서 토막나
        * > 무슨 말인지 알 수 없게 됐다. */
+      /* 눈으로 골라 둔 로컬 사진도 정사각으로 자르지 않는다.
+       * 세로 4:5 컷(인스타 기본 비율)을 정사각으로 담으면 위아래가 20% 날아가
+       * 간판이나 하늘·수면이 잘려 "무엇을 찍은 사진인지" 가 흐려진다.
+       * → 원본 비율을 유지하고 폭만 thumbSize 로 맞춘다. */
       const thumbIsClip = isThumb && bg?.source === 'clip-shot';
+      const thumbNative = isThumb && bg?.source === 'local-photo';
       const thumbBase = cfg.images.thumbSize || 1200;
       const [width, height] = clampToSource(
         isThumb ? thumbBase : cfg.images.width,
         isThumb
           ? thumbIsClip
             ? Math.round((thumbBase * 9) / 16)
-            : thumbBase
+            : thumbNative
+              ? Math.round(thumbBase * (nativeAspect(bg.file)[1] / nativeAspect(bg.file)[0]))
+              : thumbBase
           : Math.round(cfg.images.height * 0.75),
         bg?.file
       );
@@ -425,7 +544,8 @@ export async function renderImages(article, cfg) {
        * 설정으로만 도달할 수 있어 사실상 쓰이지 않던 연출들이다.
        *
        * `images.layout` 으로 강제하면 그 값이 우선한다. */
-      const printedOn = bg?.source === 'clip-shot' || bg?.source === 'source-article';
+      const printedOn =
+        bg?.source === 'clip-shot' || bg?.source === 'source-article' || bg?.source === 'local-photo';
       const layout =
         cfg.images.layout ||
         (printedOn
@@ -456,6 +576,8 @@ export async function renderImages(article, cfg) {
           isThumb,
           layout,
           bgDataUri,
+          // 전역 룩 — 레이아웃 자기 필터 뒤에 붙는다 (레이아웃 의도가 먼저다)
+          photoLook: resolveLook(cfg.images.look).filter,
           // 인물 사진은 얼굴이 잘리지 않도록 크롭 위치를 바꾼다
           bgPosition: isPerson ? personBgPosition(layout, bg.portrait) : '',
           credit: bgDataUri && cfg.images.showCredit ? bg.credit : '',
@@ -489,6 +611,9 @@ export async function renderImages(article, cfg) {
         alt: brief.alt || brief.headline || article.title,
         caption: isThumb ? '' : brief.caption || '',
         afterSection: isThumb ? 0 : brief.afterSection || i,
+        // 아티클이 지정한 배치 — 어느 문단 뒤에 놓을지, 어느 사진과 묶을지
+        afterParagraph: brief.afterParagraph ?? null,
+        group: brief.group || '',
         layout,
         background: bg
           ? {

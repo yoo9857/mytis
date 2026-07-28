@@ -82,10 +82,23 @@ const BODY_STYLE = { fontSizeCode: 'fs16' };
  */
 export const QUOTE = {
   answer: 'quotation_line', // 한 줄 정리 — 글의 결론
+  lead: 'quotation_corner', // 섹션 머리 — 이 대목이 무엇인가 (상위 글의 주력 용법)
   tip: 'quotation_postit', // 섹션 팁·주의
   speech: 'quotation_bubble', // 인물 발언
   plain: 'default',
 };
+
+/* 인용구를 왜 이렇게 쓰는가 — 상위 여행 글 실측 (2026-07-29, 검색 상위 8편)
+ *
+ *   ppororogo/224255039046   인용구 9개 · **전부 `quotation_corner`**
+ *                            "위치 및 기본 정보" "강추하는 이유" "이용 전에 알아둘 점" "총평"
+ *   kkujuni-/223970686576    인용구 8개 · **전부 `quotation_line`**
+ *                            "라쿠아 위치 가는 방법" "온천과 노천탕 최고임" "결제 후 퇴장"
+ *
+ * 즉 상위 글에서 **인용구는 소제목이다.** 한 글에서 한 종류로 통일해 리듬을 만든다.
+ * 우리는 `sectionTitle`(GEO 용 목차)을 포기하지 않으므로, 섹션 안의 **대목 머리말**을
+ * 인용구로 세워 같은 리듬을 만든다 (`sections[].lead`).
+ */
 
 /**
  * 굵게는 `style: { bold: true }` 로 넣는다.
@@ -462,6 +475,19 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   const thumb = images[0] ? imageComponent(images[0], { represent: true }) : null;
   if (thumb) out.push(thumb);
 
+  /* 도입 — 인사와 공감으로 시작한다.
+   *
+   * 상위 글은 예외 없이 이렇게 연다 (2026-07-29 실측):
+   *   "안녕하세요, 분당 직장인 뽀로로 지은입니다:)" → "도쿄 여행 가면 하루 종일 걷고…
+   *    진짜 좀 쉬어야겠다 싶을 때" → 그래서 이 장소
+   *   "도쿄 여행을 하다 보면 하루에 2~3만 보는 기본입니다" → "다리가 무거워지죠"
+   *
+   * 정보부터 들이대지 않고 **읽는 사람의 상황**을 먼저 말한다. 그 자리가 없으면
+   * 글이 안내문처럼 읽힌다. */
+  if (article.intro?.length) {
+    out.push(textComponent(spacedParagraphs(article.intro)));
+  }
+
   /* 한 줄 정리 — 세로선 인용구로 세운다.
    * 글의 결론이므로 맨 위에서 눈에 걸려야 하고, 아래의 '팁' 인용구와는
    * 모양이 달라야 독자가 역할을 구분한다. */
@@ -474,7 +500,11 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
    * html.js 의 <ul> 을 그대로 옮길 수 없는 자리다.
    *
    * 항목 사이를 빈 줄로 띄우지 않는다 — 모바일에서 화면 한 장을 다 잡아먹는다. */
-  if (seo.includeKeyTakeaways !== false && article.keyTakeaways?.length) {
+  /* `naver.keyTakeaways: false` 면 '이 글의 핵심' 을 세우지 않는다.
+   * 맨 위 '한 줄 정리'(세로선 인용구)가 이미 결론을 말하는데, 그 아래 요약 목록까지
+   * 세우면 **읽기 전에 결론을 두 번** 보게 되고 사진·장소 이야기가 그만큼 밀린다.
+   * 티스토리(html.js)와 JSON-LD 는 그대로 쓰므로 요약 자체를 버리는 것은 아니다. */
+  if (cfg.naver?.keyTakeaways !== false && seo.includeKeyTakeaways !== false && article.keyTakeaways?.length) {
     out.push(sectionTitle('이 글의 핵심'));
     out.push(textComponent(article.keyTakeaways.map((t) => bodyPara(`· ${t}`))));
   }
@@ -489,16 +519,73 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   (article.sections || []).forEach((sec, i) => {
     out.push(sectionTitle(sec.heading));
 
+    /* 섹션 머리말 인용구 — 이 대목에서 무엇을 보게 되는지 한 줄로 세운다.
+     * 상위 글이 소제목 대신 쓰는 장치이고, 팁(`callout`, 포스트잇)과 모양이 달라
+     * 독자가 역할을 구분한다 (위 QUOTE 주석의 실측 참고). */
+    if (sec.lead) out.push(quotation(sec.lead, { layout: QUOTE.lead }));
+
     const paras = sec.paragraphs || [];
     // 이 섹션에 배치될 사진들의 인덱스
     const mine = bodyImages
       .map((img, k) => ({ img, k }))
       .filter(({ k }) => (bodyMeta[k]?.afterSection ?? 0) === i + 1);
 
-    /* 사진을 1·2·2·1 리듬으로 묶는다. 묶음 하나가 배치의 한 단위가 된다.
-     * 시드에 섹션 번호를 섞어, 섹션마다 리듬의 시작 위치가 달라지게 한다. */
-    const groups = chunkByRhythm(mine, rhythmSeed + i);
-    const slots = spreadImages(paras.length, groups.length);
+    /* 사진 묶기 — 세 가지 방식이 있고, 우선순위가 있다.
+     *
+     * ① **`group` 이 같은 사진끼리 묶는다** (아티클이 지정). 에디터에서 사진을 옆으로
+     *    끌어다 놓으면 초록 표시가 뜨며 두 장이 나란히 붙는 그 기능이고, 문서로는
+     *    `imageGroup` 이다. **연관 있는 컷**(같은 공간의 가로/세로, 같은 야경 두 컷)만
+     *    묶어야 예쁘다 — 관계없는 두 장이 붙으면 둘 다 죽는다.
+     * ② `naver.collage: false` 면 그 밖의 사진은 **한 장씩** 세운다 (여행 글 기본값).
+     * ③ 아니면 1·2·2·1 리듬으로 자동 묶는다.
+     *
+     * ①이 ②를 이긴다 — 자동 묶기는 관계를 모르지만, 아티클이 지정한 묶음은 안다. */
+    const groups = [];
+    {
+      const pending = new Map(); // group 이름 → 모으는 중인 묶음
+      const rest = [];
+      for (const x of mine) {
+        const g = bodyMeta[x.k]?.group;
+        if (!g) {
+          rest.push(x);
+          continue;
+        }
+        if (!pending.has(g)) {
+          const bucket = [];
+          pending.set(g, bucket);
+          groups.push(bucket); // 묶음의 자리는 첫 사진이 나온 순서로 정한다
+        }
+        pending.get(g).push(x);
+      }
+      const loose = cfg.naver?.collage === false ? rest.map((x) => [x]) : chunkByRhythm(rest, rhythmSeed + i);
+      groups.push(...loose);
+      // 사진 순서대로 다시 정렬한다 (묶음의 첫 사진 기준)
+      groups.sort((a, b) => a[0].k - b[0].k);
+    }
+    /* 사진 자리.
+     *
+     * `afterParagraph` (1-based)를 주면 **그 문단 뒤**에 정확히 놓는다. 사진과 그 사진을
+     * 설명하는 문장이 붙어야 하기 때문이다 — 자동 분배는 개수만 보고 나누므로
+     * "사진과 관계없는 문장" 이 사진 사이에 끼는 일이 생긴다(2026-07-28 지적).
+     * 지정하지 않은 묶음만 예전처럼 고르게 나눈다. */
+    const slots = new Map();
+    {
+      const put = (p, gi) => {
+        if (!slots.has(p)) slots.set(p, []);
+        slots.get(p).push(gi);
+      };
+      const auto = [];
+      groups.forEach((g, gi) => {
+        const at = Number(bodyMeta[g[0].k]?.afterParagraph);
+        if (Number.isFinite(at) && at >= 1) put(Math.min(paras.length, Math.round(at)), gi);
+        else auto.push(gi);
+      });
+      if (auto.length) {
+        for (const [p, list] of spreadImages(paras.length, auto.length)) {
+          for (const j of list) put(p, auto[j]);
+        }
+      }
+    }
 
     /** 묶음 하나를 컴포넌트로 만든다 (1장이면 단독, 2장이면 콜라주) */
     const renderGroup = (g) => {

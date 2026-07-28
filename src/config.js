@@ -78,6 +78,13 @@ const DEFAULTS = {
     allowSearch: true, // '검색 허용' — 끄면 네이버 검색에 안 잡힌다
     tagCount: 10, // 네이버 상한은 30개
     publishMode: 'now',
+    /* 사진 2장을 나란히 묶는 콜라주.
+     * 여행 글에서는 끈다 — 참고 글 6편이 모두 콜라주 0개였다(learned.md 법칙 ⑨).
+     * 사진이 주인공이므로 한 장씩 크게 세운다. */
+    collage: false,
+    /* '이 글의 핵심' 요약 목록. 맨 위 '한 줄 정리' 와 겹쳐 결론을 두 번 말하게 되므로
+     * 네이버 글에서는 끈다 (2026-07-28 사용자 결정). 티스토리·JSON-LD 는 그대로 쓴다. */
+    keyTakeaways: false,
   },
   news: {
     query: '한국 연예 뉴스',
@@ -106,13 +113,23 @@ const DEFAULTS = {
     bodyAspects: ['3:2', '4:3', '3:4', '1:1', '2:3'], // 세로 사진도 섞이게
     background: 'photo', // 'photo' = 실사 사진 배경, 'gradient' = 그라디언트만
     scrim: 0.55, // 사진 위 어둡게 덮는 정도 (0~1). 글자 가독성용
-    // 사진 색보정(룩). 'none' | 'neutral' | 'canon'(따뜻·고채도) | 'film'
-    // 출처가 다른 사진들의 톤을 통일한다. images.js 의 LOOKS 참고
+    // 사진 색보정(룩). 출처가 다른 사진들의 톤을 통일한다. images.js 의 LOOKS 참고
+    //   'none' | 'neutral' | 'canon'(따뜻·고채도) | 'film'
+    //   'fuji'(클래식크롬 — 저채도·고콘트라스트) | 'fujiSoft'(감성·에어리)
+    //   'velvia'(풍경 고채도) | 'eterna'(시네마 평탄)
+    //   인스타 감성(소프트 글로우 포함): 'instaRosy'(살구·핑크) |
+    //   'instaAiry'(민트·청량) | 'goldenHour'(해질녘 금빛)
+    // 비교: node scripts/look-compare.mjs <사진…>
     look: 'neutral',
     /* 스톡 사진(Pexels·Unsplash·Openverse) 사용 여부.
      * **특정 장소를 다루는 글(여행·호텔·시설)에서는 false 로 끄세요.**
      * 그 장소가 아닌 아무 사진이 실려 독자를 속이게 됩니다 — photo.js 주석 참고. */
     stockPhotos: true,
+    /* 눈으로 골라 둔 로컬 사진 폴더 (`out/photos/ig/<제목>/` 같은 곳).
+     * 채우면 스톡 검색을 건너뛰고 이 폴더의 사진만 쓴다 — 여행·시설 글의 정답.
+     * 어느 사진을 어느 자리에 쓸지는 `imageBriefs[].photo` 에 파일 이름으로 적는다.
+     * ⚠️ 원저작자 사진이면 발행 허가가 아니다 — photo.js 의 localPhotoDir 주석 참고. */
+    localPhotoDir: '',
     showCredit: true, // 사진 출처를 카드 구석에 표기
     style: 'trendy', // 'trendy'(팬 콘텐츠 감성) | 'editorial'(정보성 사설 톤) | 'mixed'
     layout: '', // 비우면 글마다 자동으로 다른 연출. 고정하려면 레이아웃 이름

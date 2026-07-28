@@ -298,6 +298,9 @@ async function cmdPublishFile(cfg, file, flags = {}) {
     alt: img.alt || '',
     caption: idx === 0 ? '' : img.caption || '',
     afterSection: idx === 0 ? 0 : img.afterSection,
+    // 아티클이 지정한 배치 — 문단 위치와 사진 묶음(imageGroup)
+    afterParagraph: idx === 0 ? null : img.afterParagraph ?? null,
+    group: idx === 0 ? '' : img.group || '',
   }));
   const credits = ordered.map((i) => i.background).filter((b) => b && (b.photographer || b.credit));
 

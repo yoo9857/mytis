@@ -13,12 +13,17 @@
  * 사용:
  *   node scripts/preview-naver.mjs out/<article>.json [이미지파일...]
  *   이미지를 생략하면 out/images/ 에서 아티클 stamp 로 시작하는 PNG 를 찾는다.
+ *
+ *   node scripts/preview-naver.mjs out/<article>.json --photos out/photos/ig/<폴더>
+ *   눈으로 골라 둔 사진 폴더를 주면 **여기서 바로 렌더링**한다(색보정·비율 포함).
+ *   어느 사진이 어느 섹션에 갈지는 아티클의 `imageBriefs[].photo`·`afterSection` 이 정한다.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadConfig } from '../src/config.js';
 import { buildDocument, summarize } from '../src/naverDoc.js';
+import { renderImages } from '../src/images.js';
 
 const esc = (s) =>
   String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -91,7 +96,33 @@ if (!file) {
 const article = JSON.parse(fs.readFileSync(file, 'utf8'));
 const cfg = loadConfig();
 
-let files = process.argv.slice(3);
+const rest = process.argv.slice(3);
+const photosAt = rest.indexOf('--photos');
+// 아티클이 `photoDir` 을 들고 있으면 인수 없이도 그 폴더를 쓴다
+const photoDir = photosAt >= 0 ? rest[photosAt + 1] : article.photoDir || '';
+
+/* `--photos` 로 폴더를 주면 사진을 여기서 렌더링한다.
+ * 배치·캡션·크레딧을 렌더 결과에서 그대로 받아 오므로, 아래의 "고르게 나눠 넣기"
+ * 추정이 필요 없다 — 아티클이 지정한 자리에 정확히 들어간다. */
+let rendered = null;
+if (photoDir) {
+  if (!fs.existsSync(photoDir)) {
+    console.error(`사진 폴더가 없습니다: ${photoDir}`);
+    process.exit(1);
+  }
+  cfg.images.localPhotoDir = path.resolve(photoDir);
+  cfg.images.background = 'photo';
+  // 본문 사진 개수는 아티클의 imageBriefs 가 정한다 (config 의 bodyImages 로 잘리면
+  // 사진 100자당 1장 규칙을 맞출 수 없다 — learned.md 법칙 ②)
+  article.bodyImageCount =
+    article.bodyImageCount ?? (article.imageBriefs || []).filter((b) => b.placement === 'body').length;
+  rendered = await renderImages(article, cfg);
+}
+
+let files = rest.filter((a) => a !== '--photos' && a !== photoDir);
+if (rendered) {
+  files = [rendered.thumbnail?.file, ...rendered.body.map((b) => b.file)].filter(Boolean);
+}
 if (!files.length) {
   const stampPrefix = path.basename(file).slice(0, 15); // 20260728-221640
   const dir = 'out/images';
@@ -118,18 +149,34 @@ const images = files.map((f) => ({
   '@ctype': 'image',
 }));
 const sc = article.sections?.length || 1;
-const imageMeta = images.map((_, i) => ({
-  alt: '',
-  caption: '',
-  afterSection: i === 0 ? 0 : Math.min(sc, Math.floor(((i - 1) * sc) / Math.max(1, images.length - 1)) + 1),
-}));
+/* 배치 정보.
+ * 렌더 결과가 있으면 그 값을 쓴다(아티클이 지정한 자리 = 실제 발행과 같은 배치).
+ * 없으면 예전처럼 섹션에 고르게 나눠 넣는 추정으로 그린다. */
+const entries = rendered ? [rendered.thumbnail, ...rendered.body].filter(Boolean) : [];
+const imageMeta = images.map((_, i) =>
+  entries.length
+    ? {
+        alt: entries[i]?.alt || '',
+        caption: entries[i]?.caption || '',
+        afterSection: entries[i]?.afterSection ?? 0,
+        afterParagraph: entries[i]?.afterParagraph ?? null,
+        group: entries[i]?.group || '',
+      }
+    : {
+        alt: '',
+        caption: '',
+        afterSection:
+          i === 0 ? 0 : Math.min(sc, Math.floor(((i - 1) * sc) / Math.max(1, images.length - 1)) + 1),
+      }
+);
+const credits = entries.map((e) => e.background).filter(Boolean);
 
 const comps = buildDocument(article, {
   cfg,
   baseDoc: { components: [{ id: 'T', layout: 'default', '@ctype': 'documentTitle' }] },
   images,
   imageMeta,
-  credits: [],
+  credits,
 });
 
 const unknown = comps.filter((c) => !c['@ctype']).length;
