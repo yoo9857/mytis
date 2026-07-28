@@ -119,16 +119,62 @@ export async function collectBuzz({ program, season, names = [], limit = 12, tim
           const items = await page.evaluate(
             (patternSource) => {
               const re = new RegExp(patternSource);
-              const out = [];
-              document.querySelectorAll('a').forEach((a) => {
-                const text = (a.innerText || '')
+              const clean = (s) =>
+                (s || '')
                   .trim()
                   .replace(/\s+/g, ' ')
-                  .replace(/\s*새 창 열림\s*$/, ''); // 네이버 접근성 텍스트
+                  .replace(/\s*새 창 열림\s*/g, ''); // 네이버 접근성 텍스트
+              const out = [];
+
+              document.querySelectorAll('a').forEach((a) => {
                 if (!a.href || !re.test(a.href)) return;
-                if (text.length < 10 || text.length > 300) return;
+                const title = clean(a.innerText);
+                if (title.length < 10 || title.length > 300) return;
+
+                /* 스니펫(본문 미리보기)을 함께 가져온다.
+                 *
+                 * **제목만으로는 글을 쓸 수 없다.** 실제로 제목만 넘겼더니
+                 * codex 가 "이런 제목의 글이 있습니다" 라고만 쓰고 끝냈다.
+                 * 독자에게 아무 정보도 주지 못하는 문단이 됐다.
+                 *
+                 * 사이트마다 결과 컨테이너 클래스가 달라 셀렉터를 박으면 잘 깨진다.
+                 * 그래서 링크에서 **위로 올라가며** 제목보다 충분히 긴 텍스트
+                 * 블록을 찾는다. 네이트판·네이버 카페 모두 이 방식으로 잡힌다. */
+                let el = a;
+                let snippet = '';
+                for (let i = 0; i < 5 && el?.parentElement; i++) {
+                  el = el.parentElement;
+                  const t = clean(el.innerText);
+                  if (t.length > title.length + 40 && t.length < 700) {
+                    snippet = t;
+                    break;
+                  }
+                }
+                /* 작성일을 뽑는다. **글의 시점을 모르면 쓸 수 없다.**
+                 * 오래된 기수의 커뮤니티 글은 1~2년 전 것인데, 그걸 지금 반응처럼
+                 * 쓰면 독자를 속이게 된다. 형태가 사이트마다 다르다:
+                 *   네이트판  "24.11.06 20:05"
+                 *   네이버카페 "25.05.13."
+                 * 날짜가 스니펫 블록 밖(형제·상위 노드)에 있는 경우가 많아
+                 * 한 단계 더 올라가며 찾는다. */
+                let date = '';
+                let scan = el;
+                for (let i = 0; i < 3 && scan && !date; i++) {
+                  const m = clean(scan.innerText).match(/(\d{2})\.(\d{2})\.(\d{2})\.?(?!\d)/);
+                  if (m) date = `20${m[1]}-${m[2]}-${m[3]}`;
+                  scan = scan.parentElement;
+                }
+
+                // 제목 부분을 덜어내고 본문만 남긴다
+                if (snippet.startsWith(title)) snippet = snippet.slice(title.length).trim();
+
                 // 네이버 카페 링크에는 JWT 추적 쿼리가 길게 붙는다
-                out.push({ title: text.slice(0, 200), url: a.href.split('?')[0] });
+                out.push({
+                  title: title.slice(0, 200),
+                  snippet: snippet.replace(/^[()\d.\s·-]+/, '').slice(0, 400),
+                  date,
+                  url: a.href.split('?')[0],
+                });
               });
               return out.slice(0, 40);
             },
@@ -141,15 +187,40 @@ export async function collectBuzz({ program, season, names = [], limit = 12, tim
             if (seen.has(key)) continue;
 
             /* ⚠️ 기수 필터 — 이 파일에서 가장 중요한 줄이다.
-             * 이름만 걸린 결과는 **다른 기수의 다른 사람**이다. */
+             * 이름만 걸린 결과는 **다른 기수의 다른 사람**이다.
+             *
+             * **제목에서** 요구한다. 스니펫까지 허용하면 검색 결과에 글과 나란히
+             * 붙어 있는 **카페 이름 링크**가 같은 스니펫을 물고 통과해 같은 글이
+             * 두 번 실린다. (실측: "인천맘 쏙", "야구 24시-(KIA…" 가 제목 자리에 들어왔다)
+             * 카페 이름에는 기수가 없으므로 이 조건 하나로 함께 걸러진다. */
+            const hay = `${it.title} ${it.snippet}`;
             if (!tokens.some((t) => it.title.includes(t))) continue;
-            if (ABUSIVE.test(it.title)) {
+            if (ABUSIVE.test(hay)) {
               log.debug(`제외(비하 표현): ${it.title.slice(0, 40)}`);
               continue;
             }
+            // 본문 없이 제목만 있는 것은 인용할 재료가 없다
+            if (it.snippet.length < 25) {
+              log.debug(`제외(본문 미리보기 없음): ${it.title.slice(0, 40)}`);
+              continue;
+            }
+
+            /* 같은 글이 두 번 잡히는 것을 막는다.
+             * 검색 결과에는 글 링크 옆에 **카페 이름 링크**가 같은 곳을 가리키며
+             * 함께 있어서, 위로 올라가는 방식이 같은 스니펫을 두 번 집는다.
+             * (실측: "인천맘 쏙", "야구 24시-(KIA…" 가 글 제목 자리에 들어왔다) */
+            const bodyKey = it.snippet.slice(0, 60);
+            if (seen.has(bodyKey)) continue;
 
             seen.add(key);
-            found.push({ source: src.name, title: it.title, url: it.url });
+            seen.add(bodyKey);
+            found.push({
+              source: src.name,
+              title: it.title,
+              snippet: it.snippet,
+              date: it.date,
+              url: it.url,
+            });
           }
           log.debug(`${src.name} "${q}" → 누적 ${found.length}건`);
         } catch (err) {
@@ -175,7 +246,18 @@ export async function collectBuzz({ program, season, names = [], limit = 12, tim
 export function buzzBlock(items) {
   if (!items?.length) return '';
   const lines = items
-    .map((b, i) => `${i + 1}. [${b.source}] ${b.title}\n   ${b.url}`)
-    .join('\n');
-  return `\n# 방송 밖 반응 (커뮤니티에서 실제로 수집한 글 목록)\n\n${lines}\n`;
+    .map(
+      (b, i) =>
+        `${i + 1}. [${b.source}] ${b.title}\n` +
+        `   작성일: ${b.date || '확인 안 됨'}\n` +
+        `   내용: ${b.snippet}\n` +
+        `   출처: ${b.url}`
+    )
+    .join('\n\n');
+  return (
+    `\n# 방송 밖 반응 — 커뮤니티에서 실제로 수집했습니다\n\n${lines}\n\n` +
+    `**작성일을 반드시 확인하고 쓰세요.** 오래된 기수의 글은 1~2년 전 것입니다.\n` +
+    `"지금 화제" 처럼 쓰면 안 되고, "방송 당시", "2024년 11월 당시" 처럼\n` +
+    `시점을 밝혀 주세요. 작성일이 '확인 안 됨' 인 글은 시점을 단정하지 마세요.\n`
+  );
 }
