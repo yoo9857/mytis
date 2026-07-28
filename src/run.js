@@ -63,6 +63,33 @@ export async function generate(topic, cfg) {
   // 여기서 다른 영상을 덧붙이면 글과 따로 논다.
   if (article.fromClip) {
     log.debug(`영상 소재 글 — 장면 임베드 ${(article.embeds || []).length}개 유지 (추가 검색 생략)`);
+
+    /* 임베드가 가리키는 그 순간을 이미지로도 남긴다.
+     * 임베드는 본문에서 재생되지만 티스토리 목록·검색결과·공유 카드에는
+     * 이미지가 필요하다. 시각은 codex 가 지어낸 값이 아니라
+     * snapTimestamps 가 실제 자막 시각으로 검증·보정한 값이다. */
+    if (cfg.images.useClipShots !== false) {
+      const secs = [...new Set(
+        (article.embeds || [])
+          .map((e) => Math.max(0, parseInt(e.startSeconds, 10) || 0))
+          .filter((s) => s > 0)
+      )].sort((a, b) => a - b);
+
+      if (secs.length) {
+        try {
+          const { captureFrames } = await import('./ytShot.js');
+          const want = 1 + (cfg.images.bodyImages ?? 2); // 대표 1 + 본문 N
+          // 캡처는 항상 headless — 창을 띄우면 장면마다 브라우저가 깜빡인다
+          article.clipShots = await captureFrames(article.clipVideoId, secs.slice(0, want), {
+            title: article.title,
+            headless: true,
+          });
+        } catch (err) {
+          log.warn(`장면 캡처 실패 — 스톡 사진으로 진행합니다: ${err.message.split('\n')[0]}`);
+          article.clipShots = [];
+        }
+      }
+    }
   } else {
     try {
       article.embeds = await fillEmbeds(article, cfg);

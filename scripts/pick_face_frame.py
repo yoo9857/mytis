@@ -17,8 +17,42 @@ import os
 import numpy as np
 import cv2
 
-CASCADE = os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_default.xml')
-PROFILE = os.path.join(cv2.data.haarcascades, 'haarcascade_profileface.xml')
+def cascade_path(name):
+    """haarcascade XML 경로를 ASCII 안전한 위치로 돌려준다.
+
+    cv2.CascadeClassifier 는 내부적으로 C++ 파일 입출력을 쓰기 때문에
+    **경로에 한글이 있으면 조용히 빈 분류기를 만든다.** 그러면 detectMultiScale
+    에서 `(-215:Assertion failed) !empty()` 로 터진다.
+    (imread_any 가 이미지에 대해 푸는 것과 똑같은 문제다)
+
+    사용자 계정 이름이 한글이면 site-packages 경로가 통째로 한글이 된다.
+    예: C:\\Users\\AI배움터\\AppData\\...\\cv2\\data\\
+
+    > 2026-07-28 실측: 이 문제로 얼굴 선별이 매번 실패하고 첫 후보로 폴백했다.
+    > 로그에는 한 줄만 찍혀서 눈치채기 어려웠다.
+
+    그래서 경로에 ASCII 아닌 문자가 있으면 프로젝트 안(.tmp)으로 복사해 쓴다.
+    프로젝트 경로는 ASCII 라고 가정한다 (아니면 애초에 실행이 안 된다).
+    """
+    src = os.path.join(cv2.data.haarcascades, name)
+    try:
+        src.encode('ascii')
+        return src
+    except UnicodeEncodeError:
+        pass
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dst_dir = os.path.join(root, '.tmp', 'cascades')
+    os.makedirs(dst_dir, exist_ok=True)
+    dst = os.path.join(dst_dir, name)
+    if not os.path.exists(dst) or os.path.getsize(dst) == 0:
+        with open(src, 'rb') as f_in, open(dst, 'wb') as f_out:
+            f_out.write(f_in.read())
+    return dst
+
+
+CASCADE = cascade_path('haarcascade_frontalface_default.xml')
+PROFILE = cascade_path('haarcascade_profileface.xml')
 
 
 def imread_any(path):

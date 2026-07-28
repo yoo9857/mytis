@@ -437,6 +437,43 @@ export async function fetchBackgrounds(article, cfg, slots) {
     });
   }
 
+  /* --- 최우선: 영상 소재 글의 장면 캡처 (article.clipShots) ----------------
+   *
+   * 영상 글에서 독자가 보고 싶은 것은 스톡 사진이 아니라 **그 장면**이다.
+   * 임베드가 같은 장면을 재생해 주지만, 목록·검색결과·공유 카드에는
+   * 이미지가 필요하므로 캡처를 대표·본문 이미지로 쓴다.
+   *
+   * ⚠️ 캡처는 제작사 저작물이다. `ytShot.js` 머리말의 원칙을 지킨다 —
+   *    해설에 필요한 최소한만, 로고·워터마크를 지우지 않고, 채널명을 크레딧으로 남긴다.
+   *    켜고 끄는 것은 `images.useClipShots` (기본 켜짐, 영상 글에서만 동작).
+   */
+  const clipShots = article.clipShots || [];
+  if (cfg.images.useClipShots !== false && clipShots.length) {
+    log.warn(
+      `영상 장면 캡처 ${clipShots.length}장을 이미지로 사용합니다 (${article.clipChannel || '유튜브'}). ` +
+        '방송 화면은 제작사 저작물입니다 — 위험은 발행자가 집니다.'
+    );
+    for (let slot = 0; slot < slots && slot < clipShots.length; slot++) {
+      const s = clipShots[slot];
+      if (!s?.file || !fs.existsSync(s.file)) continue;
+      result[slot] = {
+        file: s.file,
+        // 카드 위 크레딧은 ASCII 만 (한글은 본문 하단 '이미지 출처'에 남는다)
+        credit: 'YouTube capture',
+        photographer: 'YouTube',
+        license: 'broadcast still',
+        source: 'clip-shot',
+        pageUrl: article.clipUrl || '',
+        description: `${article.clipChannel || '유튜브'} · ${Math.floor(s.sec / 60)}:${String(
+          Math.round(s.sec % 60)
+        ).padStart(2, '0')} 장면`,
+        isPerson: true, // 인물이 담긴 장면이므로 얼굴 기준으로 크롭 위치를 잡는다
+      };
+      log.debug(`슬롯 ${slot}: ${path.basename(s.file)} (장면 ${s.sec}초)`);
+    }
+    if (result.some(Boolean)) log.ok(`장면 캡처 ${result.filter(Boolean).length}장 사용`);
+  }
+
   const sourcePool = [article.sourceImage, ...(article.sourceImages || [])].filter(Boolean);
   if (cfg.images.useSourcePhoto === true && sourcePool.length) {
     const publisher = article.sourcePublisher || '원문 기사';

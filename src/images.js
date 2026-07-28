@@ -325,11 +325,24 @@ export async function renderImages(article, cfg) {
         continue;
       }
 
-      // 대표 이미지는 정사각. 티스토리 목록·공유 카드가 정사각으로 잘린다.
-      // 원본보다 크게 그리면 사진이 뭉개지므로 원본 크기로 상한을 건다.
+      /* 대표 이미지는 정사각. 티스토리 목록·공유 카드가 정사각으로 잘린다.
+       * 원본보다 크게 그리면 사진이 뭉개지므로 원본 크기로 상한을 건다.
+       *
+       * 다만 **영상 장면 캡처는 16:9 로 둔다.** 방송 화면에는 자막이 박혀 있어
+       * 정사각으로 자르면 좌우 44% 가 날아가며 자막이 글자 중간에서 잘린다.
+       *
+       * > 2026-07-28 실측 — 나는솔로 캡처를 1200x1200 으로 자른 대표 이미지:
+       * > "그래도 데이트할 때 / 여행 갔을 때 여자친구…" 가 양옆에서 토막나
+       * > 무슨 말인지 알 수 없게 됐다. */
+      const thumbIsClip = isThumb && bg?.source === 'clip-shot';
+      const thumbBase = cfg.images.thumbSize || 1200;
       const [width, height] = clampToSource(
-        isThumb ? cfg.images.thumbSize || 1200 : cfg.images.width,
-        isThumb ? cfg.images.thumbSize || 1200 : Math.round(cfg.images.height * 0.75),
+        isThumb ? thumbBase : cfg.images.width,
+        isThumb
+          ? thumbIsClip
+            ? Math.round((thumbBase * 9) / 16)
+            : thumbBase
+          : Math.round(cfg.images.height * 0.75),
         bg?.file
       );
 

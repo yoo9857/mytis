@@ -363,6 +363,9 @@ export async function writeArticle({ topic, cfg }) {
         // youtube.js 의 fillEmbeds 가 다른 영상을 덧붙이면 글이 어긋난다.
         article.fromClip = true;
         article.clipVideoId = clip.videoId;
+        // 장면 캡처를 쓸 때 크레딧으로 남길 출처 (photo.js 의 clip-shot 분기)
+        article.clipChannel = clip.channel || '';
+        article.clipUrl = `https://www.youtube.com/watch?v=${clip.videoId}`;
         article.embeds = snapTimestamps(
           (article.embeds || []).map((e) => ({ ...e, videoId: clip.videoId })),
           clip
@@ -402,8 +405,21 @@ export async function writeArticle({ topic, cfg }) {
        * 저마다 그 인물의 최근 사진을 싣고 있다. 여기서 더 긁어오면
        * "코요태 옛날 단체사진 + 헬스장 스톡" 같은 무관한 그림을 피할 수 있다.
        *
-       * 기사 한 곳당 브라우저를 한 번 띄우므로 개수를 제한한다. */
+       * 기사 한 곳당 브라우저를 한 번 띄우므로 개수를 제한한다.
+       *
+       * ⚠️ **영상 소재 글(clip)에서는 하지 않는다.**
+       * 영상 글의 주제는 그 영상의 장면이고, sources 에 담긴 기사들은 배경조사용
+       * 참고 자료일 뿐이라 사안이 다르다. 그 사진을 쓰면 글과 어긋난다.
+       *
+       * > 2026-07-28 실측 — 나는솔로 23기 라이벌 데이트 영상 글:
+       * > codex 가 배경조사로 인용한 '23기 여출연자 스펙' 기사에서 사진을 긁어와
+       * > **전혀 다른 영상의 썸네일**("아빠가 사주셨죠")이 대표 이미지가 됐다.
+       * > 그 위에 "말의 순서가 남긴 간격" 헤드라인이 얹혀 글과 완전히 따로 놀았다.
+       * > (HANDOVER ⑦-4 와 같은 구조의 사고다)
+       *
+       * 영상 글의 이미지는 `ytShot.captureFrames` 가 잡는 장면 캡처를 쓴다. */
       if (
+        !clip &&
         cfg.images?.useSourcePhoto === true &&
         (article.sourceImages?.length || 0) < 3 &&
         article.sources?.length > 1
