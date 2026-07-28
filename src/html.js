@@ -312,9 +312,33 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
       `<h2 id="${anchorId(i)}" data-ke-size="${KE.h2}" style="${S.h2}">${esc(sec.heading)}</h2>`
     );
 
-    for (const para of sec.paragraphs) {
+    /* 사진을 **문단 사이에 끼워 넣는다.**
+     *
+     * 예전에는 섹션의 문단을 전부 쓴 뒤 사진을 몰아서 붙였다. 한 섹션에
+     * 사진이 두세 장이면 캡션이 줄줄이 쌓여 목록처럼 보이고, 사진 아래로
+     * 글이 이어지지 않아 읽는 흐름이 끊긴다.
+     *
+     * 사진 → 이어지는 글 → 사진 → 이어지는 글 순서가 되도록 문단 사이에
+     * 고르게 흩뿌린다. 마지막 문단 뒤에는 두지 않는다 — 그러면 다음 소제목과
+     * 사진이 붙어 다시 몰린 것처럼 보인다. */
+    const mine = bodyImages.filter((b) => b.afterSection === i + 1);
+    const gaps = Math.max(1, sec.paragraphs.length - 1); // 문단 사이 자리 수
+    const slot = new Map();
+    mine.forEach((img, k) => {
+      // 자리를 고르게 나눈다. (사진 3장·문단 4개 → 1·2·3번 문단 뒤)
+      const at = Math.min(
+        gaps,
+        Math.max(1, Math.round(((k + 1) * (gaps + 1)) / (mine.length + 1)))
+      );
+      if (!slot.has(at)) slot.set(at, []);
+      slot.get(at).push(img);
+    });
+
+    sec.paragraphs.forEach((para, pi) => {
       out.push(`<p data-ke-size="${KE.p}" style="${S.p}">${esc(para)}</p>`);
-    }
+      for (const img of slot.get(pi + 1) || []) out.push(renderFigure(img));
+    });
+
     if (sec.bullets.length) {
       const items = sec.bullets.map((b) => `<li>${esc(b)}</li>`).join('\n');
       out.push(`<ul style="${S.ul}">\n${items}\n</ul>`);
@@ -325,10 +349,9 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
       out.push(`<div style="${S.callout}">💡 ${esc(sec.callout)}</div>`);
     }
 
-    // 이 섹션 뒤에 붙는 본문 이미지
-    for (const img of bodyImages.filter((b) => b.afterSection === i + 1)) {
-      out.push(renderFigure(img));
-    }
+    // 문단 수보다 사진이 많아 자리를 못 잡은 것은 섹션 끝에 둔다
+    const placedCount = [...slot.values()].reduce((a, v) => a + v.length, 0);
+    for (const img of mine.slice(placedCount)) out.push(renderFigure(img));
     // 이 섹션 뒤에 붙는 공식 영상 임베드
     for (const em of embeds.filter((e) => e.afterSection === i + 1)) {
       out.push(renderEmbed(em));

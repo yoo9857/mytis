@@ -404,6 +404,8 @@ export async function captureFrames(
         // 얼굴이 가장 잘 나온 한 장 고르기
         let picked = shots[0];
         let note = "";
+        let faces = 0;
+        let biggest = 0;
         try {
           const res = await runJson("python", [
             path.join(DIRS.root, "scripts", "pick_face_frame.py"),
@@ -411,9 +413,9 @@ export async function captureFrames(
           ]);
           if (res?.best) {
             picked = res.best;
-            note = res.faces
-              ? ` · 얼굴 ${res.faces}개, 최대 ${res.biggest}%`
-              : " · 얼굴 없음";
+            faces = res.faces || 0;
+            biggest = res.biggest || 0;
+            note = faces ? ` · 얼굴 ${faces}개, 최대 ${biggest}%` : " · 얼굴 없음";
           }
         } catch (err) {
           log.debug(
@@ -426,7 +428,11 @@ export async function captureFrames(
           `${prefix}-shot${Math.round(shotSec)}.jpg`,
         );
         fs.copyFileSync(picked, file);
-        out.push({ sec: shotSec, file });
+        /* 얼굴 점수를 함께 돌려준다.
+         * 대표 이미지는 시간순 첫 장면이 아니라 **얼굴이 가장 잘 나온 장면**으로
+         * 골라야 한다. (실측: 첫 장면이 "빨간 바지 입고 등장" 컷이라 몸통만
+         * 나온 사진이 대표가 됐다 — run.js 의 applyClipShotLayout 참고) */
+        out.push({ sec: shotSec, file, faces, biggest });
         log.debug(
           `캡처 ${mmss(shotSec)} → ${path.basename(file)} (${shots.length}장 중 선택${note})`,
         );

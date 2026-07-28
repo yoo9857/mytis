@@ -91,12 +91,38 @@ function pickScenes(article) {
  */
 function applyClipShotLayout(article, cfg, scenes, shots) {
   const bySec = new Map(shots.map((s) => [s.sec, s]));
-  const got = scenes.filter((s) => bySec.has(s.sec));
+  let got = scenes.filter((s) => bySec.has(s.sec));
   if (!got.length) return;
 
   const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
   const sectionCount = Math.max(1, (article.sections || []).length);
   const oldThumb = (article.imageBriefs || []).find((b) => b.placement === 'thumbnail') || {};
+
+  /* 대표 이미지는 **얼굴이 가장 크게 잡힌 장면**으로 고른다.
+   *
+   * 시간순 첫 장면으로 고정했더니 그 장면에 얼굴이 없으면 그대로 실렸다.
+   *
+   * > 2026-07-28 실측 — 광수 글:
+   * > 첫 장면(5:46)이 "강렬한 빨간색 바지 입고 등장" 자막이 붙은 컷이라
+   * > 카메라가 바지를 잡고 있었다. **얼굴 없이 몸통만 나온 사진**이
+   * > 대표 이미지가 되고 그 위에 "눈물 뒤의 직진" 헤드라인이 얹혔다.
+   *
+   * 대표 이미지는 목록·검색결과·공유 카드에서 글의 얼굴이 된다. 시간 순서보다
+   * 사람이 보이는 쪽이 훨씬 중요하다. 본문 사진은 그대로 시간순을 지킨다.
+   * 얼굴이 아예 없으면(예: 풍경 위주 영상) 원래대로 첫 장면을 쓴다. */
+  const faceScore = (s) => {
+    const shot = shots.find((x) => x.sec === s.sec);
+    return (shot?.biggest || 0) * 10 + (shot?.faces || 0);
+  };
+  const best = got.reduce((a, b) => (faceScore(b) > faceScore(a) ? b : a), got[0]);
+  if (best !== got[0] && faceScore(best) > 0) {
+    got = [best, ...got.filter((s) => s !== best)];
+    const shot = shots.find((x) => x.sec === best.sec);
+    log.debug(
+      `대표 이미지를 ${mmss(best.sec)} 장면으로 바꿉니다 ` +
+        `(얼굴 ${shot?.faces}개 · 최대 ${shot?.biggest}%)`
+    );
+  }
 
   /* 본문 사진은 **반드시 시간순**으로 실려야 한다.
    *
