@@ -426,6 +426,8 @@ export async function writeArticle({ topic, cfg }) {
        * mode.js 로 판단을 한곳에 모은 뒤에도 **값을 심는 것을 빼먹으면** 같은
        * 사고가 난다. 새 모드를 추가할 때 이 줄을 잊지 마세요. */
       article.mode = mode;
+      // 책 글은 사진이 많아야 한다 — 프롬프트(bodyImages+2)와 렌더 수를 맞춘다
+      if (mode === MODE.BOOK) article.bodyImageCount = cfg.images.bodyImages + 2;
 
       // 영상 소재 글: 지어낸 타임스탬프를 실제 자막 시각으로 스냅하고,
       // 자막에 없는 지점은 0(처음부터)으로 되돌린다.
