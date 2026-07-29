@@ -533,6 +533,17 @@ export async function writeArticle({ topic, cfg }) {
         log.warn(`${lastErr} — 그대로 진행합니다.`);
       }
 
+      /* 조사 오류는 지시문으로 두 번 연속 새어나갔다 — 규칙이 기계적이라 코드가 잡는다.
+       * 고치지는 않는다(사람 이름 오탐이 있다). 발행 전에 눈으로 확인할 목록만 남긴다. */
+      const { findParticleErrors, articleText } = await import('./lintKo.js');
+      const particleErrs = findParticleErrors(articleText(article));
+      if (particleErrs.length) {
+        log.warn(`조사가 의심되는 곳 ${particleErrs.length}군데 — 발행 전에 확인하세요.`);
+        for (const e of particleErrs.slice(0, 8)) {
+          log.warn(`  ${e.phrase} → ${e.suggest}   …${e.context}…`);
+        }
+      }
+
       article.charCount = chars;
       log.ok(
         `글 생성 완료 (${fmtDuration(Date.now() - started)}) · ` +
