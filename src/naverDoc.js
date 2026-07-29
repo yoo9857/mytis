@@ -481,11 +481,13 @@ function sectionTitle(text) {
   if (!String(text ?? '').trim()) return null;
   /* 본문이 전부 가운데 정렬인데 소제목만 왼쪽이면 축이 두 개가 된다
    * (2026-07-29 발행글 독자 피드백 — "가운데 정렬이 안 되어 있다").
-   * 소제목 문단에도 같은 align 을 싣는다. */
+   * 소제목 문단에도 같은 align 을 싣는다.
+   * 굵기도 명시한다 — 컴포넌트가 크기(30px)는 정해 주지만 발행글에서
+   * 소제목이 본문과 같은 굵기로 나와 제목처럼 안 보였다 (같은 날 피드백). */
   return {
     id: uid(),
     layout: 'default',
-    title: [paragraph(text, null, { align: 'center' })],
+    title: [paragraph(text, { bold: true }, { align: 'center' })],
     '@ctype': 'sectionTitle',
   };
 }
@@ -703,10 +705,13 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   const bodyMeta = imageMeta.slice(1);
 
   (article.sections || []).forEach((sec, i) => {
-    /* 섹션 사이 구분선 — 화제가 바뀐다는 시각 신호.
-     * 상위 글은 구분선을 1~23개 쓴다 (learned.md 법칙 ⑥). 우리 발행글은
-     * 하단 출처용 2개뿐이라 섹션 전환이 소제목 하나에만 실려 있었다.
-     * 첫 섹션 앞에는 넣지 않는다 — 위 '핵심' 블록과 이중 구분이 된다. */
+    /* 섹션 경계.
+     * ① 여백 한 줄 — 인접 컴포넌트 간격이 0 이라 앞 문단 마지막 줄과
+     *    소제목이 붙는다. "글이 넘어오는 부분이 어색하다"는 독자 피드백(2026-07-29)의
+     *    정체가 이것이었다. 첫 섹션 앞에도 넣는다(도입 문단과 붙는다).
+     * ② 구분선 — 화제가 바뀐다는 시각 신호. 상위 글은 1~23개 쓴다 (법칙 ⑥).
+     *    첫 섹션 앞에는 넣지 않는다 — 위 '핵심' 블록과 이중 구분이 된다. */
+    out.push(textComponent([spacer()]));
     if (i) out.push(horizontalLine());
 
     out.push(sectionTitle(sec.heading));
