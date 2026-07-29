@@ -504,15 +504,32 @@ function sectionTitle(text) {
  * 구절이 없으면 라벨 한 줄만 크게 세운다. 스타일 키(fontColor·fontSizeCode)는
  * probe-nodestyle 실측으로 살아남는 것이 확인된 것만 쓴다.
  */
+/* 라벨의 영문 병기 — 상위 리뷰 글 실측(seule_ment 어린왕자: "프롤로그 Prologue",
+ * "줄거리 미리보기 Preview", "감상평 Thoughts"). 회색 라벨 줄에 함께 얹는다. */
+const HEADING_EN = {
+  프롤로그: 'Prologue',
+  목차: 'Contents',
+  줄거리: 'Story',
+  생각: 'Thoughts',
+  감상: 'Thoughts',
+  '기본 정보': 'Info',
+  결말: 'Ending',
+  포인트: 'Points',
+  '자주 묻는 질문': 'Q&A',
+  에필로그: 'Epilogue',
+};
+
 function headingQuote(heading) {
   const [label, ...rest] = String(heading || '').split(/\s*—\s*/);
   const phrase = rest.join(' — ').trim();
+  const ko = label.trim();
+  const labelText = HEADING_EN[ko] ? `${ko} · ${HEADING_EN[ko]}` : ko;
   const paras = phrase
     ? [
-        paragraph(label.trim(), { fontSizeCode: 'fs13', fontColor: '#999999' }),
+        paragraph(labelText, { fontSizeCode: 'fs13', fontColor: '#999999' }),
         paragraph(phrase, { bold: true, fontSizeCode: 'fs19' }),
       ]
-    : [paragraph(label.trim(), { bold: true, fontSizeCode: 'fs19' })];
+    : [paragraph(labelText, { bold: true, fontSizeCode: 'fs19' })];
   return { id: uid(), layout: QUOTE.answer, value: paras, source: null, '@ctype': 'quotation' };
 }
 
