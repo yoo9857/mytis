@@ -36,6 +36,10 @@ const HELP = `
   npm run probe                        에디터 구조 덤프 (셀렉터가 깨졌을 때 진단)
   npm run doctor                       설정·환경 점검
 
+  오늘 뭐 읽지? (네이버 책 시리즈)
+  npm run book                         알라딘 월간 문학 베스트에서 오늘의 책 선정 → 초안 생성
+                                       (검토 뒤 npm run publish -- out/<글>.json --naver)
+
   네이버 블로그
   npm run login:naver                  네이버 로그인 · 세션 저장 · 블로그 아이디 자동 탐지
   npm run probe:naver                  네이버 에디터 구조 덤프 (셀렉터 확정용)
@@ -588,6 +592,22 @@ async function main() {
       return cmdPost(cfg, rest.join(' '), flags);
     case 'draft':
       return cmdPost(cfg, rest.join(' '), { ...flags, noPublish: true });
+    case 'book': {
+      /* '오늘 뭐 읽지?' 한 번에 — 오늘의 책을 고르고 초안까지 만든다.
+       * **발행은 하지 않는다.** 검토(사진 큐레이션·카드·발췌 확인)는 사람이 한다
+       * (publish-review-loop 원칙). 검토 뒤: npm run publish -- out/<글>.json --naver */
+      const { execFileSync } = await import('node:child_process');
+      const picked = execFileSync(process.execPath, ['scripts/book-today.mjs', '--pick', '--save'], {
+        encoding: 'utf8',
+      })
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith('책:'))
+        .pop();
+      if (!picked) throw new Error('오늘의 책을 고르지 못했습니다 (scripts/book-today.mjs 확인).');
+      log.ok(`오늘의 책: ${picked.replace(/^책\s*:\s*/, '')}`);
+      return cmdPost(cfg, picked, { ...flags, noPublish: true });
+    }
     case 'publish':
       return cmdPublishFile(cfg, rest[0], flags);
     case 'news':

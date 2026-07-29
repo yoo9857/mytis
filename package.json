@@ -19,7 +19,8 @@
     "doctor": "node src/cli.js doctor",
     "postinstall": "playwright install chromium",
     "post:naver": "node src/cli.js post --naver",
-    "post:both": "node src/cli.js post --both"
+    "post:both": "node src/cli.js post --both",
+    "book": "node src/cli.js book"
   },
   "dependencies": {
     "playwright": "^1.49.0"
