@@ -724,7 +724,12 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
     out.push(textComponent([spacer()]));
     if (i) out.push(horizontalLine());
 
-    out.push(sectionTitle(sec.heading));
+    /* 책 글의 소제목은 sectionTitle 이 아니라 **왼쪽 세로선 인용구**다
+     * (2026-07-29 독자 요청 — "왼쪽에 인용구로 세련되게").
+     * 상위 글 실측과도 맞는다: kkujuni- 는 소제목 8개가 전부 quotation_line,
+     * ppororogo 는 전부 corner — **한 종류로 통일**하는 것이 그들의 리듬이다.
+     * 대신 sectionTitle 의 GEO(목차 인식)는 잃는다 — title·meta·FAQ 가 짊어진다. */
+    out.push(isBook ? quotation(sec.heading, { layout: QUOTE.answer }) : sectionTitle(sec.heading));
 
     /* 섹션 머리말 인용구 — 이 대목에서 무엇을 보게 되는지 한 줄로 세운다.
      * 상위 글이 소제목 대신 쓰는 장치이고, 팁(`callout`, 포스트잇)과 모양이 달라
@@ -897,7 +902,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
    * 답은 문장 단위로 풀어 문장 사이에도 숨을 넣는다. */
   if (seo.includeFaq !== false && article.faq?.length) {
     out.push(horizontalLine());
-    out.push(sectionTitle('자주 묻는 질문'));
+    out.push(isBook ? quotation('자주 묻는 질문', { layout: QUOTE.answer }) : sectionTitle('자주 묻는 질문'));
     article.faq.forEach((f, fi) => {
       /* "A. " 는 문장을 나눈 **뒤** 첫 문장에 붙인다.
        * sentences('A. 답변...') 으로 넘기면 "A." 가 한 문장으로 분리되어
@@ -917,7 +922,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   if (article.conclusion) {
     out.push(horizontalLine());
     // 책 글은 프롤로그로 열었으니 에필로그로 닫는다 — 에세이의 짝
-    out.push(sectionTitle(isBook ? '에필로그' : '마치며'));
+    out.push(isBook ? quotation('에필로그', { layout: QUOTE.answer }) : sectionTitle('마치며'));
     out.push(textComponent([spacer(), ...spacedParagraphs(sentences(article.conclusion))]));
   }
 

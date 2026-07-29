@@ -62,13 +62,17 @@ export const CAPABILITIES = {
     allowTables: true,
   },
   [MODE.BOOK]: {
-    sourcePhoto: false, // 원문 기사가 없다
-    relatedArticlePhotos: false, // 서평 기사의 사진은 표지 스캔이라 저작권이 더 위험하다
+    /* 처음에는 사진·SNS 를 다 껐다가 되켰다 (2026-07-29 사용자 결정).
+     * 작가의 얼굴·강연·사인회 사진은 서평·부고·인터뷰 **기사에** 있고,
+     * 보도사진 위험은 연예 글과 같은 기준으로 발행자가 감수한다.
+     * 표지 스캔이 섞여 들어오는 위험은 남는다 — 발행 전 눈으로 거른다. */
+    sourcePhoto: true, // sources 의 기사 사진(작가 보도사진)을 쓴다
+    relatedArticlePhotos: true,
     clipShots: false,
     /* 북트레일러가 있는 책도 있지만 공식 채널 판별이 어렵고(출판사 채널 이름이
      * 제각각), 없는 책이 대부분이라 검색 시간만 쓴다. v1 은 끈다. */
     youtubeEmbeds: false,
-    socialEmbeds: false, // 저자 SNS 는 책 소개와 무관한 근황이 대부분이다
+    socialEmbeds: true, // 저자·출판사 공식 X·인스타 게시물 임베드 — 사진을 합법으로 보여 준다
     allowTables: true, // 서지 정보(출판사·출간일·쪽수)가 표의 정석이다
   },
   [MODE.CLIP]: {
