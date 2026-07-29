@@ -45,6 +45,22 @@ for (const { f } of keepArticles) {
   try {
     const a = JSON.parse(fs.readFileSync(path.join(OUT, f), 'utf8'));
     for (const s of a.clipShots || []) if (s.file) keep.add(path.resolve(s.file));
+    /* photoDir(눈으로 고른 사진·디자인 카드)은 **폴더째** 남긴다.
+     * 파일명에 글 제목이 없어서 아래 제목 매칭으로는 안 잡힌다 —
+     * 2026-07-29 에 완판 글의 카드·큐레이션 사진이 삭제 목록에 들어갔었다. */
+    if (a.photoDir) {
+      const pd = path.resolve(a.photoDir);
+      if (fs.existsSync(pd)) {
+        const walkKeep = (dir) => {
+          for (const g of fs.readdirSync(dir, { withFileTypes: true })) {
+            const p = path.join(dir, g.name);
+            if (g.isDirectory()) walkKeep(p);
+            else keep.add(p);
+          }
+        };
+        walkKeep(pd);
+      }
+    }
     const stem = f.replace(/\.json$/, '');
     for (const dir of ['images', 'photos']) {
       const d = path.join(OUT, dir);
@@ -58,6 +74,21 @@ for (const { f } of keepArticles) {
   } catch {
     /* 깨진 JSON 은 남길 가치가 없다 */
   }
+}
+
+/* 수작업 자산은 어떤 경우에도 지우지 않는다 — 인스타에서 눈으로 고른 여행 사진(ig/),
+ * 책 글의 카드·큐레이션(book/)은 다시 만들 수 없거나 비용이 크다. */
+for (const safeDir of ['photos/ig', 'photos/book']) {
+  const d = path.join(OUT, safeDir);
+  if (!fs.existsSync(d)) continue;
+  const walkKeep = (dir) => {
+    for (const g of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, g.name);
+      if (g.isDirectory()) walkKeep(p);
+      else keep.add(p);
+    }
+  };
+  walkKeep(d);
 }
 
 const targets = [];
