@@ -5,6 +5,7 @@ import { DIRS, FILES, stamp, safeSlug } from './paths.js';
 import { log } from './log.js';
 import { runCodexJson } from './codexWriter.js';
 import { MODE, can } from './mode.js';
+import { imageSize } from './imageSize.js';
 
 /**
  * 이미지 카드의 배경으로 쓸 "실사 사진"을 확보한다.
@@ -414,6 +415,30 @@ export async function fetchBackgrounds(article, cfg, slots) {
     }
   }
 
+  /**
+   * 여러 컷을 위아래(또는 좌우)로 이어붙인 **합성본**을 걸러낸다.
+   *
+   * 대표 이미지는 얼굴 개수로 합성본을 피하지만(아래 pickBestThumb), 본문 사진은
+   * 그 검사를 거치지 않아 그대로 실린다. 합성본은 본문에서도 쓸 수 없다 —
+   * 방송사 로고와 자막이 층마다 박혀 있고, 세로로 길어 모바일에서 한 컷이
+   * 화면을 다 먹는다.
+   *
+   * > 2026-07-29 실측 — 나솔 29기 정숙 기사: 300x893(0.34) 사진이 본문 5번째로
+   * > 들어갔다. SBS Plus 로고와 자막이 박힌 방송 캡처 4장을 세로로 이어붙인
+   * > 것이었다.
+   *
+   * 한계값은 인스타 스토리(9:16 = 0.56)는 살리고 3단 이상 합성본만 자르게 잡았다.
+   * 가로로 이어붙인 것도 같은 이유로 자른다.
+   */
+  function looksLikeMontage(file) {
+    const { w, h } = imageSize(file);
+    if (!w || !h) return false; // 크기를 못 읽으면 판단하지 않는다
+    const aspect = w / h;
+    if (aspect < 0.5) return `세로로 이어붙임 (${w}x${h}, 비율 ${aspect.toFixed(2)})`;
+    if (aspect > 3) return `가로로 이어붙임 (${w}x${h}, 비율 ${aspect.toFixed(2)})`;
+    return false;
+  }
+
   /** 후보 목록에서 하나를 골라 슬롯에 내려받는다. */
   async function tryFill(slot, candidates) {
     if (result[slot]) return true; // 이미 채워진 슬롯은 건드리지 않는다
@@ -440,6 +465,14 @@ export async function fetchBackgrounds(article, cfg, slots) {
           log.debug(`같은 파일이라 건너뜁니다: ${String(cand.url).slice(0, 70)}`);
           continue;
         }
+        const montage = looksLikeMontage(got.file);
+        if (montage) {
+          fs.rmSync(got.file, { force: true });
+          used.add(key); // 같은 사진을 다른 슬롯에서 또 받지 않는다
+          log.debug(`제외 (합성본): ${montage} · ${String(cand.url).slice(0, 70)}`);
+          continue;
+        }
+
         used.add(contentKey);
         used.add(key);
         result[slot] = {

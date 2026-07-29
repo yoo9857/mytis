@@ -20,7 +20,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { imageSize } from '../src/images.js';
+import { imageSize } from '../src/imageSize.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36';
 
