@@ -94,6 +94,27 @@ export function findMonotoneEndings(article) {
       }
     }
   }
+
+  /* 문단 안 3연타만 보면 **글 전체가 한 종결로 도배된 것**을 놓친다 —
+   * 문단이 2문장씩이라 연타는 0인데 전체가 "~입니다" 인 글이 나갔다
+   * (2026-07-29 신입사원 강회장: 독자가 "재미없다, AI 같다"). 전체 분포를 본다. */
+  const all = [];
+  for (const s of article.sections || []) {
+    for (const p of s.paragraphs || []) {
+      for (const x of String(p).split(/(?<=[.!?])\s+/)) {
+        const t = x.trim().replace(/[.!?"”』」]+$/g, '').slice(-2);
+        if (t) all.push(t);
+      }
+    }
+  }
+  if (all.length >= 15) {
+    const cnt = {};
+    for (const t of all) cnt[t] = (cnt[t] || 0) + 1;
+    const [top, n] = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    if (n / all.length >= 0.75) {
+      out.push({ section: 0, ending: top, sample: `글 전체 ${all.length}문장 중 ${n}문장(${Math.round((n / all.length) * 100)}%)이 "…${top}." 로 끝남` });
+    }
+  }
   return out;
 }
 
