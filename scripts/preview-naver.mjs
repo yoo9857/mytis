@@ -41,7 +41,14 @@ function paragraphs(list) {
         .map((n) => {
           const ns = n.style || {};
           const size = ns.fontSizeCode ? Number(String(ns.fontSizeCode).replace(/\D/g, '')) : null;
-          const s = [size ? `font-size:${size}px` : '', ns.bold ? 'font-weight:700' : ''].filter(Boolean).join(';');
+          const s = [
+            size ? `font-size:${size}px` : '',
+            ns.bold ? 'font-weight:700' : '',
+            ns.underline ? 'text-decoration:underline;text-underline-offset:3px' : '',
+            ns.italic ? 'font-style:italic' : '',
+            ns.fontColor ? `color:${ns.fontColor}` : '',
+            ns.backgroundColor ? `background:${ns.backgroundColor}` : '',
+          ].filter(Boolean).join(';');
           // 제로폭 공백은 눈에 안 보이므로 프리뷰에서만 표시해 준다
           const isSpacer = n.value === '​';
           if (isSpacer) return `<span class="zwsp" title="제로폭 공백 여백"></span>`;

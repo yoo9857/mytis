@@ -165,8 +165,12 @@ const BODY_PARA = { lineHeight: 2.0, align: 'center' };
  * 최대 26~31자. 즉 그들은 **문단 하나 = 모바일 한 줄**로 쓴다. 우연이 아니다.
  * (learned.md 법칙 ①)
  */
-const MOBILE_LINE = 22;
-const MOBILE_LINE_MAX = 30;
+/* 처음에는 22 / 30 이었다. max 를 30 으로 두니 29자 줄이 만들어졌고, 실제 렌더
+ * 폭(390~420px ≈ 22~25자)을 살짝 넘겨 **마지막 두어 글자만 다음 줄로 떨어졌다**
+ * ("…보도했 / 고,"). 줄을 화면 폭 안에 확실히 넣으려면 max 가 렌더 폭보다
+ * 작아야 한다. 상위 글 문단 중간값이 8~16자인 것과도 방향이 같다. */
+const MOBILE_LINE = 20;
+const MOBILE_LINE_MAX = 25;
 
 /**
  * 긴 문단을 **모바일 한 줄 크기로 쪼갠다.**
@@ -186,7 +190,16 @@ export function mobileLines(text, { max = MOBILE_LINE_MAX, target = MOBILE_LINE 
   const out = [];
   let rest = src;
   while (rest.length > max) {
-    // target~max 구간에서 끊을 자리를 찾는다. 뒤에서부터 좋은 자리를 고른다.
+    /* target~max 구간에서 끊을 자리를 찾는다.
+     *
+     * **max 가 아니라 target 에 가장 가까운 자리를 고른다.** 예전에는 max 에
+     * 가까운(마지막) 자리를 골랐는데, 29자 문단이 모바일 실제 폭(~24자)을
+     * 살짝 넘겨 **마지막 한두 글자만 다음 줄로 떨어졌다** (2026-07-29 프리뷰
+     * 실측: "…불참했던 채영 / 이", "…브랜드 캠페인 / 과"). 고아 글자는
+     * 가운데 정렬에서 특히 눈에 띈다.
+     *
+     * 그리고 **꼬리가 5자 이하로 남는 자리는 피한다** — 다음 줄에 "다." 만
+     * 남는 것도 같은 문제다. 피할 자리가 없을 때만 어쩔 수 없이 받아들인다. */
     const window = rest.slice(0, max + 1);
     const at = (() => {
       const patterns = [
@@ -195,13 +208,28 @@ export function mobileLines(text, { max = MOBILE_LINE_MAX, target = MOBILE_LINE 
         /(?:고|며|서|면|지만|는데|으로|에서|까지|부터)\s+/g, // 연결 어미·조사 뒤
         /\s+/g, // 공백
       ];
+      /* 따옴표 **안**에서는 끊지 않는다 — 인용이 줄에 걸쳐 잘리면 강조를 붙일 수
+       * 없고(여는/닫는 따옴표를 구분 못 한다), 읽기에도 발언이 두 동강 난다.
+       * 위치 p 앞의 따옴표 개수가 홀수면 인용 속이다. max 보다 긴 인용은
+       * 어차피 피할 수 없으므로 그때만 인용 속 자리도 허용한다. */
+      const insideQuote = (p) => {
+        let open = 0;
+        for (let i = 0; i < p; i++) if (/["“”]/.test(rest[i])) open ^= 1;
+        return open === 1;
+      };
       for (const re of patterns) {
-        let best = -1;
+        const ends = [];
         for (const m of window.matchAll(re)) {
           const end = m.index + m[0].length;
-          if (end >= target * 0.6 && end <= max) best = end;
+          if (end >= target * 0.6 && end <= max) ends.push(end);
         }
-        if (best > 0) return best;
+        if (!ends.length) continue;
+        const tail = (end) => rest.length - end; // 이 자리에서 끊으면 남는 길이
+        let pool = ends.filter((e) => !insideQuote(e));
+        if (!pool.length) pool = ends; // 인용이 max 보다 길면 어쩔 수 없다
+        const good = pool.filter((e) => tail(e) === 0 || tail(e) > 5);
+        if (good.length) pool = good;
+        return pool.reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a));
       }
       return max; // 끊을 자리가 없으면 어쩔 수 없이 자른다
     })();
@@ -213,6 +241,62 @@ export function mobileLines(text, { max = MOBILE_LINE_MAX, target = MOBILE_LINE 
 }
 
 /**
+ * 본문 중간중간 넣는 강조 — 문장을 스타일이 다른 노드들로 쪼갠다.
+ *
+ * 어떤 키를 쓸 수 있는지는 **2026-07-29 에 에디터 왕복으로 실측**했다
+ * (`scripts/probe-nodestyle.mjs` — 발행 없이 setDocumentData → getDocumentData):
+ *
+ *   살아남음: bold · underline · italic · fontColor · backgroundColor · fontSizeCode
+ *   삭제됨:   strikethrough · strike
+ *   알 수 없는 컴포넌트: 0개 (안전)
+ *
+ * 강조 규칙 — 상위 네이버 글의 문법대로 **역할을 고정**한다:
+ *   따옴표 인용(발언)  → 굵게 + 한 단계 큰 글자 (fs19)  — 발언이 그 문단의 주인공이다
+ *   날짜·시각·수치     → 굵게 + 밑줄                    — 스캔하는 눈이 걸리는 자리
+ * 색은 쓰지 않는다 — 자동으로 고른 색은 반드시 촌스러워진다. 굵기·크기·밑줄이면
+ * 리듬이 생기고, 과하지 않다.
+ */
+const ACCENTS = [
+  /* 따옴표 인용 — **같은 줄 안에서 완결된 것만** 강조한다.
+   * 처음에는 줄에 걸쳐 잘린 조각(여는 쪽·닫는 쪽)도 받았는데, 여는 따옴표와
+   * 닫는 따옴표를 문자로 구분할 수 없어 "정숙은 " 같은 **화자 쪽이 강조되는**
+   * 오작동이 났다. 대신 mobileLines 가 따옴표 안에서 끊지 않도록 고쳐(아래),
+   * 웬만한 인용은 한 줄에 온전히 남는다. 그래도 잘린 긴 인용은 강조 없이 둔다. */
+  { re: /["“][^"”]{2,60}["”]/g, style: { bold: true, fontSizeCode: 'fs19' } },
+  // 날짜 (2026년 7월 30일 · 7월 30일 · 30일), 시각 (오후 3시), 수치+단위
+  {
+    re: /\d{4}년(?:\s?\d{1,2}월)?(?:\s?\d{1,2}일)?|\d{1,2}월(?:\s?\d{1,2}일)?|(?:오전|오후)\s?\d{1,2}시(?:\s?\d{1,2}분)?|\d[\d,.]*\s?(?:일|명|장|개|살|세|부작|곡|편|회|위|만|억|%|원|kg|cm)(?=[\s,.·)]|$)/g,
+    style: { bold: true, underline: true },
+  },
+];
+
+function accentNodes(text) {
+  const src = String(text ?? '');
+  // 겹치지 않게 자리를 먼저 모은다 — 앞선 규칙이 이긴다
+  const marks = [];
+  for (const { re, style } of ACCENTS) {
+    re.lastIndex = 0;
+    for (const m of src.matchAll(re)) {
+      const [s, e] = [m.index, m.index + m[0].length];
+      if (marks.some((x) => s < x.e && e > x.s)) continue;
+      marks.push({ s, e, style });
+    }
+  }
+  if (!marks.length) return [textNode(src, BODY_STYLE)];
+  marks.sort((a, b) => a.s - b.s);
+
+  const nodes = [];
+  let at = 0;
+  for (const m of marks) {
+    if (m.s > at) nodes.push(textNode(src.slice(at, m.s), BODY_STYLE));
+    nodes.push(textNode(src.slice(m.s, m.e), { ...BODY_STYLE, ...m.style }));
+    at = m.e;
+  }
+  if (at < src.length) nodes.push(textNode(src.slice(at), BODY_STYLE));
+  return nodes;
+}
+
+/**
  * 본문 문단 — 글자 크기·줄간격·가운데 정렬을 함께 입힌다.
  *
  * 가운데 정렬은 `paragraphStyle.align` 이다. 발행된 글의 문단 클래스가
@@ -220,7 +304,9 @@ export function mobileLines(text, { max = MOBILE_LINE_MAX, target = MOBILE_LINE 
  * 실제 반영은 발행 후 `se-text-paragraph-align-center` 로 확인한다.
  */
 function bodyPara(value) {
-  return paragraph(value, BODY_STYLE, BODY_PARA);
+  const p = { id: uid(), nodes: accentNodes(value), '@ctype': 'paragraph' };
+  p.style = { ...BODY_PARA, '@ctype': 'paragraphStyle' };
+  return p;
 }
 
 /** 여러 문단을 한 text 컴포넌트로 묶는다. */
@@ -231,9 +317,9 @@ function textComponent(paragraphs) {
 }
 
 /** 문단 하나만 담은 text 컴포넌트 (소제목처럼 단독으로 서야 하는 것) */
-function line(value, style) {
+function line(value, style, paraStyle) {
   if (!String(value ?? '').trim()) return null;
-  return textComponent([paragraph(value, style)]);
+  return textComponent([paragraph(value, style, paraStyle)]);
 }
 
 /**
@@ -300,6 +386,22 @@ function horizontalLine() {
 }
 
 /**
+ * 문장 단위로 나눈다 — **긴 덩어리를 문단으로 승격시키는 입구.**
+ *
+ * 왜 필요한가: 결론·FAQ 답·directAnswer 는 아티클에서 한 문자열로 온다.
+ * mobileLines 는 줄만 쪼개고 **여백은 문단 사이에만** 들어가므로, 268자 결론이
+ * 한 문단으로 남아 모바일에서 9줄 글자 벽이 됐다 (2026-07-29 발행글 실측 —
+ * 문단 최대 길이 268자. 상위 글 법칙은 26~31자).
+ * 문장으로 나눠 spacedParagraphs 에 넘기면 문장 사이에 여백이 생긴다.
+ */
+function sentences(text) {
+  return String(text ?? '')
+    .trim()
+    .split(/(?<=[.!?…])\s+/)
+    .filter(Boolean);
+}
+
+/**
  * **네이버의 진짜 소제목.**
  *
  * `text` 컴포넌트에 굵게·큰 글자를 씌운 것과 다르다. 에디터의 문단 서식
@@ -308,7 +410,15 @@ function horizontalLine() {
  */
 function sectionTitle(text) {
   if (!String(text ?? '').trim()) return null;
-  return { id: uid(), layout: 'default', title: [paragraph(text)], '@ctype': 'sectionTitle' };
+  /* 본문이 전부 가운데 정렬인데 소제목만 왼쪽이면 축이 두 개가 된다
+   * (2026-07-29 발행글 독자 피드백 — "가운데 정렬이 안 되어 있다").
+   * 소제목 문단에도 같은 align 을 싣는다. */
+  return {
+    id: uid(),
+    layout: 'default',
+    title: [paragraph(text, null, { align: 'center' })],
+    '@ctype': 'sectionTitle',
+  };
 }
 
 /**
@@ -490,9 +600,16 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
 
   /* 한 줄 정리 — 세로선 인용구로 세운다.
    * 글의 결론이므로 맨 위에서 눈에 걸려야 하고, 아래의 '팁' 인용구와는
-   * 모양이 달라야 독자가 역할을 구분한다. */
+   * 모양이 달라야 독자가 역할을 구분한다.
+   *
+   * **인용구에는 첫 문장만 넣는다.** directAnswer 는 2~4문장(240자대)인데
+   * 그대로 넣었더니 인용구가 글자 벽이 됐다 (2026-07-29 발행글 실측 — 인용구
+   * 243자. 상위 글의 인용구는 10~40자 짧은 한마디다). 나머지 문장은 인용구
+   * 바로 아래 본문 문단으로 풀어 준다 — 정보는 버리지 않고 형태만 나눈다. */
   if (article.directAnswer) {
-    out.push(quotation(article.directAnswer, { layout: QUOTE.answer }));
+    const [first, ...rest] = sentences(article.directAnswer);
+    if (first) out.push(quotation(first, { layout: QUOTE.answer }));
+    if (rest.length) out.push(textComponent(spacedParagraphs(rest)));
   }
 
   /* 핵심 요약.
@@ -517,6 +634,12 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   const bodyMeta = imageMeta.slice(1);
 
   (article.sections || []).forEach((sec, i) => {
+    /* 섹션 사이 구분선 — 화제가 바뀐다는 시각 신호.
+     * 상위 글은 구분선을 1~23개 쓴다 (learned.md 법칙 ⑥). 우리 발행글은
+     * 하단 출처용 2개뿐이라 섹션 전환이 소제목 하나에만 실려 있었다.
+     * 첫 섹션 앞에는 넣지 않는다 — 위 '핵심' 블록과 이중 구분이 된다. */
+    if (i) out.push(horizontalLine());
+
     out.push(sectionTitle(sec.heading));
 
     /* 섹션 머리말 인용구 — 이 대목에서 무엇을 보게 되는지 한 줄로 세운다.
@@ -627,17 +750,25 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
 
     /* 표는 만들지 않는다 (파일 머리말 참고).
      * 표에 담겨 있던 정보를 버리지는 않고 "항목: 값" 문단으로 펼친다.
-     * 모바일에서는 어차피 표가 옆으로 넘쳐 읽기 어렵다 — 펼치는 편이 낫다. */
+     * 모바일에서는 어차피 표가 옆으로 넘쳐 읽기 어렵다 — 펼치는 편이 낫다.
+     *
+     * 행 하나를 ' · ' 로 이어 한 문단으로 만들지 않는다 — 뉴스 글의 행은
+     * 3열을 이으면 100자를 넘어 글자 벽이 됐다 (2026-07-29 실측).
+     * 첫 열(대개 시점)은 굵은 줄로 세우고, 나머지 열은 아래 줄로 푼다.
+     * 행 사이에는 여백을 넣어 행이 덩어리로 읽히게 한다. */
     if (sec.table?.headers?.length && sec.table?.rows?.length) {
       const { headers, rows } = sec.table;
-      if (sec.table.caption) out.push(line(sec.table.caption, { bold: true, fontSizeCode: FS.h3 }));
-      out.push(
-        textComponent(
-          rows.map((row) =>
-            bodyPara(headers.map((h, ci) => `${h}: ${row[ci] ?? ''}`).join(' · '))
-          )
-        )
-      );
+      if (sec.table.caption) {
+        out.push(line(sec.table.caption, { bold: true, fontSizeCode: FS.h3 }, BODY_PARA));
+      }
+      const paras = rows.flatMap((row, ri) => [
+        ...(ri ? [spacer()] : []),
+        paragraph(String(row[0] ?? ''), { ...BODY_STYLE, bold: true }, BODY_PARA),
+        ...row.slice(1).flatMap((cell, ci) =>
+          mobileLines(`${headers[ci + 1]}: ${cell ?? ''}`).map((l) => bodyPara(l))
+        ),
+      ]);
+      out.push(textComponent(paras));
     }
 
     // 팁·주의는 포스트잇 인용구로 — '한 줄 정리'(세로선)와 모양이 달라야 구분된다
@@ -661,18 +792,35 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
 
   /* FAQ.
    * 질문마다 소제목을 쓰면 소제목이 5개나 더 늘어 글의 구조가 무너진다.
-   * 'FAQ' 자체만 소제목으로 세우고, 질문은 굵은 한 줄로 둔다. */
+   * 'FAQ' 자체만 소제목으로 세우고, 질문은 굵은 한 줄로 둔다.
+   *
+   * 문답 하나 = 컴포넌트 하나로 담는다. 예전처럼 Q 컴포넌트·A 컴포넌트로
+   * 나누면 인접 컴포넌트 간격이 0 이라(파일 위 실측) 다섯 문답이 전부 붙어
+   * 한 덩어리 벽이 됐다. 문답 사이 여백은 컴포넌트 안의 spacer 가 만든다.
+   * 답은 문장 단위로 풀어 문장 사이에도 숨을 넣는다. */
   if (seo.includeFaq !== false && article.faq?.length) {
+    out.push(horizontalLine());
     out.push(sectionTitle('자주 묻는 질문'));
-    for (const f of article.faq) {
-      out.push(line(`Q. ${f.question}`, { bold: true, fontSizeCode: FS.h3 }));
-      out.push(textComponent([bodyPara(`A. ${f.answer}`)]));
-    }
+    article.faq.forEach((f, fi) => {
+      /* "A. " 는 문장을 나눈 **뒤** 첫 문장에 붙인다.
+       * sentences('A. 답변...') 으로 넘기면 "A." 가 한 문장으로 분리되어
+       * 홀로 한 줄에 선다 (2026-07-29 프리뷰 실측). */
+      const ans = sentences(f.answer);
+      if (ans.length) ans[0] = `A. ${ans[0]}`;
+      out.push(
+        textComponent([
+          ...(fi ? [spacer()] : []),
+          paragraph(`Q. ${f.question}`, { bold: true, fontSizeCode: FS.h3 }, BODY_PARA),
+          ...spacedParagraphs(ans),
+        ])
+      );
+    });
   }
 
   if (article.conclusion) {
+    out.push(horizontalLine());
     out.push(sectionTitle('마치며'));
-    out.push(textComponent([bodyPara(article.conclusion)]));
+    out.push(textComponent(spacedParagraphs(sentences(article.conclusion))));
   }
 
   /* 영상 글의 원본 영상 주소.
@@ -682,7 +830,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   const videoEmbeds = (article.embeds || []).filter((e) => /^[A-Za-z0-9_-]{11}$/.test(e.videoId || ''));
   if (videoEmbeds.length) {
     out.push(horizontalLine());
-    out.push(line('원본 영상', { bold: true, fontSizeCode: FS.h3 }));
+    out.push(line('원본 영상', { bold: true, fontSizeCode: FS.h3 }, { align: 'center' }));
     out.push(
       textComponent(
         videoEmbeds.map((e) =>
@@ -701,7 +849,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   if (sources.length || useCredits.length) out.push(horizontalLine());
 
   if (sources.length) {
-    out.push(line('참고 자료', { bold: true, fontSizeCode: FS.h3 }));
+    out.push(line('참고 자료', { bold: true, fontSizeCode: FS.h3 }, { align: 'center' }));
     out.push(
       textComponent(
         sources.map((s) =>
@@ -726,7 +874,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
       if (cur) cur.count += 1;
       else merged.set(key, { who, license: c.license, pageUrl: c.pageUrl, count: 1 });
     }
-    out.push(line('이미지 출처', { bold: true, fontSizeCode: FS.h3 }));
+    out.push(line('이미지 출처', { bold: true, fontSizeCode: FS.h3 }, { align: 'center' }));
     out.push(
       textComponent(
         [...merged.values()].map((c) =>
