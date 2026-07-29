@@ -493,6 +493,30 @@ function sectionTitle(text) {
 }
 
 /**
+ * 책 글의 소제목 인용구 — 매거진 스타일 두 줄.
+ *
+ * "프롤로그 — 출간 뒤 엿새" 를 한 줄에 붙이면 라벨과 구절이 서로를 죽인다
+ * (2026-07-29 독자 피드백 — "디자인적으로 별로"). 나눠서 쌓는다:
+ *
+ *     │ 프롤로그          ← 작은 회색 (분류 라벨)
+ *     │ 출간 뒤 엿새      ← 크고 굵게 (이 대목의 얼굴)
+ *
+ * 구절이 없으면 라벨 한 줄만 크게 세운다. 스타일 키(fontColor·fontSizeCode)는
+ * probe-nodestyle 실측으로 살아남는 것이 확인된 것만 쓴다.
+ */
+function headingQuote(heading) {
+  const [label, ...rest] = String(heading || '').split(/\s*—\s*/);
+  const phrase = rest.join(' — ').trim();
+  const paras = phrase
+    ? [
+        paragraph(label.trim(), { fontSizeCode: 'fs13', fontColor: '#999999' }),
+        paragraph(phrase, { bold: true, fontSizeCode: 'fs19' }),
+      ]
+    : [paragraph(label.trim(), { bold: true, fontSizeCode: 'fs19' })];
+  return { id: uid(), layout: QUOTE.answer, value: paras, source: null, '@ctype': 'quotation' };
+}
+
+/**
  * 인용구 컴포넌트. `layout` 이 종류를 결정한다 (QUOTE 참고).
  * 빈 인용구는 `value: null` 로 생성되지만 내용을 넣을 때의 구조는 text 와 같다.
  */
@@ -729,7 +753,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
      * 상위 글 실측과도 맞는다: kkujuni- 는 소제목 8개가 전부 quotation_line,
      * ppororogo 는 전부 corner — **한 종류로 통일**하는 것이 그들의 리듬이다.
      * 대신 sectionTitle 의 GEO(목차 인식)는 잃는다 — title·meta·FAQ 가 짊어진다. */
-    out.push(isBook ? quotation(sec.heading, { layout: QUOTE.answer }) : sectionTitle(sec.heading));
+    out.push(isBook ? headingQuote(sec.heading) : sectionTitle(sec.heading));
 
     /* 섹션 머리말 인용구 — 이 대목에서 무엇을 보게 되는지 한 줄로 세운다.
      * 상위 글이 소제목 대신 쓰는 장치이고, 팁(`callout`, 포스트잇)과 모양이 달라
@@ -902,7 +926,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
    * 답은 문장 단위로 풀어 문장 사이에도 숨을 넣는다. */
   if (seo.includeFaq !== false && article.faq?.length) {
     out.push(horizontalLine());
-    out.push(isBook ? quotation('자주 묻는 질문', { layout: QUOTE.answer }) : sectionTitle('자주 묻는 질문'));
+    out.push(isBook ? headingQuote('자주 묻는 질문') : sectionTitle('자주 묻는 질문'));
     article.faq.forEach((f, fi) => {
       /* "A. " 는 문장을 나눈 **뒤** 첫 문장에 붙인다.
        * sentences('A. 답변...') 으로 넘기면 "A." 가 한 문장으로 분리되어
@@ -922,7 +946,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   if (article.conclusion) {
     out.push(horizontalLine());
     // 책 글은 프롤로그로 열었으니 에필로그로 닫는다 — 에세이의 짝
-    out.push(isBook ? quotation('에필로그', { layout: QUOTE.answer }) : sectionTitle('마치며'));
+    out.push(isBook ? headingQuote('에필로그') : sectionTitle('마치며'));
     out.push(textComponent([spacer(), ...spacedParagraphs(sentences(article.conclusion))]));
   }
 
