@@ -706,7 +706,10 @@ export async function fetchBackgrounds(article, cfg, slots) {
     };
     // 기사에는 로고·아이콘·기자 프로필 같은 작은 이미지가 섞여 있다.
     // 파일 크기로 1차 거르고, 대표 선별에서 해상도로 한 번 더 거른다.
-    const looksTiny = (u) => /(logo|icon|profile|badge|btn_|sprite|blank)/i.test(u);
+    /* `/img/bn/` 은 알라딘 프로모션 배너다 — 2026-07-29 실측: 헤일메리 글 수확
+     * 9장 중 6장이 컬처패스·신간알림 광고 배너였다. 서점 상품 페이지를 sources 에
+     * 넣기 시작하면서 생긴 새 노이즈라 경로로 거른다. */
+    const looksTiny = (u) => /(logo|icon|profile|badge|btn_|sprite|blank|\/img\/bn\/|banner)/i.test(u);
     const asCandidate = (url) => ({
       url,
       trusted: true, // 도메인 화이트리스트를 우회한다(원문 기사 한 곳뿐)
