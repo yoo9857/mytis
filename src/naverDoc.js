@@ -970,6 +970,21 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
     out.push(textComponent([spacer(), ...spacedParagraphs(sentences(article.conclusion))]));
   }
 
+  /* '오늘 뭐 읽지?' 시리즈 연결 — 지난 책으로 가는 다리.
+   * 링크 노드는 스키마 미실측이라 평문 주소로 적는다 (네이버가 자동 링크화). */
+  if (isBook && article.prevBook?.url) {
+    out.push(
+      textComponent([
+        spacer(),
+        paragraph('지난 오늘 뭐 읽지?', { fontSizeCode: 'fs13', fontColor: '#999999' }, BODY_PARA),
+        ...mobileLines(`『${article.prevBook.title}』`).map((l) =>
+          paragraph(l, { ...BODY_STYLE, bold: true }, BODY_PARA)
+        ),
+        paragraph(article.prevBook.url, { fontSizeCode: FS.small }, BODY_PARA),
+      ])
+    );
+  }
+
   /* 영상 글의 원본 영상 주소.
    * 링크 노드 스키마를 아직 실측하지 못했으므로 주소를 평문으로 적는다.
    * 네이버는 본문의 유튜브 주소를 발행 시 카드로 바꿔 주는 경우가 있는데,

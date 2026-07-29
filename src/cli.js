@@ -288,6 +288,34 @@ async function cmdPublishFile(cfg, file, flags = {}) {
   const article = JSON.parse(fs.readFileSync(abs, 'utf8'));
   log.info(`아티클 로드: ${article.title}`);
 
+  /* 발행 직전 안전망 — 생성 직후에만 검사하면 **손으로 고친 문장**이 검사 없이
+   * 나간다 (검토 루프에서 JSON 을 직접 편집하는 일이 많다). 경고만 하고 막지는 않는다. */
+  try {
+    const { findParticleErrors, findMonotoneEndings, articleText } = await import('./lintKo.js');
+    const pe = findParticleErrors(articleText(article));
+    for (const e of pe.slice(0, 5)) log.warn(`조사 의심: ${e.phrase} → ${e.suggest}   …${e.context}…`);
+    const mono = findMonotoneEndings(article);
+    for (const m of mono.slice(0, 3)) log.warn(`어미 3연타(섹션${m.section}): …${m.ending}. — ${m.sample}…`);
+  } catch {
+    /* lint 실패로 발행을 막지 않는다 */
+  }
+
+  /* '오늘 뭐 읽지?' 시리즈 연결 — 직전에 발행한 책의 링크를 글 끝에 잇는다.
+   * 시리즈는 이어 읽게 만들어야 시리즈다 (내부 링크는 검색에도 좋다).
+   * 주소는 books.done.txt 에서 읽는다 (발행 성공 시 아래에서 기록). */
+  if (article.mode === 'book' && !article.prevBook && fs.existsSync('books.done.txt')) {
+    const lines = fs.readFileSync('books.done.txt', 'utf8').split('\n').filter((l) => l.includes('->'));
+    const prev = lines
+      .map((l) => l.match(/\]\s*(.+?)\s*->\s*(https?:\S+)/))
+      .filter(Boolean)
+      .filter((m) => !String(article.title).includes(m[1]))
+      .pop();
+    if (prev) {
+      article.prevBook = { title: prev[1], url: prev[2] };
+      log.info(`시리즈 연결: 지난 책 『${prev[1]}』`);
+    }
+  }
+
   const platforms = resolvePlatforms(flags);
   log.info(`발행 대상: ${platforms.map((p) => PLATFORM_LABEL[p]).join(' + ')}`);
 
@@ -327,6 +355,21 @@ async function cmdPublishFile(cfg, file, flags = {}) {
 
   for (const [platform, r] of Object.entries(results)) {
     log.ok(`${PLATFORM_LABEL[platform]} 발행 완료: ${r.postUrl || r.url}`);
+  }
+
+  /* 책 발행 성공 → books.done.txt 의 해당 줄에 주소를 기록한다.
+   * 다음 책이 "지난 책" 으로 이 글을 잇는 재료가 된다 (topics.done.txt 방식). */
+  const naverUrl = results.naver?.postUrl || results.naver?.url;
+  if (article.mode === 'book' && naverUrl && fs.existsSync('books.done.txt')) {
+    const lines = fs.readFileSync('books.done.txt', 'utf8').split('\n');
+    const at = lines.findIndex(
+      (l) => !l.includes('->') && l.trim() && String(article.title).includes(l.replace(/^\[[^\]]*\]\s*/, '').replace(/\s*\(.*?\)\s*/g, '').trim())
+    );
+    if (at >= 0) {
+      lines[at] = `${lines[at]} -> ${naverUrl}`;
+      fs.writeFileSync('books.done.txt', lines.join('\n'));
+      log.debug(`books.done.txt 에 주소 기록: ${naverUrl}`);
+    }
   }
 }
 

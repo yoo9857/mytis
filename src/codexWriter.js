@@ -544,13 +544,19 @@ export async function writeArticle({ topic, cfg }) {
 
       /* 조사 오류는 지시문으로 두 번 연속 새어나갔다 — 규칙이 기계적이라 코드가 잡는다.
        * 고치지는 않는다(사람 이름 오탐이 있다). 발행 전에 눈으로 확인할 목록만 남긴다. */
-      const { findParticleErrors, articleText } = await import('./lintKo.js');
+      const { findParticleErrors, findMonotoneEndings, articleText } = await import('./lintKo.js');
       const particleErrs = findParticleErrors(articleText(article));
       if (particleErrs.length) {
         log.warn(`조사가 의심되는 곳 ${particleErrs.length}군데 — 발행 전에 확인하세요.`);
         for (const e of particleErrs.slice(0, 8)) {
           log.warn(`  ${e.phrase} → ${e.suggest}   …${e.context}…`);
         }
+      }
+      // 같은 어미 3연타 — "기계적, AI 같다"의 첫 신호 (2026-07-29 독자 지적)
+      const mono = findMonotoneEndings(article);
+      if (mono.length) {
+        log.warn(`같은 어미가 3문장 이상 이어지는 문단 ${mono.length}개 — 리듬을 확인하세요.`);
+        for (const m of mono.slice(0, 4)) log.warn(`  섹션${m.section} "…${m.ending}." 연타: ${m.sample}…`);
       }
 
       article.charCount = chars;

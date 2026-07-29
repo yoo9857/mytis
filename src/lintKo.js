@@ -67,6 +67,36 @@ export function findParticleErrors(text) {
   return out;
 }
 
+/**
+ * 같은 어미가 연달아 이어지는 문단을 찾는다 — "~이다. ~다. ~이다." 연타.
+ *
+ * 왜: 독자가 "기계적, AI 같다"고 지목한 첫 신호가 이것이었다 (2026-07-29).
+ * 지금까지 임시 스크립트로 재던 것을 검사기로 굳힌다. 문장 끝 두 글자를
+ * 어미 지문으로 보고, 한 문단에서 3문장 이상 같은 지문이면 보고한다.
+ */
+export function findMonotoneEndings(article) {
+  const out = [];
+  for (const [si, s] of (article.sections || []).entries()) {
+    for (const p of s.paragraphs || []) {
+      const sents = String(p)
+        .split(/(?<=[.!?])\s+/)
+        .map((x) => x.trim())
+        .filter((x) => /[.!?]$/.test(x));
+      if (sents.length < 3) continue;
+      const tail = (x) => x.replace(/[.!?"”』」]+$/g, '').slice(-2);
+      let run = 1;
+      for (let i = 1; i < sents.length; i++) {
+        run = tail(sents[i]) === tail(sents[i - 1]) ? run + 1 : 1;
+        if (run >= 3) {
+          out.push({ section: si + 1, ending: tail(sents[i]), sample: p.slice(0, 60) });
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
 /** 아티클 전체에서 검사할 문자열을 모은다 (제목·본문·표·FAQ 까지) */
 export function articleText(article) {
   const parts = [
