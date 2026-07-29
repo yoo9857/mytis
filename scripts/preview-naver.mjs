@@ -86,6 +86,17 @@ function renderComponent(c) {
     return `<figure class="img" style="text-align:${c.align || 'left'}">
       <img src="${esc(c.src)}" alt="">${c.represent ? '<span class="tag">대표</span>' : ''}${cap}</figure>`;
   }
+  if (t === 'table') {
+    const trs = (c.rows || [])
+      .map(
+        (r) =>
+          `<tr>${(r.cells || [])
+            .map((cell) => `<td style="width:${cell.width}%;border:1px solid #e3e3e3;padding:8px 6px;vertical-align:middle">${paragraphs(cell.value)}</td>`)
+            .join('')}</tr>`
+      )
+      .join('\n');
+    return `<table style="width:100%;border-collapse:collapse;margin:8px 0"><tbody>${trs}</tbody></table>`;
+  }
   if (t === 'imageGroup') {
     const imgs = (c.images || []).map((i) => `<img src="${esc(i.src)}" alt="">`).join('');
     return `<figure class="group"><span class="tag">${esc(c.layout)} · ${c.images?.length}장</span>

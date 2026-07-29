@@ -21,13 +21,16 @@
  * 목차·모바일 보기에서 소제목으로 인식되지 않고, 그냥 굵은 문단이 된다.
  * `sectionTitle` 컴포넌트를 써야 한다 (문단 서식 드롭다운의 '소제목' 이 이것이다).
  *
- * ⚠️ **표(table)와 링크 노드는 일부러 쓰지 않는다.**
- *   표는 셀마다 문단·이미지 노드를 품는 큰 구조라 손으로 만들 이유가 없고,
- *   무엇보다 **커서가 표 안에 있으면 사진 업로드가 표 셀 안으로 들어간다**
- *   (실측: 최상위 image 컴포넌트가 안 생기고 셀 안에 imageNode 로 박혔다).
- *   링크 노드는 스키마를 아직 실측하지 못했다. 모르는 필드를 넣으면 그 컴포넌트가
- *   통째로 "알 수 없는 컴포넌트" 가 되어 글에 회색 박스로 실린다.
- *   → 참고 자료는 평문으로 적는다. 확실하지 않으면 넣지 않는다(프로젝트 원칙).
+ * **표(table)는 2026-07-29 에 실측을 마쳐 이제 쓴다.**
+ *   스키마: scripts/probe-table.mjs (에디터가 만든 표를 떠옴) →
+ *   logs/naver-table-schema.json. 셀에 문단·굵게·색·크기를 채운 것이
+ *   왕복에서 살아남는 것까지 probe-table2.mjs 로 확인했다 (회색 박스 0개).
+ *   "커서가 표 안에 있으면 사진 업로드가 표 셀 안으로 들어간다"는 함정은
+ *   여전하지만, 우리는 **사진을 다 올린 뒤에** 문서를 주입하므로 안전하다.
+ *
+ * ⚠️ **링크 노드는 여전히 쓰지 않는다** — 스키마를 아직 실측하지 못했다.
+ *   모르는 필드를 넣으면 그 컴포넌트가 통째로 "알 수 없는 컴포넌트" 가 되어
+ *   글에 회색 박스로 실린다. → 참고 자료는 평문으로 적는다.
  */
 
 /**
@@ -383,6 +386,72 @@ function spacedParagraphs(texts) {
 
 function horizontalLine() {
   return { id: uid(), layout: 'default', '@ctype': 'horizontalLine' };
+}
+
+/**
+ * 진짜 표 — 스키마는 에디터가 만든 것을 그대로 베꼈다 (파일 머리말 참고).
+ *
+ * 왜 표인가: 시점 흐름을 문단으로 펼치니 행마다 4~5줄 + 화살표 + 여백으로
+ * 세로가 너무 길다는 독자 피드백(2026-07-29). 표는 행 하나가 한 줄이다.
+ *
+ * @param {string[]} headers
+ * @param {string[][]} rows
+ * @param {object} opts
+ * @param {boolean} opts.timeline  첫 열이 시점 — 2열(시점 30 : 내용 70)로 압축하고
+ *                                 머리행을 생략한다 (날짜는 설명이 필요 없다)
+ */
+function naverTable(headers, rows, { timeline = false } = {}) {
+  const cellPara = (v, style) => paragraph(v, style, { align: 'center' });
+  const cell = (paras, width) => ({
+    id: uid(),
+    colSpan: 1,
+    rowSpan: 1,
+    width,
+    height: 43,
+    value: paras.filter(Boolean),
+    '@ctype': 'tableCell',
+  });
+  const tr = (cells) => ({ cells, '@ctype': 'tableRow' });
+  const metaCol = (h) => /의미|포인트|읽을|비고|해석/.test(String(h || ''));
+
+  let outRows;
+  let columnCount;
+  if (timeline) {
+    columnCount = 2;
+    outRows = rows.map((row) =>
+      tr([
+        cell([cellPara(String(row[0] ?? ''), { bold: true })], 30),
+        cell(
+          [
+            // 내용 열들 먼저, '의미' 열은 회색 작은 글자로 그 아래
+            ...row.slice(1).flatMap((c, ci) => (metaCol(headers[ci + 1]) ? [] : [cellPara(String(c ?? ''))])),
+            ...row
+              .slice(1)
+              .flatMap((c, ci) =>
+                metaCol(headers[ci + 1]) ? [cellPara(String(c ?? ''), { fontColor: '#8c8c8c', fontSizeCode: 'fs13' })] : []
+              ),
+          ],
+          70
+        ),
+      ])
+    );
+  } else {
+    columnCount = headers.length;
+    const w = Math.round((100 / columnCount) * 100) / 100;
+    outRows = [
+      tr(headers.map((h) => cell([cellPara(String(h ?? ''), { bold: true })], w))),
+      ...rows.map((row) => tr(row.map((c) => cell([cellPara(String(c ?? ''))], w)))),
+    ];
+  }
+  return {
+    id: uid(),
+    layout: 'default',
+    width: 100,
+    rows: outRows,
+    columnCount,
+    borderStyleName: 'thinLine',
+    '@ctype': 'table',
+  };
 }
 
 /**
@@ -768,44 +837,15 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
      * fontColor 가 에디터 왕복에서 살아남는 것은 probe-nodestyle 로 실측했다. */
     if (sec.table?.headers?.length && sec.table?.rows?.length) {
       const { headers, rows } = sec.table;
-      const paras = [spacer()];
       if (sec.table.caption) {
-        paras.push(paragraph(sec.table.caption, { bold: true, fontSizeCode: FS.h3 }, BODY_PARA), spacer());
+        out.push(textComponent([spacer(), paragraph(sec.table.caption, { bold: true, fontSizeCode: FS.h3 }, BODY_PARA)]));
       }
+      /* 처음에는 문단으로 펼쳤다(날짜 이정표 + ↓ 연결). 행마다 4~5줄이라
+       * 세로로 너무 길다는 독자 피드백이 바로 왔다 — 표는 행 하나가 한 줄이다. */
       const isTimeline =
         /시점|날짜|일자|시기|연도/.test(String(headers[0] || '')) ||
         rows.every((r) => /^\d{4}[-.년]|^\d{1,2}월/.test(String(r[0] || '').trim()));
-      const metaCol = (h) => /의미|포인트|읽을|비고|해석/.test(String(h || ''));
-
-      rows.forEach((row, ri) => {
-        if (ri) {
-          paras.push(
-            spacer(),
-            paragraph('↓', { ...BODY_STYLE, fontColor: '#b0b0b0' }, BODY_PARA),
-            spacer()
-          );
-        }
-        if (isTimeline) {
-          paras.push(paragraph(String(row[0] ?? ''), { ...BODY_STYLE, bold: true, fontSizeCode: FS.h3 }, BODY_PARA));
-          row.slice(1).forEach((cell, ci) => {
-            const meta = metaCol(headers[ci + 1]);
-            for (const l of mobileLines(String(cell ?? ''))) {
-              paras.push(
-                meta
-                  ? paragraph(l, { fontSizeCode: FS.small, fontColor: '#8c8c8c' }, BODY_PARA)
-                  : bodyPara(l)
-              );
-            }
-          });
-        } else {
-          // 시점 표가 아니면 첫 열을 굵은 줄로, 나머지는 "항목: 값" 줄로
-          paras.push(paragraph(String(row[0] ?? ''), { ...BODY_STYLE, bold: true }, BODY_PARA));
-          row.slice(1).forEach((cell, ci) => {
-            for (const l of mobileLines(`${headers[ci + 1]}: ${cell ?? ''}`)) paras.push(bodyPara(l));
-          });
-        }
-      });
-      out.push(textComponent(paras));
+      out.push(naverTable(headers, rows, { timeline: isTimeline }));
     }
 
     // 팁·주의는 포스트잇 인용구로 — '한 줄 정리'(세로선)와 모양이 달라야 구분된다
