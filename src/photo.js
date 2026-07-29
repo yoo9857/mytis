@@ -588,12 +588,18 @@ export async function fetchBackgrounds(article, cfg, slots) {
     ];
     const taken = new Set();
     const pick = (slot) => {
-      const want = briefs[slot]?.photo;
+      const b = briefs[slot];
+      const want = b?.photo;
       if (want) {
         const hit = names.find((n) => n === want || n === path.basename(want));
         if (hit) return hit;
         log.warn(`로컬 사진을 찾지 못했습니다: ${want} (슬롯 ${slot})`);
       }
+      /* **혼합 모드** — photoQuery 가 있는 슬롯은 검색(원문 사진·스톡)으로 채우려는
+       * 슬롯이다. 여기서 로컬 파일을 순차로 먹어 버리면 지정 카드가 자리를 뺏긴다.
+       * > 2026-07-29 실측 — 책 글에 카드 2장(photo 지정)만 로컬로 두었는데,
+       * > 대표·본문1 이 폴더를 먼저 소진해 카드 슬롯이 그라디언트로 대체됐다. */
+      if (b?.photoQuery?.trim()) return null;
       return names.find((n) => !taken.has(n));
     };
 
@@ -603,7 +609,7 @@ export async function fetchBackgrounds(article, cfg, slots) {
     );
     for (let slot = 0; slot < slots; slot++) {
       const name = pick(slot);
-      if (!name) break;
+      if (!name) continue; // 이 슬롯은 다른 경로(원문 사진·스톡)가 채운다 — 다음 슬롯은 계속 본다
       taken.add(name);
       const it = byFile.get(name) || {};
       /* 크레딧은 사진의 출처에 따라 다르게 만든다.

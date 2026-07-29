@@ -21,7 +21,7 @@
   },
   "naver": {
     "blogId": "",
-    "category": "문학책",
+    "category": "오늘 뭐 읽지?",
     "categoryFallback": "",
     "categoryAliases": {},
     "visibility": "public",

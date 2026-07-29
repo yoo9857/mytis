@@ -404,30 +404,83 @@ export async function attachBookMaterial(page, title) {
   const input = page.locator('[class*="search"] input, [class*="side"] input[type="text"]').first();
   await input.fill(title);
   await input.press('Enter');
-  await sleep(page, 2500);
 
+  /* 결과 패널이 **접힌 채** 올 때가 있다 — 에디터가 직전 상태(축소)를 기억한다
+   * (2026-07-29 실측: 하단 검색바만 남아 카드가 안 보였고, 클릭이 허공을 짚었다).
+   * '더보기' 가 보일 때까지 검색바의 펼침 버튼을 눌러 연다. */
+  let opened = false;
+  for (let k = 0; k < 4; k++) {
+    await sleep(page, 1500);
+    if (await page.locator('text=더보기').first().isVisible().catch(() => false)) {
+      opened = true;
+      break;
+    }
+    await page.locator('[class*="search"] button').last().click().catch(() => {});
+  }
+  if (!opened) {
+    await shot(page, 'naver-material-fail');
+    throw new Error('글감 결과 패널이 펼쳐지지 않았습니다.');
+  }
+  // 책 탭으로 좁힌다 — 쇼핑(나선호스…)이 섞이지 않게
+  await page.locator('button:text-is("책")').first().click().catch(() => {});
+  await sleep(page, 1200);
+
+  /* 같은 글자가 **본문에도** 있다 — 서지 표 셀과 참고 자료에 책 제목이 그대로
+   * 들어 있어서, 문서 전체에서 첫 일치를 집으면 본문을 클릭한다 (2026-07-29 실측:
+   * 오클릭 여파로 라이브러리 패널까지 열려 발행 버튼이 막혔다).
+   * 글감 패널의 위치를 '전체 글감' 탭으로 잡고, **그 아래·오른쪽 일치만** 받는다. */
   const rect = await page.evaluate((q) => {
+    const tab = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '전체 글감');
+    if (!tab) return null;
+    const t = tab.getBoundingClientRect();
     const els = [...document.querySelectorAll('div,strong,span,a,p')].filter(
-      (e) => e.childElementCount === 0 && e.textContent.trim() === q && e.getClientRects().length
+      (e) => e.childElementCount === 0 && e.textContent.trim() === q
     );
-    const el = els[0];
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    for (const el of els) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      if (r.top > t.top && r.left > t.left - 60) return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }
+    return null;
   }, title);
   if (!rect) throw new Error('글감 검색 결과에서 책 카드를 찾지 못했습니다.');
   await page.mouse.click(rect.x, rect.y);
   await sleep(page, 2500);
 
-  // 패널을 닫는다 — 열려 있으면 발행 버튼 클릭을 막을 수 있다
+  /* 패널을 닫는다 — 열려 있으면 **발행 설정 레이어가 아예 안 열린다**
+   * (2026-07-29 실측: Escape 만으로는 하단 검색 바가 남아 발행이 3회 다 실패).
+   * 글감 버튼은 토글이다 — 한 번 더 누르는 것이 가장 확실하게 닫는다.
+   * 오클릭으로 열렸을 수 있는 라이브러리 패널도 같은 방식(토글)으로 닫는다. */
+  await page.locator('button:has-text("글감")').first().click().catch(() => {});
+  await sleep(page, 800);
+  if (await page.locator('text=현재 문서').first().isVisible().catch(() => false)) {
+    await page.locator('button:has-text("라이브러리")').first().click().catch(() => {});
+    await sleep(page, 600);
+  }
   await page.keyboard.press('Escape').catch(() => {});
   await sleep(page, 500);
 
-  const ok = await page.evaluate(() =>
-    window.__seEd().getDocumentData().document.components.some((c) => c['@ctype'] === 'material')
-  );
-  if (!ok) throw new Error('책 카드가 문서에 들어가지 않았습니다.');
-  log.ok('책 카드 첨부 완료 (글감 > 책)');
+  /* 카드를 **글 맨 위**(제목 바로 아래)로 올린다 (2026-07-29 독자 요청).
+   * UI 삽입은 커서 위치라 끝에 붙는데, material 컴포넌트는 왕복이 확인됐으므로
+   * setDocumentData 로 안전하게 자리만 옮길 수 있다. */
+  const ok = await page.evaluate(() => {
+    const e = window.__seEd();
+    const cur = e.getDocumentData();
+    const comps = cur.document.components;
+    const at = comps.findIndex((c) => c['@ctype'] === 'material');
+    if (at < 0) return false;
+    const [card] = comps.splice(at, 1);
+    const titleAt = comps.findIndex((c) => c['@ctype'] === 'documentTitle');
+    comps.splice(titleAt + 1, 0, card);
+    e.setDocumentData({ ...cur, document: { ...cur.document, components: comps } });
+    return true;
+  });
+  if (!ok) {
+    await shot(page, 'naver-material-fail');
+    throw new Error('책 카드가 문서에 들어가지 않았습니다.');
+  }
+  await sleep(page, 1500);
+  log.ok('책 카드 첨부 완료 (글감 > 책 · 글 맨 위)');
 }
 
 /** 발행 설정 레이어 열기 */
@@ -706,6 +759,10 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
       await attachBookMaterial(page, bookTitle);
     } catch (err) {
       log.warn(`책 글감 첨부 실패 (발행은 계속합니다): ${err.message.slice(0, 100)}`);
+      // 실패해도 패널은 반드시 닫는다 — 열려 있으면 발행 레이어가 안 열린다
+      await page.locator('button:has-text("글감")').first().click().catch(() => {});
+      await sleep(page, 800);
+      await page.keyboard.press('Escape').catch(() => {});
     }
   }
 
