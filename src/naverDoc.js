@@ -609,7 +609,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   if (article.directAnswer) {
     const [first, ...rest] = sentences(article.directAnswer);
     if (first) out.push(quotation(first, { layout: QUOTE.answer }));
-    if (rest.length) out.push(textComponent(spacedParagraphs(rest)));
+    if (rest.length) out.push(textComponent([spacer(), ...spacedParagraphs(rest)]));
   }
 
   /* 핵심 요약.
@@ -623,7 +623,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
    * 티스토리(html.js)와 JSON-LD 는 그대로 쓰므로 요약 자체를 버리는 것은 아니다. */
   if (cfg.naver?.keyTakeaways !== false && seo.includeKeyTakeaways !== false && article.keyTakeaways?.length) {
     out.push(sectionTitle('이 글의 핵심'));
-    out.push(textComponent(article.keyTakeaways.map((t) => bodyPara(`· ${t}`))));
+    out.push(textComponent([spacer(), ...article.keyTakeaways.map((t) => bodyPara(`· ${t}`))]));
   }
 
   /* 목차는 만들지 않는다.
@@ -728,7 +728,9 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
        * 여백은 "문단들 사이" 이므로 호출 단위가 하나면 만들 수 없다. */
       {
         const lines = mobileLines(para).map((l) => bodyPara(l));
-        const c = textComponent(pi ? [spacer(), ...lines] : lines);
+        /* 첫 문단(pi=0)에도 여백을 넣는다 — 바로 위가 소제목인데 인접 컴포넌트
+         * 간격이 0 이라 소제목과 본문이 붙었다 (2026-07-29 독자 피드백). */
+        const c = textComponent([spacer(), ...lines]);
         if (c) out.push(c);
       }
       const here = slots.get(pi + 1);
@@ -744,30 +746,65 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
     /* 목록은 한 컴포넌트로 묶는다. 항목마다 컴포넌트를 만들면 항목 사이가
      * 문단만큼 벌어져 목록으로 읽히지 않는다. */
     if (sec.bullets?.length) {
-      const comp = textComponent(sec.bullets.map((b) => bodyPara(`· ${b}`)));
+      const comp = textComponent([spacer(), ...sec.bullets.map((b) => bodyPara(`· ${b}`))]);
       if (comp) out.push(comp);
     }
 
     /* 표는 만들지 않는다 (파일 머리말 참고).
-     * 표에 담겨 있던 정보를 버리지는 않고 "항목: 값" 문단으로 펼친다.
+     * 표에 담겨 있던 정보를 버리지는 않고 문단으로 펼친다.
      * 모바일에서는 어차피 표가 옆으로 넘쳐 읽기 어렵다 — 펼치는 편이 낫다.
      *
-     * 행 하나를 ' · ' 로 이어 한 문단으로 만들지 않는다 — 뉴스 글의 행은
-     * 3열을 이으면 100자를 넘어 글자 벽이 됐다 (2026-07-29 실측).
-     * 첫 열(대개 시점)은 굵은 줄로 세우고, 나머지 열은 아래 줄로 푼다.
-     * 행 사이에는 여백을 넣어 행이 덩어리로 읽히게 한다. */
+     * 첫 열이 시점(날짜)이면 **타임라인**으로 그린다.
+     * "확인된 내용: ○○ · 의미: ○○" 처럼 라벨을 반복하면 나열로 읽힌다는
+     * 독자 피드백(2026-07-29)이 있었다. 라벨을 지우고 역할을 모양에 싣는다:
+     *
+     *     2025. 10. 24.        ← 굵게 + 한 단계 큰 글자 (이정표)
+     *     JYP, 투어 불참 공지    ← 본문
+     *     건강 관련 사유로 불참   ← 회색 작은 글자 (부연)
+     *          ↓               ← 회색 연결 화살표
+     *     2025. 10. 25.
+     *
+     * 회색(#8c8c8c)은 자동으로 고른 색이 아니라 **중립 회색 하나로 고정**한 것이다.
+     * fontColor 가 에디터 왕복에서 살아남는 것은 probe-nodestyle 로 실측했다. */
     if (sec.table?.headers?.length && sec.table?.rows?.length) {
       const { headers, rows } = sec.table;
+      const paras = [spacer()];
       if (sec.table.caption) {
-        out.push(line(sec.table.caption, { bold: true, fontSizeCode: FS.h3 }, BODY_PARA));
+        paras.push(paragraph(sec.table.caption, { bold: true, fontSizeCode: FS.h3 }, BODY_PARA), spacer());
       }
-      const paras = rows.flatMap((row, ri) => [
-        ...(ri ? [spacer()] : []),
-        paragraph(String(row[0] ?? ''), { ...BODY_STYLE, bold: true }, BODY_PARA),
-        ...row.slice(1).flatMap((cell, ci) =>
-          mobileLines(`${headers[ci + 1]}: ${cell ?? ''}`).map((l) => bodyPara(l))
-        ),
-      ]);
+      const isTimeline =
+        /시점|날짜|일자|시기|연도/.test(String(headers[0] || '')) ||
+        rows.every((r) => /^\d{4}[-.년]|^\d{1,2}월/.test(String(r[0] || '').trim()));
+      const metaCol = (h) => /의미|포인트|읽을|비고|해석/.test(String(h || ''));
+
+      rows.forEach((row, ri) => {
+        if (ri) {
+          paras.push(
+            spacer(),
+            paragraph('↓', { ...BODY_STYLE, fontColor: '#b0b0b0' }, BODY_PARA),
+            spacer()
+          );
+        }
+        if (isTimeline) {
+          paras.push(paragraph(String(row[0] ?? ''), { ...BODY_STYLE, bold: true, fontSizeCode: FS.h3 }, BODY_PARA));
+          row.slice(1).forEach((cell, ci) => {
+            const meta = metaCol(headers[ci + 1]);
+            for (const l of mobileLines(String(cell ?? ''))) {
+              paras.push(
+                meta
+                  ? paragraph(l, { fontSizeCode: FS.small, fontColor: '#8c8c8c' }, BODY_PARA)
+                  : bodyPara(l)
+              );
+            }
+          });
+        } else {
+          // 시점 표가 아니면 첫 열을 굵은 줄로, 나머지는 "항목: 값" 줄로
+          paras.push(paragraph(String(row[0] ?? ''), { ...BODY_STYLE, bold: true }, BODY_PARA));
+          row.slice(1).forEach((cell, ci) => {
+            for (const l of mobileLines(`${headers[ci + 1]}: ${cell ?? ''}`)) paras.push(bodyPara(l));
+          });
+        }
+      });
       out.push(textComponent(paras));
     }
 
@@ -809,7 +846,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
       if (ans.length) ans[0] = `A. ${ans[0]}`;
       out.push(
         textComponent([
-          ...(fi ? [spacer()] : []),
+          spacer(), // 첫 문답도 소제목과 붙지 않게
           paragraph(`Q. ${f.question}`, { bold: true, fontSizeCode: FS.h3 }, BODY_PARA),
           ...spacedParagraphs(ans),
         ])
@@ -820,7 +857,7 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   if (article.conclusion) {
     out.push(horizontalLine());
     out.push(sectionTitle('마치며'));
-    out.push(textComponent(spacedParagraphs(sentences(article.conclusion))));
+    out.push(textComponent([spacer(), ...spacedParagraphs(sentences(article.conclusion))]));
   }
 
   /* 영상 글의 원본 영상 주소.
