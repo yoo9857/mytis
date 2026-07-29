@@ -415,14 +415,14 @@ export async function attachBookMaterial(page, title) {
       opened = true;
       break;
     }
-    await page.locator('[class*="search"] button').last().click().catch(() => {});
+    await page.locator('[class*="search"] button').last().click({ timeout: 2000 }).catch(() => {});
   }
   if (!opened) {
     await shot(page, 'naver-material-fail');
     throw new Error('글감 결과 패널이 펼쳐지지 않았습니다.');
   }
   // 책 탭으로 좁힌다 — 쇼핑(나선호스…)이 섞이지 않게
-  await page.locator('button:text-is("책")').first().click().catch(() => {});
+  await page.locator('button:text-is("책")').first().click({ timeout: 2500 }).catch(() => {}); // 30초 기본 대기 금지 — 책 선택이 70초 걸린 주범
   await sleep(page, 1200);
 
   /* 같은 글자가 **본문에도** 있다 — 서지 표 셀과 참고 자료에 책 제목이 그대로
@@ -451,27 +451,30 @@ export async function attachBookMaterial(page, title) {
    * (2026-07-29 실측: Escape 만으로는 하단 검색 바가 남아 발행이 3회 다 실패).
    * 글감 버튼은 토글이다 — 한 번 더 누르는 것이 가장 확실하게 닫는다.
    * 오클릭으로 열렸을 수 있는 라이브러리 패널도 같은 방식(토글)으로 닫는다. */
-  await page.locator('button:has-text("글감")').first().click().catch(() => {});
+  await page.locator('button:has-text("글감")').first().click({ timeout: 2500 }).catch(() => {});
   await sleep(page, 800);
   if (await page.locator('text=현재 문서').first().isVisible().catch(() => false)) {
-    await page.locator('button:has-text("라이브러리")').first().click().catch(() => {});
+    await page.locator('button:has-text("라이브러리")').first().click({ timeout: 2500 }).catch(() => {});
     await sleep(page, 600);
   }
   await page.keyboard.press('Escape').catch(() => {});
   await sleep(page, 500);
 
-  /* 카드를 **글 맨 위**(제목 바로 아래)로 올린다 (2026-07-29 독자 요청).
-   * UI 삽입은 커서 위치라 끝에 붙는데, material 컴포넌트는 왕복이 확인됐으므로
-   * setDocumentData 로 안전하게 자리만 옮길 수 있다. */
+  /* 카드를 **대표 사진 바로 아래**로 올린다 (2026-07-29 독자 요청 — 처음엔 제목
+   * 바로 아래였는데 썸네일 아래가 낫다고 확정). UI 삽입은 커서 위치라 끝에 붙는데,
+   * material 컴포넌트는 왕복이 확인됐으므로 setDocumentData 로 자리만 옮긴다. */
   const ok = await page.evaluate(() => {
     const e = window.__seEd();
     const cur = e.getDocumentData();
     const comps = cur.document.components;
     const at = comps.findIndex((c) => c['@ctype'] === 'material');
     if (at < 0) return false;
+    // align:center 는 2026-07-29 왕복 실측으로 살아남는 것을 확인했다 (unknown 0)
     const [card] = comps.splice(at, 1);
+    card.align = 'center';
+    const firstImage = comps.findIndex((c) => c['@ctype'] === 'image');
     const titleAt = comps.findIndex((c) => c['@ctype'] === 'documentTitle');
-    comps.splice(titleAt + 1, 0, card);
+    comps.splice((firstImage >= 0 ? firstImage : titleAt) + 1, 0, card);
     e.setDocumentData({ ...cur, document: { ...cur.document, components: comps } });
     return true;
   });
@@ -480,7 +483,7 @@ export async function attachBookMaterial(page, title) {
     throw new Error('책 카드가 문서에 들어가지 않았습니다.');
   }
   await sleep(page, 1500);
-  log.ok('책 카드 첨부 완료 (글감 > 책 · 글 맨 위)');
+  log.ok('책 카드 첨부 완료 (글감 > 책 · 대표 사진 아래 · 가운데)');
 }
 
 /** 발행 설정 레이어 열기 */
@@ -760,7 +763,7 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
     } catch (err) {
       log.warn(`책 글감 첨부 실패 (발행은 계속합니다): ${err.message.slice(0, 100)}`);
       // 실패해도 패널은 반드시 닫는다 — 열려 있으면 발행 레이어가 안 열린다
-      await page.locator('button:has-text("글감")').first().click().catch(() => {});
+      await page.locator('button:has-text("글감")').first().click({ timeout: 2500 }).catch(() => {});
       await sleep(page, 800);
       await page.keyboard.press('Escape').catch(() => {});
     }
