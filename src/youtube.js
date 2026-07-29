@@ -14,10 +14,13 @@ import { log } from './log.js';
 
 /** 공식 채널로 볼 만한 신호 */
 const OFFICIAL_HINTS =
-  /official|공식|entertainment|records|엔터테인먼트|studios?|tv$|mbc|kbs|sbs|jtbc|tvn|mnet|스타뉴스|뉴스|newsen|dispatch|weverse|hybe|sm\b|jyp|yg\b|pledis|starship|kakao ?ent/i;
+  /official|공식|entertainment|records|엔터테인먼트|tv$|mbc|kbs|sbs|jtbc|tvn|mnet|스타뉴스|뉴스|newsen|dispatch|weverse|hybe|sm\b|jyp|yg\b|pledis|starship|kakao ?ent/i;
+/* `studios?` 를 넣었다가 뺐다 — 팬 직캠 채널 "studio PARN" 이 공식으로 잡혀
+ * 2019년 공항 직캠이 2026년 기사 글에 실렸다 (2026-07-29 실측).
+ * 방송사·제작사는 위 다른 신호(tv$·방송사명)로 이미 걸린다. */
 
-/** 임베드로 쓰기 곤란한 채널 */
-const AVOID_HINTS = /reaction|리액션|해석|썰|정리해드림|ai |tts|모음zip/i;
+/** 임베드로 쓰기 곤란한 채널·영상 */
+const AVOID_HINTS = /reaction|리액션|해석|썰|정리해드림|ai |tts|모음zip|fancam|직캠|프리뷰|preview/i;
 
 function parseViews(text) {
   const m = String(text || '').match(/([\d.,]+)\s*(만|천|억)?/);
@@ -224,11 +227,30 @@ export async function fillEmbeds(article, cfg) {
     return article.embeds || [];
   }
 
+  /* 기사 글에는 오래된 영상을 넣지 않는다.
+   *
+   * > 2026-07-29 실측 — 채영 출국 기사에 "190816 트와이스 말레이시아 출국 4K
+   * > Fancam"(2019년)이 붙었다. 검색어("채영 쿠알라룸푸르 출국")와는 맞지만
+   * > 7년 전 다른 출국이다. 기사 글의 임베드는 근황이어야 한다.
+   *
+   * 주제·영상 글은 거르지 않는다 — 데뷔곡·과거 방송을 다루는 글이 있다. */
+  const fresh =
+    article.mode === 'news'
+      ? relevant.filter((v) => !/년\s*전/.test(v.published || ''))
+      : relevant;
+
   // 공식 채널을 우선하되, 그 안에서는 주제어가 많이 걸린 영상을 앞세운다.
   // (조회수만 보면 주제와 살짝 빗나간 인기 플레이리스트가 먼저 뽑힌다)
   const scoreTerms = [...nameTerms, ...topicTerms];
-  const officials = relevant.filter((v) => v.official);
-  const chosen = (officials.length ? officials : relevant)
+  const officials = fresh.filter((v) => v.official);
+  /* 공식 채널이 없으면 **넣지 않는다.** 예전에는 relevant 전체로 폴백했는데,
+   * 그 길로 팬 직캠 채널이 들어왔다. 지시문(mediaRules)도 "확실하지 않으면
+   * 빈 배열" 이라고 말한다 — 코드가 지시문과 반대로 움직이면 안 된다. */
+  if (!officials.length) {
+    log.info('공식 채널 영상이 없어 임베드를 넣지 않습니다. (관련 영상은 있었지만 전부 비공식)');
+    return article.embeds || [];
+  }
+  const chosen = officials
     .slice()
     .sort((a, b) => relevanceScore(b, scoreTerms) - relevanceScore(a, scoreTerms))
     .slice(0, want);
