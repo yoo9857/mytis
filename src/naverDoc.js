@@ -691,8 +691,18 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
   /* `naver.keyTakeaways: false` 면 '이 글의 핵심' 을 세우지 않는다.
    * 맨 위 '한 줄 정리'(세로선 인용구)가 이미 결론을 말하는데, 그 아래 요약 목록까지
    * 세우면 **읽기 전에 결론을 두 번** 보게 되고 사진·장소 이야기가 그만큼 밀린다.
-   * 티스토리(html.js)와 JSON-LD 는 그대로 쓰므로 요약 자체를 버리는 것은 아니다. */
-  if (cfg.naver?.keyTakeaways !== false && seo.includeKeyTakeaways !== false && article.keyTakeaways?.length) {
+   * 티스토리(html.js)와 JSON-LD 는 그대로 쓰므로 요약 자체를 버리는 것은 아니다.
+   *
+   * **책 글(에세이)에는 모드로 끈다** — ISBN·정가·쪽수가 목록으로 맨 위에 서면
+   * 에세이가 상품 페이지처럼 열린다 (2026-07-29 독자 피드백: "이건 불필요").
+   * 그 정보는 본문의 서지 표가 담는다. */
+  const isBook = article.mode === 'book';
+  if (
+    !isBook &&
+    cfg.naver?.keyTakeaways !== false &&
+    seo.includeKeyTakeaways !== false &&
+    article.keyTakeaways?.length
+  ) {
     out.push(sectionTitle('이 글의 핵심'));
     out.push(textComponent([spacer(), ...article.keyTakeaways.map((t) => bodyPara(`· ${t}`))]));
   }
@@ -853,8 +863,13 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
       out.push(naverTable(headers, rows, { timeline: isTimeline }));
     }
 
-    // 팁·주의는 포스트잇 인용구로 — '한 줄 정리'(세로선)와 모양이 달라야 구분된다
-    if (sec.callout) out.push(quotation(sec.callout, { layout: QUOTE.tip }));
+    /* 팁·주의는 포스트잇 인용구로 — '한 줄 정리'(세로선)와 모양이 달라야 구분된다.
+     * 책 글의 callout 은 팁이 아니라 **책 속 문장**이다(buildBookPrompt) —
+     * 포스트잇(메모지)이 아니라 기본 인용구(큰따옴표)로 세운다. 참고 글 실측
+     * (bigsky04 어린 왕자): 책 속 문장 인용이 글의 뼈대였다. */
+    if (sec.callout) {
+      out.push(quotation(sec.callout, { layout: isBook ? QUOTE.plain : QUOTE.tip }));
+    }
 
     // 자리를 못 잡은 묶음은 섹션 끝에 (문단 수보다 사진 묶음이 많을 때)
     groups.forEach((g, gi) => {
@@ -901,7 +916,8 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
 
   if (article.conclusion) {
     out.push(horizontalLine());
-    out.push(sectionTitle('마치며'));
+    // 책 글은 프롤로그로 열었으니 에필로그로 닫는다 — 에세이의 짝
+    out.push(sectionTitle(isBook ? '에필로그' : '마치며'));
     out.push(textComponent([spacer(), ...spacedParagraphs(sentences(article.conclusion))]));
   }
 

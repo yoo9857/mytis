@@ -3,8 +3,8 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { DIRS, FILES, stamp, safeSlug } from './paths.js';
 import { log, fmtDuration } from './log.js';
-import { buildArticlePrompt, buildNewsPrompt, buildClipPrompt } from './prompt.js';
-import { MODE, MODE_LABEL, resolveMode, can } from './mode.js';
+import { buildArticlePrompt, buildNewsPrompt, buildClipPrompt, buildBookPrompt } from './prompt.js';
+import { MODE, MODE_LABEL, detectMode, resolveMode, can } from './mode.js';
 
 /** 주제 문자열이 기사 URL 인지 판별한다. */
 export function isUrl(text) {
@@ -328,10 +328,17 @@ function articleCharCount(article) {
  * 결과가 빈약하면 한 번 더 시도한다.
  */
 export async function writeArticle({ topic, cfg }) {
-  const schemaFile = FILES.articleSchema;
+  /* 책 글은 스키마를 따로 쓴다 — **필드 설명이 프롬프트와 싸우면 스키마가 이긴다.**
+   * article.schema.json 의 heading 설명("질문형 또는 명사구")과 callout 설명
+   * ("팁이나 주의사항") 때문에, 프롬프트에서 아무리 금지해도 질문형 소제목과
+   * 조언형 callout 이 계속 나왔다 (2026-07-29 · 6차 시도까지 재발 —
+   * 이 라우팅 자체가 한 번 조용히 빠져서 6차도 옛 스키마로 나갔다).
+   * codex 는 --output-schema 의 description 을 프롬프트보다 강하게 따른다. */
+  const schemaFile = detectMode(topic) === MODE.BOOK ? FILES.bookSchema : FILES.articleSchema;
   if (!fs.existsSync(schemaFile)) {
     throw new Error(`아티클 스키마를 찾을 수 없습니다: ${schemaFile}`);
   }
+  log.debug(`스키마: ${path.basename(schemaFile)}`);
 
   const fromNews = isUrl(topic);
   const maxAttempts = 2;

@@ -34,6 +34,8 @@ export const MODE = {
   NEWS: 'news',
   /** 유튜브 URL → 장면을 따라가는 서사 에세이 */
   CLIP: 'clip',
+  /** "책: 제목 — 저자" → '오늘 뭐 읽지?' 책 추천 (네이버 시리즈) */
+  BOOK: 'book',
 };
 
 /**
@@ -59,6 +61,16 @@ export const CAPABILITIES = {
     socialEmbeds: true,
     allowTables: true,
   },
+  [MODE.BOOK]: {
+    sourcePhoto: false, // 원문 기사가 없다
+    relatedArticlePhotos: false, // 서평 기사의 사진은 표지 스캔이라 저작권이 더 위험하다
+    clipShots: false,
+    /* 북트레일러가 있는 책도 있지만 공식 채널 판별이 어렵고(출판사 채널 이름이
+     * 제각각), 없는 책이 대부분이라 검색 시간만 쓴다. v1 은 끈다. */
+    youtubeEmbeds: false,
+    socialEmbeds: false, // 저자 SNS 는 책 소개와 무관한 근황이 대부분이다
+    allowTables: true, // 서지 정보(출판사·출간일·쪽수)가 표의 정석이다
+  },
   [MODE.CLIP]: {
     sourcePhoto: false,
     /* ⚠️ 반드시 false. 영상 글에서 sources 는 배경조사용 참고 자료라
@@ -81,6 +93,7 @@ export const CAPABILITIES = {
  * `resolveMode` 가 한다 (유튜브 주소인데 자막이 없으면 NEWS 로 내려간다).
  */
 export function detectMode(topic) {
+  if (/^책\s*:/.test(String(topic || '').trim())) return MODE.BOOK;
   if (!looksLikeUrl(topic)) return MODE.TOPIC;
   return parseYouTube(topic) ? MODE.CLIP : MODE.NEWS;
 }
@@ -103,4 +116,5 @@ export const MODE_LABEL = {
   [MODE.TOPIC]: '주제',
   [MODE.NEWS]: '기사',
   [MODE.CLIP]: '영상',
+  [MODE.BOOK]: '책',
 };

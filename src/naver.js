@@ -378,6 +378,58 @@ export async function injectDocument(page, article, { cfg, images, imageMeta, cr
   return after;
 }
 
+/**
+ * 글감 > 책 카드를 본문 끝에 삽입한다 (2026-07-29 실측 — probe-material-book.mjs).
+ *
+ * 왜 UI 로 하나: 카드 컴포넌트(@ctype material, type book)의 link 는
+ * 네이버 서명이 붙은 쇼핑 URL 이고 dataId·sign·thumbnail 도 네이버가 만든다.
+ * setDocumentData 로 지어 넣을 수 없는 값들이다.
+ *
+ * 실측에서 배운 것:
+ *   - 결과 항목은 셀렉터 클릭이 타임아웃 난다(겹침·hidden 매치) →
+ *     제목 글자와 정확히 일치하는 말단 요소를 찾아 **좌표로** 클릭한다.
+ *   - 검색 결과에 원서·타 판본이 섞인다("Invisible Helix" 3종) —
+ *     제목이 정확히 일치하는 첫 카드가 한국어판이다.
+ */
+export async function attachBookMaterial(page, title) {
+  log.step(`글감 첨부: 책 "${title}"`);
+
+  // 커서를 본문 끝으로 — 카드는 커서 자리에 삽입된다
+  await page.locator('.se-text-paragraph').last().click();
+  await sleep(page, 300);
+
+  await page.locator('button:has-text("글감")').first().click();
+  await sleep(page, 1500);
+
+  const input = page.locator('[class*="search"] input, [class*="side"] input[type="text"]').first();
+  await input.fill(title);
+  await input.press('Enter');
+  await sleep(page, 2500);
+
+  const rect = await page.evaluate((q) => {
+    const els = [...document.querySelectorAll('div,strong,span,a,p')].filter(
+      (e) => e.childElementCount === 0 && e.textContent.trim() === q && e.getClientRects().length
+    );
+    const el = els[0];
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  }, title);
+  if (!rect) throw new Error('글감 검색 결과에서 책 카드를 찾지 못했습니다.');
+  await page.mouse.click(rect.x, rect.y);
+  await sleep(page, 2500);
+
+  // 패널을 닫는다 — 열려 있으면 발행 버튼 클릭을 막을 수 있다
+  await page.keyboard.press('Escape').catch(() => {});
+  await sleep(page, 500);
+
+  const ok = await page.evaluate(() =>
+    window.__seEd().getDocumentData().document.components.some((c) => c['@ctype'] === 'material')
+  );
+  if (!ok) throw new Error('책 카드가 문서에 들어가지 않았습니다.');
+  log.ok('책 카드 첨부 완료 (글감 > 책)');
+}
+
 /** 발행 설정 레이어 열기 */
 export async function openPublishLayer(page) {
   log.step('발행 설정 열기');
@@ -640,6 +692,22 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
   }
 
   await injectDocument(page, article, { cfg, images, imageMeta, credits });
+
+  /* 책 글은 글 끝에 **글감 > 책 카드**를 단다 (독자 구조의 ⑧ 책등록).
+   * 카드의 link·sign·dataId 는 네이버 서명값이라 손으로 만들 수 없다 —
+   * 사진·장소와 같은 전략으로 UI 로 삽입하고 문서에서 확인만 한다. */
+  if (article.mode === 'book') {
+    const bookTitle = String(article.topic || article.title || '')
+      .replace(/^책\s*:\s*/, '')
+      .split('—')[0]
+      .replace(/\(.*?\)/g, '')
+      .trim();
+    try {
+      await attachBookMaterial(page, bookTitle);
+    } catch (err) {
+      log.warn(`책 글감 첨부 실패 (발행은 계속합니다): ${err.message.slice(0, 100)}`);
+    }
+  }
 
   await openPublishLayer(page);
   await selectCategory(page, cfg.naver.category, {
