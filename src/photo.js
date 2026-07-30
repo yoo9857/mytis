@@ -372,6 +372,18 @@ async function dropVisualDupes(result) {
       const bad = filled[badAt];
       const keep = filled[keepAt];
       if (!bad || !result[bad.i]) continue;
+      /* 장면 캡처끼리는 기준을 훨씬 조입니다. 임계값 16 은 보도사진 실측
+       * (같은 포스터 12 / 다른 사진 최소 22)인데, 같은 영상의 캡처는 색보정·
+       * 인물·구도가 같아 **다른 장면끼리도 거리가 좁다.**
+       * > 2026-07-30 실측 — 김부장 리캡: 23:40 과 37:08 (14분 떨어진 다른
+       * > 장면, 둘 다 어두운 얼굴 클로즈업)이 거리 16 으로 걸려 삭제됐다.
+       * 진짜 중복(같은 장면을 두 번 캡처)은 인코딩까지 같아 거리가 한 자릿수다. */
+      const bothClips =
+        result[bad.i]?.source === 'clip-shot' && result[keep?.i]?.source === 'clip-shot';
+      if (bothClips && dist > 6) {
+        log.debug(`장면 캡처 유사(거리 ${dist})지만 다른 장면으로 보고 둡니다 (슬롯 ${bad.i}↔${keep?.i})`);
+        continue;
+      }
       log.debug(
         `같은 사진이라 슬롯 ${bad.i} 를 비웁니다 (슬롯 ${keep?.i ?? '?'} 와 거리 ${dist})`
       );
