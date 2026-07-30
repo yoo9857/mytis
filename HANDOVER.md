@@ -1217,6 +1217,23 @@ CC BY 2.0, **2592×3888**)이었다. 배우 본인은 2위(`Hwang Jung-Min.jpg`,
 공식 유튜브 썸네일(1280×720)은 자체 문구가 커서 헤드라인을 얹을 수 없어 대안이 못 된다.
 (§7-1 남은 과제 2번과 같은 문제다)
 
+### 네이버 발행 글은 **같은 주소로 수정할 수 없다** (2026-07-30 실측)
+
+책 글에 사진을 고칠 일이 생겨 편집 진입을 실측했다. **전부 막혀 있다.**
+
+| 시도 | 결과 |
+|---|---|
+| `postwrite?logNo=<번호>` | 블로그 홈으로 튕김 |
+| `postwrite?logNo=...&isUpdate=true` | 블로그 홈으로 튕김 |
+| `PostUpdateForm.naver?blogId=&logNo=` | section.blog 홈으로 튕김 |
+| `blog.naver.com/<id>?Redirect=Update&logNo=` (\_modifyPost 가 만드는 URL) | mainFrame 이 BlogHome 으로 튕김 (헤드리스·헤드풀 동일) |
+
+PC 블로그의 수정 버튼(`._modifyPost`)은 토큰 기반 폼 전송으로 보이며 URL 직행이
+안 된다. → **수정이 필요하면 새로 발행하고 옛 글을 지운다.** 주소가 바뀌므로
+`books.done.txt` 를 갱신하고, 그 글을 가리키는 내부 링크가 있는지 먼저 확인할 것.
+`scripts/edit-naver-post.mjs` 는 이 진입로가 뚫리면 쓸 수 있게 남겨 뒀다
+(문서 비우기 → 재조립 로직은 완성돼 있다).
+
 ---
 
 ## 8. 다음 작업 후보 (우선순위 순)
