@@ -125,6 +125,12 @@ def score_thumbnail(path, front, side):
     if w < 500 or h < 350:
         return {'path': path, 'faces': 0, 'score': -999.0, 'biggest': 0.0}
 
+    # 해상도 계수 — 얼굴 크기만 보면 537×537 같은 작은 사진이 대표로 뽑혀
+    # 목록 카드에서 흐려 보인다 (2026-07-29 실측). 대표 렌더 목표는 1200px 이고
+    # clampToSource 가 원본보다 크게 그리지 않으므로, 짧은 변이 작을수록
+    # 실제 출력도 작아진다. 900px 미만부터 완만하게 깎는다 (537px → ×0.77).
+    res_factor = min(1.0, min(w, h) / 900.0) ** 0.5
+
     gray = cv2.equalizeHist(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
 
     boxes = list(front.detectMultiScale(gray, scaleFactor=1.08, minNeighbors=6,
@@ -134,7 +140,8 @@ def score_thumbnail(path, front, side):
 
     if not boxes:
         # 얼굴이 없는 장면 사진 — 대표로 못 쓸 정도는 아니지만 우선순위는 낮다
-        return {'path': path, 'faces': 0, 'score': 1.0, 'biggest': 0.0}
+        # (해상도 계수는 여기도 적용한다 — 같은 무얼굴끼리는 큰 쪽이 낫다)
+        return {'path': path, 'faces': 0, 'score': round(1.0 * res_factor, 3), 'biggest': 0.0}
 
     best_area, center = 0.0, 0.0
     for (x, y, fw, fh) in boxes:
@@ -147,12 +154,15 @@ def score_thumbnail(path, front, side):
     # 너무 작은 얼굴은 오탐이거나 배경 인물이다. 대표 이미지의 주인공이 될 수 없다.
     # (실측: 1.6% 짜리 오탐이 '단독 얼굴' 가점을 받아 대표로 뽑혔다)
     if best_area < 0.012:
-        return {'path': path, 'faces': len(boxes), 'score': 2.0,
+        return {'path': path, 'faces': len(boxes), 'score': round(2.0 * res_factor, 3),
                 'biggest': round(best_area * 100, 2)}
 
     # 얼굴 하나 = 가점, 둘 이상 = 감점(합성본일 가능성이 높다)
     solo = 25.0 if len(boxes) == 1 else -18.0 * (len(boxes) - 1)
     score = best_area * 900 + solo + center * 12
+    # 해상도 계수는 **양수 점수에만** 곱한다 — 합성본 감점이 약해지면 안 된다.
+    if score > 0:
+        score *= res_factor
     return {'path': path, 'faces': len(boxes), 'score': round(score, 2),
             'biggest': round(best_area * 100, 2)}
 

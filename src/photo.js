@@ -366,9 +366,11 @@ async function dropVisualDupes(result) {
       p.stdin.end();
     });
 
-    for (const [badPath, keepPath, dist] of out?.dupes || []) {
-      const bad = filled.find((x) => path.basename(x.r.file) === path.basename(badPath));
-      const keep = filled.find((x) => path.basename(x.r.file) === path.basename(keepPath));
+    /* 넘긴 순서의 **순번**으로 받는다 — 경로로 받으면 한글이 cp949 로 깨져
+     * 대조가 전부 빗나간다 (찾아 놓고도 안 버렸다. dupe_photos.py 머리말 참고). */
+    for (const [badAt, keepAt, dist] of out?.dupes || []) {
+      const bad = filled[badAt];
+      const keep = filled[keepAt];
       if (!bad || !result[bad.i]) continue;
       log.debug(
         `같은 사진이라 슬롯 ${bad.i} 를 비웁니다 (슬롯 ${keep?.i ?? '?'} 와 거리 ${dist})`
@@ -935,11 +937,22 @@ export async function fetchBackgrounds(article, cfg, slots) {
     try {
       const viaCodex = await fromCodex(article, queries, missing.length, cfg);
       log.debug(`codex 후보 ${viaCodex.length}건`);
+      /* **그 슬롯을 위해 찾은 후보만** 쓴다.
+       *
+       * 예전에는 맞는 후보가 없으면 다른 슬롯의 후보(rest)로 채웠다. 빈 슬롯보다
+       * 낫다는 판단이었지만, 슬롯의 캡션·alt 는 검색어를 전제로 쓰여 있어서
+       * **사진과 글이 어긋난다.**
+       *
+       * > 2026-07-30 실측 — 황정민 글: '뒷모습 커플'(관계 정리) 자리에 그린스크린
+       * > 뉴스 스튜디오가, '라이브 마이크' 자리에 외국인 스트리머 얼굴이 들어갔다.
+       * > 캡션은 여전히 원래 검색어를 설명하고 있었다.
+       *
+       * 틀린 사진이 실리는 쪽이 비어 있는 쪽보다 나쁘다 (§ 설계 원칙). */
       for (const slot of missing) {
-        const preferred = viaCodex.filter((p) => p.forSlot === slot);
-        const rest = viaCodex.filter((p) => p.forSlot !== slot);
-        await tryFill(slot, [...preferred, ...rest]);
+        await tryFill(slot, viaCodex.filter((p) => p.forSlot === slot));
       }
+      const dropped = viaCodex.filter((p) => !missing.includes(p.forSlot)).length;
+      if (dropped) log.debug(`슬롯이 다른 codex 후보 ${dropped}건은 쓰지 않습니다 (캡션과 어긋남).`);
     } catch (err) {
       log.warn(`codex 사진 검색 실패: ${err.message}`);
     }

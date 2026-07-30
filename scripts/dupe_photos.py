@@ -21,7 +21,17 @@
     처음에 10 으로 뒀더니 같은 포스터를 놓쳤다. 너무 올리면 다른 사진을 버린다.
 
 사용: 파일 경로를 stdin 으로 한 줄에 하나씩 넘긴다 (argv 는 한글 경로가 깨진다).
-출력: {"dupes": [["버릴경로", "남길경로", 거리], ...]}
+출력: {"dupes": [[버릴줄번호, 남길줄번호, 거리], ...]}   ← 0 부터 세는 입력 순번
+
+    **경로가 아니라 순번을 돌려준다.** 예전에는 경로를 그대로 실어 보냈는데,
+    Windows 기본 인코딩(cp949)으로 찍혀 한글 경로가 깨졌다. 받는 쪽(photo.js)은
+    파일명으로 슬롯을 찾으므로 대조가 전부 빗나가, 중복을 **찾아 놓고도 버리지
+    않았다.**
+
+    > 2026-07-30 실측 — 나솔 32기 글: bg1↔bg2 를 거리 9 로 정확히 찾아냈는데
+    > 같은 컷이 본문 1번·2번에 그대로 실렸다. 경고도 안 남았다(조용한 실패).
+
+    순번은 인코딩을 타지 않는다. 그래서 순번으로 말한다.
 """
 import sys
 import json
@@ -65,10 +75,10 @@ def pixels(path):
 def main():
     paths = [ln.strip() for ln in sys.stdin.buffer.read().decode('utf-8', 'replace').splitlines() if ln.strip()]
     items = []
-    for p in paths:
+    for i, p in enumerate(paths):
         h = dhash(p)
         if h is not None:
-            items.append({'path': p, 'hash': h, 'px': pixels(p)})
+            items.append({'i': i, 'hash': h, 'px': pixels(p)})
 
     # 큰 사진을 먼저 본다 → 같은 사진이면 작거나 잘린 쪽이 버려진다.
     # (실측: 같은 포스터가 640x360 잘린 것과 1000x700 온전한 것으로 들어왔는데
@@ -80,7 +90,7 @@ def main():
     for it in items:
         hit = next((k for k in kept if distance(it['hash'], k['hash']) <= THRESHOLD), None)
         if hit:
-            dupes.append([it['path'], hit['path'], distance(it['hash'], hit['hash'])])
+            dupes.append([it['i'], hit['i'], distance(it['hash'], hit['hash'])])
         else:
             kept.append(it)
 
