@@ -467,6 +467,35 @@ export async function openPublishLayer(page) {
 }
 
 /**
+ * 발행 레이어의 대표 이미지 박스(.box_thumb)가 채워졌는지 확인한다.
+ *
+ * ⚠️ 티스토리 신 에디터에는 **대표 이미지를 고르는 UI 가 없다** (2026-07-30 실측
+ * 4단계 — probe-thumb*.mjs). 발행 레이어의 box_thumb 는 본문 **첫 번째 이미지**를
+ * 자동 표시할 뿐이고(클릭 무반응, 삭제만 가능), 에디터의 이미지 툴바에도
+ * '대표 지정' 버튼이 없다(편집·크기·정렬·링크·대체텍스트뿐).
+ *
+ * 그래서 대표를 정하는 유일한 방법은 **원하는 이미지를 본문 맨 앞에 두는 것**이고,
+ * 파이프라인은 이미 그렇게 한다({{IMAGE_0}} = 대표). 여기서는 그 결과가 실제로
+ * 반영됐는지만 확인한다 — 비어 있으면 목록·공유 카드에 썸네일이 안 뜬다.
+ */
+export async function checkThumbBox(page) {
+  try {
+    const bg = await page
+      .locator('.box_thumb .thumb_g')
+      .first()
+      .evaluate((el) => el.style.backgroundImage || '', { timeout: 3000 });
+    if (bg && bg.includes('url')) {
+      log.debug('대표 이미지 확인: 본문 첫 이미지가 자동 지정됐습니다.');
+      return true;
+    }
+    log.warn('대표 이미지가 비어 있습니다 — 본문에 이미지가 없으면 목록 카드에 썸네일이 안 뜹니다.');
+    return false;
+  } catch {
+    return null; // 박스를 못 찾은 것은 마크업 변경일 수 있다 — 발행은 계속한다
+  }
+}
+
+/**
  * 카테고리 선택.
  *
  * 티스토리 카테고리 목록은 TinyMCE 드롭다운(.mce-menu-item)으로 뜨고,
@@ -702,6 +731,47 @@ export async function clickPublish(page, urls) {
 }
 
 /**
+ * 발행된 글을 다시 열어 **실제로 실렸는지** 확인한다 (HANDOVER §8-4).
+ *
+ * 함정 ③(위지윅 0자)이 재발하면 본문 없는 빈 글이 그대로 나간다. `setBody` 의
+ * 검증이 1차 방어지만, 그 뒤 어딘가에서 내용이 사라지는 사고는 발행 후에만
+ * 보인다. 발행을 되돌릴 수는 없으므로 **경고만 하고 결과에 수치를 남긴다** —
+ * 로그에서 `발행 검증` 줄이 WARN 이면 글을 열어 봐야 한다.
+ */
+export async function verifyPublished(page, postUrl, { minChars = 1000, imageCount = 0 } = {}) {
+  try {
+    await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await sleep(page, 1500);
+    const info = await page.evaluate(() => {
+      const scope =
+        document.querySelector('.tt_article_useless_p_margin') || // 신 에디터 본문 컨테이너
+        document.querySelector('.entry-content, .article_view, #article-view, article') ||
+        document.body;
+      return {
+        chars: (scope?.innerText || '').replace(/\s+/g, ' ').trim().length,
+        images: scope ? scope.querySelectorAll('img').length : 0,
+      };
+    });
+
+    const problems = [];
+    if (info.chars < minChars) problems.push(`본문 ${info.chars}자 (기준 ${minChars}자)`);
+    if (imageCount && info.images < imageCount) problems.push(`이미지 ${info.images}/${imageCount}장`);
+
+    if (problems.length) {
+      await shot(page, 'verify-failed');
+      log.warn(`발행 검증 실패: ${problems.join(' · ')} — 글을 열어 확인하세요: ${postUrl}`);
+    } else {
+      log.ok(`발행 검증: 본문 ${info.chars.toLocaleString()}자 · 이미지 ${info.images}장`);
+    }
+    return { ...info, ok: !problems.length };
+  } catch (err) {
+    // 검증 실패가 발행 성공을 뒤집으면 안 된다 — 스킨·네트워크 문제일 수 있다
+    log.warn(`발행 검증을 건너뜁니다 (${err.message.split('\n')[0]})`);
+    return { ok: null };
+  }
+}
+
+/**
  * 발행 직전에 글 주소를 확정한다.
  * 티스토리 글 주소는 /entry/{슬러그} 형식이고, 그 슬러그가 곧 #urlPublish 의 값이다.
  * 발행 후에 목록을 뒤지는 것보다 이 값을 읽는 편이 정확하다.
@@ -764,6 +834,7 @@ export async function publishPost(
 
   // 5) 발행 레이어를 열고, 레이어 안에 있는 설정만 다룬다 (글 주소·공개 범위·예약)
   await openPublishLayer(page);
+  await checkThumbBox(page); // 대표 이미지는 본문 첫 이미지 자동 지정뿐 — 채워졌는지만 확인
   await setPostUrl(page, urlSlug);
   await setVisibility(page, cfg.blog.visibility);
   if (cfg.blog.publishMode === 'reserve') {
@@ -778,6 +849,11 @@ export async function publishPost(
   // 6) 발행
   const result = await clickPublish(page, urls);
   if (result.ok && postUrl) result.postUrl = postUrl;
+
+  // 7) 발행 후 검증 — 빈 글이 조용히 나가는 것을 여기서 잡는다 (함정 ③ 재발 방어)
+  if (result.ok && postUrl) {
+    result.verify = await verifyPublished(page, postUrl, { imageCount: macros.length });
+  }
   return result;
 }
 
