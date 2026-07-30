@@ -384,6 +384,69 @@ function profileMatches(profileName, nameKo, nameEn) {
 /* ────────────────────────── 인스타그램 ────────────────────────── */
 
 /**
+ * 프로필 그리드에서 최신 게시물 코드를 긁는다 — codex 가 계정은 짚었는데
+ * 게시물 주소를 못 줬을 때의 폴백 (2026-07-30 하트시그널5 실측으로 확립).
+ *
+ * 왜 되는가: 익명 HTTP 는 전부 막혔지만(oEmbed 429 · og:title 은 로그인 월),
+ * **실제 Chrome 으로 프로필을 열면** 그리드의 /p/·/reel/ 링크가 DOM 에 있다.
+ * 그리드 순서 = 최신순이므로 날짜를 몰라도 "이 계정의 지금" 이라는 사실이
+ * 구조적으로 보장된다 — codex 날짜가 없을 때 검색엔진 폴백(날짜도 순서도
+ * 보장 없음)보다 강하다.
+ *
+ * 함정: **고정(pinned) 게시물이 그리드 맨 앞에 온다.** 실측(yykkye): 첫 링크가
+ * 2022년 고정글(Cl…), 나머지는 전부 최신(Db…). 숏코드의 첫 글자는 대략
+ * 시대순으로 증가하므로, 다수 프리픽스와 크게 어긋나는 맨 앞 항목만 걷어낸다.
+ * (숏코드로 **정확한 날짜**를 계산하는 것은 여전히 금지 — 오차가 제각각이다.
+ *  여기서는 '한 시대 이상 벌어진 고정글' 을 골라내는 데만 쓴다)
+ *
+ * 반환한 코드는 반드시 verifyInstagramPost() 를 다시 거친다 — 여기서는
+ * 후보만 만들고, 존재·작성자·사진 검증은 기존 검증기가 한다.
+ */
+export async function scrapeProfilePosts(username, { limit = 3, timeoutMs = 25_000 } = {}) {
+  const clean = String(username || '').replace(/^@/, '').trim();
+  if (!/^[A-Za-z0-9._]{2,30}$/.test(clean)) return [];
+  let browser = null;
+  try {
+    const { chromium } = await import('playwright');
+    browser = await chromium.launch({ channel: 'chrome', headless: true });
+    const page = await browser.newPage({ locale: 'ko-KR' });
+    page.setDefaultTimeout(timeoutMs);
+    await page.goto(`https://www.instagram.com/${clean}/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(5000);
+    const codes = await page.evaluate(() =>
+      [...new Set(
+        [...document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')]
+          .map((a) => (a.href.match(/\/(?:p|reel)\/([A-Za-z0-9_-]{5,20})/) || [])[1])
+          .filter(Boolean)
+      )]
+    );
+    if (!codes.length) {
+      log.debug(`인스타 @${clean}: 프로필에서 게시물 링크를 찾지 못했습니다 (비공개이거나 로그인 월).`);
+      return [];
+    }
+    // 고정글 걷어내기 — 첫 항목의 시대 프리픽스가 다수와 다르면 버린다
+    let list = codes;
+    if (codes.length >= 3) {
+      const mode = [...codes.slice(1)].sort(
+        (x, y) =>
+          codes.filter((c) => c[0] === y[0]).length - codes.filter((c) => c[0] === x[0]).length
+      )[0][0];
+      if (codes[0][0] !== mode) {
+        log.debug(`인스타 @${clean}: 맨 앞 게시물(${codes[0]})은 고정글로 보여 건너뜁니다.`);
+        list = codes.slice(1);
+      }
+    }
+    log.debug(`인스타 @${clean}: 프로필에서 게시물 ${list.length}건 확보 (최신순).`);
+    return list.slice(0, limit);
+  } catch (err) {
+    log.debug(`인스타 @${clean} 프로필 수집 실패: ${String(err.message).split('\n')[0]}`);
+    return [];
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
+/**
  * 인스타 게시물이 실제로 존재하는지 `/embed/` 로 확인하고 작성자를 읽는다.
  *
  * 판정 기준 두 가지를 **모두** 봐야 한다 (2026-07-28 실측).
@@ -694,13 +757,22 @@ export async function fillSocialEmbeds(article, cfg) {
         dated.push({ id: r.parsed.id, date: r.date });
       }
 
-      // 검색엔진 보완은 날짜를 알 수 없으므로 codex 가 아무것도 못 줬을 때만 쓴다
-      const codes = dated.length
-        ? dated
-        : (await findInstagramPosts(p.nameKo, p.nameEn, { username: expected })).map((id) => ({
-            id,
-            date: '',
-          }));
+      /* codex 가 날짜 있는 게시물을 못 줬을 때의 폴백 두 단계:
+       * ① 계정을 짚어 줬으면 **프로필 그리드를 직접 긁는다** — 그리드 순서가
+       *    최신순이라 날짜 없이도 근황임이 보장된다 (scrapeProfilePosts 주석).
+       *    (2026-07-30 실측 — 하트시그널5: codex 가 7명 전부 계정만 찾고
+       *     게시물 0건이었는데, 프로필 수집으로 7명 전부 임베드에 성공했다)
+       * ② 계정조차 없으면 검색엔진 보완 (날짜도 순서도 보장 없음 — 최후) */
+      let codes = dated;
+      if (!codes.length && expected) {
+        codes = (await scrapeProfilePosts(expected)).map((id) => ({ id, date: '' }));
+      }
+      if (!codes.length) {
+        codes = (await findInstagramPosts(p.nameKo, p.nameEn, { username: expected })).map((id) => ({
+          id,
+          date: '',
+        }));
+      }
 
       if (!codes.length) {
         log.debug(`인스타: ${p.nameKo} 의 최근 게시물을 확인하지 못했습니다.`);
