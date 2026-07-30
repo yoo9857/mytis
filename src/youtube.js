@@ -22,6 +22,30 @@ const OFFICIAL_HINTS =
 /** 임베드로 쓰기 곤란한 채널·영상 */
 const AVOID_HINTS = /reaction|리액션|해석|썰|정리해드림|ai |tts|모음zip|fancam|직캠|프리뷰|preview/i;
 
+/**
+ * 가십·폭로 채널 (**채널명으로만** 판정한다).
+ *
+ * `verified` 를 공식 신호로 쓰는 것이 구멍이었다. 유튜브 체크마크는
+ * **"본인 채널임"** 을 뜻하고 "믿을 만한 출처" 를 뜻하지 않는다. 구독자가 많은
+ * 가십 채널은 전부 verified 다.
+ *
+ * > 2026-07-30 실측 — 황정민 스토킹 사건 글에 "연예 뒤통령이진호" 채널의
+ * > "「스토킹 당했다는데..」 황정민 사생활 통화 녹취" 가 **공식으로 분류돼**
+ * > 임베드 후보에 올랐다. AVOID_HINTS 에도 걸리지 않았다.
+ *
+ * 제목으로 판정하면 안 된다 — 같은 사안을 다룬 JTBC 뉴스 제목에도
+ * "사생활 폭로" 가 들어 있다. 언론사 보도까지 함께 날아간다.
+ */
+const GOSSIP_CHANNEL = /뒤통령|렉카|가로세로|이슈\s?왕|연예\s?부장|폭로|사이다|스캔들/i;
+
+/**
+ * 사적 대화·녹취를 공개하는 영상 (**제목으로** 판정한다).
+ *
+ * 채널이 어디든 남의 통화 녹음·카톡을 퍼뜨리는 영상은 임베드하지 않는다.
+ * 우리 글이 그 확산의 한 칸이 된다. 이건 저작권이 아니라 규칙 문제다.
+ */
+const PRIVATE_MATERIAL = /녹취|통화\s?내용|통화\s?녹음|녹음\s?파일|카톡\s?공개|dm\s?공개|음성\s?공개|문자\s?공개/i;
+
 function parseViews(text) {
   const m = String(text || '').match(/([\d.,]+)\s*(만|천|억)?/);
   if (!m) return 0;
@@ -92,12 +116,17 @@ export async function searchYouTube(queries, { limit = 6, timeoutMs = 45_000 } =
           if (!/^[A-Za-z0-9_-]{11}$/.test(it.videoId || '')) continue;
           if (seen.has(it.videoId)) continue;
           if (AVOID_HINTS.test(it.channel) || AVOID_HINTS.test(it.title)) continue;
+          if (GOSSIP_CHANNEL.test(it.channel || '')) continue;
+          if (PRIVATE_MATERIAL.test(it.title || '')) continue;
           seen.add(it.videoId);
           found.push({
             ...it,
             query: q,
             viewCount: parseViews(it.views),
-            official: it.verified || OFFICIAL_HINTS.test(it.channel),
+            /* verified 는 **보조 신호**다 — 채널명에 매체·공식 표시가 있을 때만
+             * 함께 인정한다. 체크마크만으로 공식으로 보면 가십 채널이 들어온다
+             * (GOSSIP_CHANNEL 주석의 실측 참고). */
+            official: OFFICIAL_HINTS.test(it.channel || ''),
           });
         }
         log.debug(`유튜브 "${q}" → ${items.length}건`);
