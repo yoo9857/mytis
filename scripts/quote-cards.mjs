@@ -40,23 +40,41 @@ const imgData = authorImg
   ? `data:image/jpeg;base64,${fs.readFileSync(path.join(dir, authorImg)).toString('base64')}`
   : '';
 
-/* 공통 팔레트 — 따뜻한 크림·피치. 종이 질감은 아주 옅은 노이즈 그라디언트로 흉내 낸다. */
+/* 팔레트 — 기본은 따뜻한 크림·피치.
+ *
+ * `--palette "#바탕1,#바탕2,#글자,#보조,#포인트"` 로 바꿀 수 있다.
+ * 글귀 카드는 **책 표지 색을 따라가는 것**이 낫다는 독자 피드백(2026-07-30) —
+ * 표지가 딥블루인 책에 크림색 카드는 남의 옷이다. 표지 지배색은
+ * `cv2.kmeans` 로 뽑아 넘긴다 (안녕, 피터팬 = #065bab 96%).
+ */
+const PAL = (() => {
+  const raw = opt('palette');
+  const [bg1, bg2, ink, sub, accent] = raw ? raw.split(',').map((s) => s.trim()) : [];
+  return {
+    bg1: bg1 || '#fdf6ec',
+    bg2: bg2 || '#f2ddc4',
+    ink: ink || '#4a3f33',
+    sub: sub || '#a58a66',
+    accent: accent || '#c47f4a',
+  };
+})();
+
 const BASE = `
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     .card {
       width:1080px; height:1350px; position:relative; overflow:hidden;
       background:
-        radial-gradient(120% 90% at 20% 0%, #fdf6ec 0%, #f7ead9 45%, #f2ddc4 100%);
-      font-family:'Malgun Gothic', sans-serif; color:#4a3f33;
+        radial-gradient(120% 90% at 20% 0%, ${PAL.bg1} 0%, ${PAL.bg2} 100%);
+      font-family:'Malgun Gothic', sans-serif; color:${PAL.ink};
     }
     .serif { font-family:Batang, 'Nanum Myeongjo', serif; }
     .grain { position:absolute; inset:0; opacity:.5;
       background-image:radial-gradient(#00000008 1px, transparent 1px); background-size:5px 5px; }
-    .edge { position:absolute; inset:36px; border:1px solid #c9b28f66; border-radius:6px; }
+    .edge { position:absolute; inset:36px; border:1px solid ${PAL.sub}55; border-radius:6px; }
     .bottom { position:absolute; left:0; right:0; bottom:64px; text-align:center; }
-    .bookline { width:56px; height:3px; background:#c47f4a; margin:0 auto 18px; border-radius:2px; }
-    .small { font-size:24px; letter-spacing:.35em; color:#a58a66; }
+    .bookline { width:56px; height:3px; background:${PAL.accent}; margin:0 auto 18px; border-radius:2px; }
+    .small { font-size:24px; letter-spacing:.35em; color:${PAL.sub}; }
   </style>`;
 
 const authorCard = `${BASE}
@@ -68,11 +86,12 @@ const authorCard = `${BASE}
       <div style="width:100%; height:100%; background:url('${imgData}') center 20%/cover no-repeat;
                   filter:sepia(.12) saturate(.92) contrast(.98);"></div>
       <div class="serif" style="position:absolute; left:0; right:0; bottom:34px; text-align:center;
-                  font-size:34px; color:#6b5843; letter-spacing:.08em;">${esc(author)}</div>
+                  font-size:34px; color:#4a4a4a; letter-spacing:.08em;">${esc(author)}</div>
+      <!-- 폴라로이드 안 이름은 흰 종이 위 — 팔레트 잉크(밝은 색일 수 있음)를 쓰면 안 보인다 -->
     </div>
     <div class="bottom">
       <div class="bookline"></div>
-      <div class="serif" style="font-size:40px; margin-bottom:14px; color:#5a4936;">${esc(life)}</div>
+      <div class="serif" style="font-size:40px; margin-bottom:14px; color:${PAL.ink};">${esc(life)}</div>
       <div class="small">${esc(role)}</div>
     </div>
   </div>`;
@@ -82,8 +101,8 @@ const quoteCard = `${BASE}
     <div class="grain"></div><div class="edge"></div>
     <div style="position:absolute; inset:120px 110px 190px; display:flex; flex-direction:column;
                 justify-content:center; align-items:center;">
-      <div class="serif" style="font-size:190px; color:#c47f4a55; line-height:.6; margin-bottom:48px;">&ldquo;</div>
-      <div class="serif" style="font-size:54px; line-height:2.0; color:#4a3f33; word-break:keep-all; text-align:center;">
+      <div class="serif" style="font-size:190px; color:${PAL.accent}66; line-height:.6; margin-bottom:48px;">&ldquo;</div>
+      <div class="serif" style="font-size:54px; line-height:2.0; color:${PAL.ink}; word-break:keep-all; text-align:center;">
         ${esc(quote)}
       </div>
     </div>

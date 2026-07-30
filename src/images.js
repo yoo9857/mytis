@@ -517,15 +517,22 @@ export async function renderImages(article, cfg) {
               }));
       usedLayouts.push(layout);
 
+      /* 글자 없는 대표 — 손으로 고른 사진(글귀 카드·표지 등)에 문구가 이미
+       * 들어 있을 때 쓴다. headline 을 비워 두면 아래 폴백이 글 제목을 얹어
+       * **글자끼리 싸운다** (2026-07-30 실측: 글귀 카드 한가운데에 글 제목이
+       * 겹쳐 찍혔다). brief.noText: true 로 명시해야 한다 — 실수로 비운
+       * headline 은 여전히 제목 폴백이 받아 준다. */
+      const noText = brief.noText === true;
+
       const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
       await page.setContent(
         renderCard({
-          headline: brief.headline || article.title,
-          subline: brief.subline || '',
-          eyebrow: brief.eyebrow || '',
-          statValue,
-          statLabel,
-          brand: cfg.images.brand,
+          headline: noText ? '' : brief.headline || article.title,
+          subline: noText ? '' : brief.subline || '',
+          eyebrow: noText ? '' : brief.eyebrow || '',
+          statValue: noText ? '' : statValue,
+          statLabel: noText ? '' : statLabel,
+          brand: noText ? '' : cfg.images.brand,
           palette,
           width,
           height,
