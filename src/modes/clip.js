@@ -53,6 +53,21 @@ export default {
   voices: VOICES,
   voicePin: 'clipVoice',
   sections: ['자유'],             // 이야기의 마디로 나눈다
+  /** 출력 규격 — 실측(2026-08-01, 발행 1편). 사진이 가장 촘촘한 모드다. */
+  contract: {
+    chars: [2650, 3300],          // 실측 2738
+    sections: [6, 8],
+    photos: [12, 20],             // 실측 18 — 장면 캡처라 많이 쓸 수 있다
+    photoDensity: [130, 230],     // 실측 152. 다섯 모드 중 참고 글(249)에 가장 가깝다.
+    captions: 'fact-only',    // §7-6 — 근거 없는 캡션 19개를 지운 자리
+    endingMax: 0.6,
+    headingWorkTitle: null,       // 프로그램명 반복은 이 모드의 관심사가 아니다
+    tables: [0, 1],
+    embeds: [1, 3],
+    tags: [8, 12],
+    faq: [5, 5],
+    noSpoilerIn: [],
+  },
   platforms: ['tistory', 'naver'],
   conflicts: { headingStyle: '이야기의 마디 (검색 질문형 금지)' },
 };

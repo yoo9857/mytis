@@ -682,15 +682,12 @@ export async function writeArticle({ topic, cfg }) {
        * 10분 30초를 쓰고 93%). 그런데 `~습니다` → `~죠` 는 뜻이 바뀌지 않는
        * 기계적 변환이라 사람이 할 이유가 없다 — 지난 글은 손으로 20곳을 고쳤다.
        * 안전한 형태만 바꾸고 큰따옴표 안은 건드리지 않는다 (endings.js 머리말). */
-      const { varyEndings } = await import('./endings.js');
-      const varied = varyEndings(article, { max: 0.6 });
-      if (varied.changed) {
-        log.info(
-          `문장 끝맺음 ${varied.changed}곳을 "~죠" 로 바꿨습니다 — ` +
-            `${Math.round(varied.before.ratio * 100)}% → ${Math.round(varied.after.ratio * 100)}% ` +
-            `("…${varied.before.top}." 비중)`
-        );
-      }
+      const { autoFix, checkContract, formatViolations } = await import('./contract.js');
+      for (const line of autoFix(article, mode)) log.info(`자동 교정 — ${line}`);
+      /* 교정 뒤에도 남은 것을 여기서 보여 준다. 발행 게이트(cli.js)가 다시 대조하지만,
+       * 초안 단계에서 알아야 사람이 손볼 수 있다. */
+      const { violations } = checkContract(article, mode);
+      for (const line of formatViolations(violations)) log.warn(`규격 — ${line}`);
 
       article.charCount = chars;
       log.ok(

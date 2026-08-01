@@ -649,6 +649,11 @@ export async function runTopic(topic, cfg, { publish: doPublish = true, platform
     return { ...gen, published: false };
   }
 
+  /* 모드 출력 규격 관문 — `npm run post` · `npm run queue` 가 지나는 길이다.
+   * `npm run publish` 쪽(cli.js)과 **같은 함수**를 부른다. 두 벌로 두면 갈라진다. */
+  const { assertContract } = await import('./contract.js');
+  assertContract(gen.article, { force: cfg.forceContract === true, log });
+
   const targets = platforms.filter((p) => PUBLISHERS[p]);
   if (!targets.length) throw new Error(`발행할 플랫폼이 없습니다: ${platforms.join(', ')}`);
 

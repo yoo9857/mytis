@@ -20,7 +20,9 @@
     "postinstall": "playwright install chromium",
     "post:naver": "node src/cli.js post --naver",
     "post:both": "node src/cli.js post --both",
-    "book": "node src/cli.js book"
+    "book": "node src/cli.js book",
+    "gate": "node scripts/gate.mjs",
+    "repreview": "node scripts/repreview.mjs"
   },
   "dependencies": {
     "playwright": "^1.49.0"

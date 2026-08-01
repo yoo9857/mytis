@@ -52,6 +52,7 @@ const rhythm = Object.keys(per)
   .map((k) => `${k}절:${per[k]}`)
   .join(' · ');
 
-const n = Object.keys(images.withLocalSrc || {}).length;
+/* `withLocalSrc` 는 `{thumbnail, body[]}` 다 — 키를 세면 늘 2가 나온다(실제로 그랬다). */
+const n = (images.withLocalSrc.thumbnail ? 1 : 0) + (images.withLocalSrc.body?.length || 0);
 log.ok(`이미지 ${n}장 · 배치 ${rhythm || '없음'}`);
 log.ok(`미리보기: ${out}`);

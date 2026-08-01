@@ -15,5 +15,20 @@ export default {
   rules: ['engagementRules', 'readabilityRules', 'calloutRules', 'legalDisputeRules', 'imageBriefRules'],
   voices: [], voicePin: '',
   sections: ['자유'],
+  /** 출력 규격 — 실측(2026-08-01, 발행 2편) */
+  contract: {
+    chars: [2800, 3600],          // 실측 2837 · 3356
+    sections: [6, 8],             // 실측 6 · 7 — 사안 크기에 따라 달라진다
+    photos: [5, 9],               // 실측 5 · 6
+    photoDensity: [300, 500],     // 실측 473 · 559 — 다섯 모드 중 가장 헐렁하다
+    captions: 'free',
+    endingMax: 0.6,
+    headingWorkTitle: null,
+    tables: [0, 2],
+    embeds: [0, 2],
+    tags: [8, 12],
+    faq: [5, 5],
+    noSpoilerIn: [],
+  },
   platforms: ['tistory', 'naver'],
 };

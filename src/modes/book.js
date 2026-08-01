@@ -53,6 +53,21 @@ export default {
   voices: VOICES,
   voicePin: 'bookVoice',
   sections: ['프롤로그', '목차', '줄거리', '생각', '기본 정보', '결말', '포인트'],
+  /** 출력 규격 — 실측(2026-08-01, 발행 3편)에서 뽑았다. src/contract.js 가 대조한다. */
+  contract: {
+    chars: [2850, 3400],          // 실측 2914 · 2914 · 3021
+    sections: [7, 7],             // 프롤로그·목차·줄거리·생각·기본 정보·결말·포인트
+    photos: [6, 9],               // 실측 6 · 7 · 7 — 독자 피드백 "시각 자료를 아끼지 않는다"
+    photoDensity: [300, 450],     // 실측 416~486. 참고 글 249 에는 못 미친다 — 늘릴 여지.
+    captions: 'free',             // 표지·저자·행사 사진은 무엇인지 밝히는 편이 낫다
+    endingMax: 0.6,
+    headingWorkTitle: [0, 0],     // 책 모드는 소제목에 제목 반복 **금지** (영화와 정반대)
+    tables: [1, 1],               // 서지 정보 표 하나
+    embeds: [0, 0],
+    tags: [8, 12],
+    faq: [5, 5],
+    noSpoilerIn: ['directAnswer', 'keyTakeaways'],
+  },
   platforms: ['naver'],
   /** 영화 모드와 **정반대**인 규칙 — 통합하면 안 된다 */
   conflicts: {

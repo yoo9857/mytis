@@ -14,5 +14,20 @@ export default {
   rules: ['engagementRules', 'readabilityRules', 'imageBriefRules'],
   voices: [], voicePin: '',
   sections: ['자유'], // 주제에 따라 codex 가 정한다
+  /** 출력 규격 — 오늘 발행 이력이 없어 기사 모드에 맞춰 둔다. 실측이 쌓이면 조인다. */
+  contract: {
+    chars: [2800, 4000],
+    sections: [6, 8],
+    photos: [5, 9],
+    photoDensity: [300, 500],
+    captions: 'free',
+    endingMax: 0.6,
+    headingWorkTitle: null,
+    tables: [0, 2],
+    embeds: [0, 2],
+    tags: [8, 12],
+    faq: [5, 5],
+    noSpoilerIn: [],
+  },
   platforms: ['tistory', 'naver'],
 };

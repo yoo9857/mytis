@@ -73,6 +73,11 @@ const HELP = `
   --naver           --platform naver 와 같음
   --both            --platform both 와 같음
   --verbose         상세 로그 (codex 진행 상황 포함)
+  --force           모드 출력 규격 위반을 무시하고 발행 (권하지 않음 — 규격을 고치세요)
+
+  규격 검사
+  npm run gate -- out/xxx.json         모드 출력 규격 대조 (발행하지 않음)
+  npm run gate -- out/xxx.json --fix   기계적으로 고칠 수 있는 것만 고쳐 저장
 `;
 
 function parseArgs(argv) {
@@ -97,6 +102,7 @@ function parseArgs(argv) {
     /* 스포일러는 **작품마다 답이 다르다** — 개봉 직후 신작은 스포 X 가 맞고, 구작은
      * "황해 결말" 처럼 결말 검색 수요가 커서 스포 O 가 맞다. config 전역 토글만
      * 있으면 매번 뒤집고 되돌리는 것을 잊는다. */
+    else if (a === '--force') flags.force = true;
     else if (a === '--spoiler') flags.spoiler = true;
     else if (a === '--no-spoiler') flags.spoiler = false;
     else if (a === '--naver') flags.platform = 'naver';
@@ -137,6 +143,8 @@ function applyFlags(cfg, flags) {
   if (flags.spoiler !== undefined) {
     cfg.movie = { ...(cfg.movie || {}), spoiler: flags.spoiler };
   }
+  /* runTopic 은 flags 를 못 본다 — 규격 무시 여부를 cfg 로 실어 보낸다. */
+  if (flags.force) cfg.forceContract = true;
   if (flags.verbose) {
     cfg.verbose = true;
     log.setVerbose(true);
@@ -317,6 +325,17 @@ async function cmdPublishFile(cfg, file, flags = {}) {
   } catch {
     /* lint 실패로 발행을 막지 않는다 */
   }
+
+  /* 모드 **출력 규격** 대조 — 형식이 글마다 흔들리는 것을 여기서 끊는다.
+   *
+   * 산문 규칙(캡션·사진 수·밀도·소제목)은 어겨져도 아무 소리가 안 났고, 그래서 매번
+   * 사람에게 확인을 받았다. 확인받는 순간 그 글만의 형식이 된다 (사용자 지적 2026-08-01).
+   * 규격은 각 모드 파일의 `contract` 가 갖고 있고 값은 실측에서 뽑았다.
+   *
+   * `막음` 항목이 있으면 발행하지 않는다. 규격이 틀렸다고 판단하면 `--force` 로 넘기고,
+   * **그때는 규격을 고치는 것이 맞다** — 넘기는 습관이 들면 게이트가 없는 것과 같다. */
+  const { assertContract } = await import('./contract.js');
+  assertContract(article, { force: flags.force === true, log });
 
   /* 영상 글의 **큰따옴표 인용을 자막과 기계 대조**한다.
    *

@@ -155,6 +155,35 @@ export function lintModes({ buildPrompt, cfg, articleKeys }) {
     }
 
     if (!m.platforms?.length) problems.push(`${m.label}: platforms 선언이 없습니다`);
+
+    /* 출력 규격이 온전한지 — 범위가 뒤집혀 있으면 **아무 글도 통과하지 못한다.**
+     * 규격은 사람이 손으로 적는 값이라 뒤집힌 채로 조용히 굳기 쉽다. */
+    const ct = m.contract;
+    if (!ct) {
+      problems.push(`${m.label}: contract 선언이 없습니다 (src/contract.js 가 기본값으로 뭅니다)`);
+    } else {
+      /* 숫자 범위인 항목만 본다. `noSpoilerIn` 은 **필드 이름 배열**이라 여기 넣으면
+       * 배열이라는 이유로 오탐이 난다 (처음 판이 다섯 모드 전부를 잘못 잡았다). */
+      const RANGES = ['chars', 'sections', 'photos', 'photoDensity', 'tables', 'embeds', 'tags', 'faq', 'headingWorkTitle'];
+      for (const k of RANGES) {
+        const v = ct[k];
+        if (v == null) continue; // headingWorkTitle: null = 검사 안 함
+        if (!Array.isArray(v) || v.length !== 2 || !Number.isFinite(v[0]) || !Number.isFinite(v[1])) {
+          problems.push(`${m.label}: contract.${k} 는 [최소, 최대] 두 숫자여야 합니다`);
+        } else if (v[0] > v[1]) {
+          problems.push(`${m.label}: contract.${k} 범위가 뒤집혔습니다 (${v[0]} > ${v[1]})`);
+        }
+      }
+      if (!Array.isArray(ct.noSpoilerIn)) {
+        problems.push(`${m.label}: contract.noSpoilerIn 은 필드 이름 배열이어야 합니다`);
+      }
+      if (!['free', 'fact-only'].includes(ct.captions)) {
+        problems.push(`${m.label}: contract.captions 는 'free' 또는 'fact-only' 여야 합니다`);
+      }
+      if (!(ct.endingMax > 0 && ct.endingMax <= 1)) {
+        problems.push(`${m.label}: contract.endingMax 는 0~1 사이 비율이어야 합니다`);
+      }
+    }
   }
   if (articleKeys?.length) problems.push(...lintSchemaKeys(articleKeys));
   return problems;
