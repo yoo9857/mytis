@@ -300,8 +300,8 @@ async function cmdPublishFile(cfg, file, flags = {}) {
   /* 발행 직전 안전망 — 생성 직후에만 검사하면 **손으로 고친 문장**이 검사 없이
    * 나간다 (검토 루프에서 JSON 을 직접 편집하는 일이 많다). 경고만 하고 막지는 않는다. */
   try {
-    const { findParticleErrors, findMonotoneEndings, articleText } = await import('./lintKo.js');
-    const pe = findParticleErrors(articleText(article));
+    const { findParticleErrors, findMonotoneEndings, articleText, articleNames } = await import('./lintKo.js');
+    const pe = findParticleErrors(articleText(article), { names: articleNames(article) });
     for (const e of pe.slice(0, 5)) log.warn(`조사 의심: ${e.phrase} → ${e.suggest}   …${e.context}…`);
     const mono = findMonotoneEndings(article);
     for (const m of mono.slice(0, 3)) log.warn(`어미 3연타(섹션${m.section}): …${m.ending}. — ${m.sample}…`);

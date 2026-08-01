@@ -7,7 +7,7 @@ import { blogUrls, naverUrls, validateForPublish, validateNaverForPublish } from
 import { writeArticle, saveArticle } from './codexWriter.js';
 import { fillEmbeds } from './youtube.js';
 import { fillSocialEmbeds } from './socialEmbed.js';
-import { MODE_LABEL, detectMode, can } from './mode.js';
+import { MODE, MODE_LABEL, detectMode, can } from './mode.js';
 import { renderImages } from './images.js';
 import { buildHtml, previewDocument } from './html.js';
 import { launchBrowser, firstPage, saveSession } from './browser.js';
@@ -38,6 +38,80 @@ const MAX_CLIP_SHOTS = 20;
  * 그리고 **주인공이 말하는 장면을 맨 앞으로** 보낸다. 첫 장면이 대표 이미지가
  * 되는데, 제목의 주인공이 대표 사진에 없으면 글이 무너진다.
  */
+/**
+ * 영화 모드 — **공식 예고편**에서 캡처할 시각을 정한다.
+ *
+ * 자막이 없으므로 장면의 뜻을 알 수 없다. 그래서 캡션을 만들지 않고
+ * (`caption: ''`) 예고편 길이에 걸쳐 고르게 뜬다.
+ *
+ * 앞뒤 여유를 두는 이유: 예고편의 맨 앞은 배급사 로고, 맨 끝은 타이틀 카드와
+ * 개봉일 자막이라 장면이 아니다.
+ */
+async function trailerScenes(article, cfg) {
+  const ok = (article.embeds || []).filter((e) => /^[A-Za-z0-9_-]{11}$/.test(e.videoId || ''));
+  if (!ok.length) {
+    log.info('공식 예고편을 찾지 못해 장면 캡처를 건너뜁니다.');
+    return [];
+  }
+
+  /* **한국 배급사 채널을 먼저 쓴다.**
+   *
+   * 같은 영화의 공식 예고편이 나라마다 따로 올라온다. 그런데 각국 채널은
+   * 그 나라 자막을 화면에 **박아서** 내보낸다 — 캡처하면 그 글자가 그대로 실린다.
+   *
+   * > 2026-08-01 실측: 채널 이름이 "소니 픽처스 영화" 여서 한국 채널로 보였는데
+   * >   캡처에 **일본어 자막**("試練を乗り越えたクモは")이 박혀 나왔다.
+   * >   앞선 시도들에서는 호주·영국 채널이 걸렸다.
+   *
+   * 그래서 채널명·제목에 '코리아/KR/한국' 표식이 있는 것을 먼저 고르고,
+   * 없으면 **제목이 한글인 것**을 고른다. 그것도 없으면 첫 번째를 쓴다. */
+  const KR_CHANNEL = /코리아|korea|\bkr\b|한국/i;
+  const HANGUL = /[가-힣]/;
+  const FOREIGN_CHANNEL = /japan|jp\b|日本|ジャパン|australia|\buk\b|india|latin|brasil|españa|france/i;
+  const pick =
+    ok.find((e) => KR_CHANNEL.test(e.channel || '')) ||
+    ok.find((e) => HANGUL.test(e.title || '') && !FOREIGN_CHANNEL.test(e.channel || '')) ||
+    ok[0];
+  const vid = pick.videoId;
+
+  article.clipVideoId = vid;
+  const em = pick;
+  article.clipChannel = em.channel || '공식 예고편';
+  if (!KR_CHANNEL.test(em.channel || '')) {
+    log.warn(
+      `예고편 채널이 한국 공식이 아닐 수 있습니다 (${em.channel || '이름 없음'}) — ` +
+        '캡처에 다른 나라 자막이 박혀 있는지 확인하세요.'
+    );
+  }
+  article.clipUrl = `https://www.youtube.com/watch?v=${vid}`;
+
+  let dur = 0;
+  try {
+    const { videoDuration } = await import('./ytClip.js');
+    dur = (await videoDuration?.(vid)) || 0;
+  } catch {
+    /* 길이를 못 얻으면 예고편 표준 길이로 가정한다 */
+  }
+  if (!dur) dur = 150; // 예고편은 대개 2~2분 30초
+
+  const want = Math.max(4, Math.min(cfg.images.bodyImages + 3, 12));
+  const head = Math.round(dur * 0.12); // 배급사 로고 구간을 건너뛴다
+  const tail = Math.round(dur * 0.9); // 타이틀 카드 전까지
+  const span = Math.max(1, tail - head);
+  const secs = Array.from({ length: want }, (_, i) => head + Math.round((span * (i + 1)) / (want + 1)));
+
+  log.info(`공식 예고편에서 장면 ${want}장을 캡처합니다 (${dur}초 · ${article.clipChannel}).`);
+  return [...new Set(secs)].map((sec, i) => ({
+    sec,
+    caption: '', // 자막이 없다 — 추측해서 쓰지 않는다
+    quote: '',
+    afterSection: 0, // applyClipShotLayout 이 고르게 흩뿌린다
+    speaker: '',
+    isStudio: false,
+    isHook: i === Math.floor(want / 3), // 앞쪽 1/3 지점을 대표 후보로
+  }));
+}
+
 function pickScenes(article) {
   const lead = (article.entities || [])[0];
   const leadName = (lead?.nameKo || lead?.nameEn || '').trim();
@@ -109,6 +183,7 @@ function clipAlt(title, sec, caption) {
 }
 
 function applyClipShotLayout(article, cfg, scenes, shots) {
+  const isMovie = article.mode === MODE.MOVIE;
   const bySec = new Map(shots.map((s) => [s.sec, s]));
   let got = scenes.filter((s) => bySec.has(s.sec));
   if (!got.length) return;
@@ -172,10 +247,28 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
    * 섹션 자체를 시간순으로 쓰게 지시하고 있으므로(prompt.js 의 서사 규칙),
    * 균등 배분이면 내용과도 대체로 맞고 사진이 고르게 퍼진다. */
   const body = got.slice(1).sort((a, b) => a.sec - b.sec);
-  const placed = body.map((s, i) => ({
-    ...s,
-    at: Math.min(sectionCount, Math.max(1, Math.ceil(((i + 1) * sectionCount) / (body.length + 1)))),
-  }));
+  /* 본문 사진을 섹션에 나눈다 — **1·2·2·1 리듬**으로 묶는다.
+   *
+   * 예전에는 섹션마다 한 장씩 고르게 흩뿌렸다. 그래서 `html.js` 의 2열 묶기가
+   * 발동할 조건(같은 섹션에 2장 이상)이 아예 만들어지지 않았다.
+   * > 2026-08-01 실측: 캡처 6장이 S1~S6 에 한 장씩 들어가 2열 묶음이 0 개였다.
+   *
+   * 사진을 많이 쓰는 글에서 한 장씩 세우면 글이 끝없이 길어진다 —
+   * 리듬으로 묶으면 같은 장수로도 글이 짧고 보기 좋아진다 (사용자 요구 2026-08-01). */
+  const RHYTHM = [1, 2, 2, 1];
+  const placed = [];
+  {
+    let i = 0;
+    let sec = 1;
+    let r = 0;
+    while (i < body.length) {
+      const take = Math.min(RHYTHM[r % RHYTHM.length], body.length - i);
+      for (let k = 0; k < take; k++) placed.push({ ...body[i + k], at: Math.min(sectionCount, sec) });
+      i += take;
+      sec++;
+      r++;
+    }
+  }
 
   /* 대표 이미지 헤드라인은 codex 가 쓴 것을 그대로 쓴다.
    *
@@ -192,9 +285,13 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
       eyebrow: oldThumb.eyebrow || '',
       statValue: oldThumb.statValue || '',
       statLabel: oldThumb.statLabel || '',
-      photoQuery: '',
+      /* 영화 모드는 대표를 **배급사 공식 포스터**가 채운다(photo.js 의 clipStart).
+       * 그래서 alt·photoQuery 를 캡처 기준으로 쓰면 거짓이 된다.
+       * > 2026-08-01 실측: 대표 alt 가 "… — 0:58 장면" 인데 실제 이미지는
+       * >   위키미디어 인물 사진이었다. §7-3 ③ 과 같은 어긋남이다. */
+      photoQuery: isMovie ? oldThumb.photoQuery || '' : '',
       caption: '',
-      alt: clipAlt(article.title, got[0].sec, got[0].caption),
+      alt: isMovie ? oldThumb.alt || article.title : clipAlt(article.title, got[0].sec, got[0].caption),
       afterSection: 0,
     },
     ...placed.map((s) => ({
@@ -317,7 +414,15 @@ export async function generate(topic, cfg) {
        *
        * 캡처 시각은 codex 가 지어낸 값이 아니라 snapTimestamps 가 실제 자막
        * 시각으로 검증·보정한 값이라 장면 설명과 어긋나지 않는다. */
-      const scenes = pickScenes(article);
+      /* 영화 모드는 **공식 예고편**에서 캡처한다.
+       *
+       * 입력이 유튜브 URL 이 아니므로 `clipVideoId` 가 없다 — codex 가 찾아 둔
+       * `embeds[].videoId`(공식 예고편)를 쓴다. 자막이 없어서 `pickScenes` 의
+       * 자막 기반 시각도 쓸 수 없으므로 **예고편 길이에 걸쳐 균등 분포**로 뜬다.
+       *
+       * ⚠️ 캡션을 만들지 않는다. 자막이 없으니 "누가 무슨 말을 하는 대목" 을 알 수 없고,
+       * 추측해서 쓰면 §7-6 ② 의 "정지 화면이 보여줄 수 없는 캡션" 이 된다. */
+      const scenes = mode === MODE.MOVIE ? await trailerScenes(article, cfg) : pickScenes(article);
 
       if (scenes.length) {
         try {
@@ -344,6 +449,35 @@ export async function generate(topic, cfg) {
       article.embeds = await fillEmbeds(article, cfg);
     } catch (err) {
       log.warn(`영상 임베드 확보 실패: ${err.message}`);
+    }
+  }
+
+  /* 장면 캡처는 **임베드 검색과 독립된 단계**다.
+   *
+   * ⚠️ 예전에는 캡처가 `if (!can(mode,'youtubeEmbeds'))` **안에** 들어 있었다.
+   * 클립 모드는 임베드를 검색하지 않으므로 그 안에 있어도 됐지만,
+   * 영화 모드는 `youtubeEmbeds: true` 라 **else 로 빠져 캡처가 아예 실행되지 않았다.**
+   * > 2026-08-01 실측: 예고편 캡처를 붙였는데 `clipShots: 0` 이었고 위키미디어
+   * >   인물 사진이 그 자리를 채웠다. 로그에 '장면 캡처' 줄이 아예 없었다.
+   *
+   * 그래서 조건을 하나만 본다 — `can(mode, 'clipShots')`. 새 모드가 캡처를 켜면
+   * 여기로 바로 들어온다. */
+  if (can(mode, 'clipShots') && cfg.images.useClipShots !== false && !(article.clipShots || []).length) {
+    const scenes = mode === MODE.MOVIE ? await trailerScenes(article, cfg) : pickScenes(article);
+    if (scenes.length) {
+      try {
+        const { captureFrames } = await import('./ytShot.js');
+        const shots = await captureFrames(
+          article.clipVideoId,
+          scenes.map((s) => s.sec),
+          { title: article.title, headless: true }
+        );
+        article.clipShots = shots;
+        if (shots.length) applyClipShotLayout(article, cfg, scenes, shots);
+      } catch (err) {
+        log.warn(`장면 캡처 실패 — 사진 없이 진행합니다: ${err.message.split('\n')[0]}`);
+        article.clipShots = [];
+      }
     }
   }
 

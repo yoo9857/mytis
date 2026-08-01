@@ -43,11 +43,42 @@ function hasFinal(ch) {
 
 /**
  * 조사가 틀린 것으로 의심되는 구절을 찾는다.
+ *
  * @param {string} text 검사할 본문
- * @returns {{phrase: string, suggest: string, context: string}[]}
+ * @param {object} [opts]
+ * @param {string[]} [opts.names] 사람·작품 이름. 이 낱말은 조사로 보지 않는다.
+ *
+ * ## 이름 오탐을 이름 목록으로 끊는다
+ *
+ * 머리말에 "이름은 목록으로 감당할 수 없다" 고 적어 두었지만, **그 글에 나오는
+ * 이름은 아티클이 이미 알고 있다** (`article.entities`).
+ *
+ * > 2026-08-01 실측 — 청룡시상식 종합 글: `김고은` 을 "김고는" 으로 **5번** 잡았다.
+ * > 경고가 5줄이면 진짜 오류가 묻힌다. 실제로 그 글의 진짜 오류는
+ * > 조사가 아니라 **이름 자체**였다(박지훈 ← 박지현).
+ *
+ * 일반 목록(`예외`)과 달리 이건 **글마다 다른 목록**이므로 인자로 받는다.
  */
-export function findParticleErrors(text) {
+/** 아티클에서 조사 검사에 넘길 이름 목록을 모은다 (entities · 태그 · 수상자 표) */
+export function articleNames(article) {
   const out = [];
+  for (const e of article?.entities || []) if (e?.nameKo) out.push(e.nameKo);
+  /* 태그에도 인물명이 들어간다 (김고은·신혜선 …). 조사처럼 끝나는 것만 쓸모가 있다. */
+  for (const t of article?.tags || []) out.push(t);
+  /* 표의 칸에 수상자 이름이 들어간다 — 청룡 종합 글이 그런 형태였다 */
+  for (const s of article?.sections || []) {
+    for (const row of s?.table?.rows || []) for (const cell of row) out.push(cell);
+  }
+  return [...new Set(out.filter(Boolean))];
+}
+
+export function findParticleErrors(text, { names = [] } = {}) {
+  const out = [];
+  /* 이름은 낱말 전체가 일치할 때만 넘긴다 — endsWith 로 하면 "연예은" 이 통과한다
+   * (머리말의 '예은' 사고와 같은 이유) */
+  const nameSet = new Set(
+    names.flatMap((n) => String(n || '').split(/[\s·,]+/)).map((s) => s.trim()).filter(Boolean)
+  );
   const 짝 = { 은: '는', 을: '를', 으로: '로' };
   // 낱말 끝(공백·문장부호·끝)에 붙은 조사만 본다 — 낱말 속의 '은'은 이름일 수 있다
   const re = /([가-힣])(으로|은|을)(?=[\s,.!?…"'”’)\]」』]|$)/g;
@@ -64,6 +95,7 @@ export function findParticleErrors(text) {
     const end = m.index + 1 + particle.length;
     const word = text.slice(start, end);
     if (예외.includes(word)) continue;
+    if (nameSet.has(word)) continue; // 그 글에 나오는 사람·작품 이름
 
     out.push({
       phrase: word,

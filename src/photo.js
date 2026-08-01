@@ -710,8 +710,19 @@ export async function fetchBackgrounds(article, cfg, slots) {
       `영상 장면 캡처 ${clipShots.length}장을 이미지로 사용합니다 (${article.clipChannel || '유튜브'}). ` +
         '방송 화면은 제작사 저작물입니다 — 위험은 발행자가 집니다.'
     );
-    for (let slot = 0; slot < slots && slot < clipShots.length; slot++) {
-      const s = clipShots[slot];
+    /* 영화 모드는 **대표를 예고편 캡처로 쓰지 않는다.**
+     *
+     * 대표는 목록·검색결과·공유 카드의 얼굴이다. 예고편의 한 프레임은 그 영화를
+     * 대표하지 못한다 — 배급사가 그 일을 위해 만든 것이 **공식 포스터·키아트**다.
+     *
+     * > 2026-08-01 실측: 캡처가 대표를 차지해 스파이더맨 글의 대표 이미지가
+     * >   **퍼니셔(존 번설) 클로즈업**이 됐다. 얼굴이 가장 크게 잡힌 프레임을
+     * >   골랐으니 규칙대로였지만, 주인공이 아니었다.
+     *
+     * 슬롯 0 을 비워 두면 아래 `sourcePhoto` 단계(배급사 키아트)가 채운다. */
+    const clipStart = mode === MODE.MOVIE ? 1 : 0;
+    for (let slot = clipStart; slot < slots && slot - clipStart < clipShots.length; slot++) {
+      const s = clipShots[slot - clipStart];
       if (!s?.file || !fs.existsSync(s.file)) continue;
       result[slot] = {
         file: s.file,
@@ -744,10 +755,16 @@ export async function fetchBackgrounds(article, cfg, slots) {
        * 가명을 쓰는 출연자라 위키미디어 인물 검색도 성과가 없다 — 여기서 끝내는 것이
        * 맞다. 부족한 장면은 캡처를 다시 뜨는 것으로 해결한다. */
       const filled = result.filter(Boolean).length;
-      if (filled < slots) {
-        log.info(`장면 ${slots - filled}칸이 비었습니다 — 스톡으로 채우지 않고 그라디언트로 둡니다.`);
+      /* 영화 모드는 **대표 한 칸만** 아래 단계(배급사 공식 키아트)에 넘긴다.
+       * 본문은 캡처로 다 채웠으므로 스톡이 끼어들 자리가 없다. */
+      if (mode === MODE.MOVIE && !result[0]) {
+        log.info('대표 자리는 배급사 공식 포스터에 넘깁니다 (예고편 프레임은 대표가 아니다).');
+      } else {
+        if (filled < slots) {
+          log.info(`장면 ${slots - filled}칸이 비었습니다 — 스톡으로 채우지 않고 그라디언트로 둡니다.`);
+        }
+        return result;
       }
-      return result;
     }
   }
 

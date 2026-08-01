@@ -133,7 +133,7 @@
     "manualLoginWaitMs": 180000
   },
   "movie": {
-    "spoiler": true,
+    "spoiler": false,
     "voice": ""
   }
 }

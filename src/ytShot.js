@@ -270,8 +270,15 @@ export async function captureFrames(
       await page.evaluate(() => {
         const p = document.querySelector("#movie_player");
         if (!p) return;
+        /* 영상이 1080p 보다 높은 화질을 갖고 있으면 그걸 쓴다.
+         * 영화 예고편은 4K 로 올라오는 경우가 많다 — 뷰포트가 1920 이라
+         * 렌더는 1080 이지만, **소스가 높을수록 압축 노이즈가 적다.**
+         * (사용자 지적 2026-08-01: "캡처 화면이 너무 지글거림") */
         try {
-          p.setPlaybackQualityRange?.("hd1080", "hd1080");
+          const levels = p.getAvailableQualityLevels?.() || [];
+          const best = ["highres", "hd2160", "hd1440", "hd1080"].find((q) => levels.includes(q)) || "hd1080";
+          p.setPlaybackQualityRange?.(best, best);
+          p.setPlaybackQuality?.(best);
         } catch {}
         try {
           if (!document.fullscreenElement) p.toggleFullscreen?.();
@@ -407,8 +414,12 @@ export async function captureFrames(
         let faces = 0;
         let biggest = 0;
         try {
+          /* --crop-letterbox: 고른 프레임의 위아래 검은 띠를 잘라낸다.
+           * 영화 예고편은 2.39:1 이라 16:9 캡처에서 1080 중 ~283px 이 검은 띠였다
+           * (2026-08-01 실측 → 797px). 그대로 카드에 담으면 화면이 작아 보인다. */
           const res = await runJson("python", [
             path.join(DIRS.root, "scripts", "pick_face_frame.py"),
+            "--crop-letterbox",
             ...shots,
           ]);
           if (res?.best) {

@@ -79,6 +79,44 @@ function renderTable(table) {
  * placeholder 가 있으면 발행 단계에서 티스토리 이미지 매크로로 치환되므로
  * 매크로를 감싸지 않고 단독 줄로 내보내고 캡션만 따로 붙인다.
  */
+/**
+ * 사진 두 장을 **나란히** 붙인다 (1·2·2·1 리듬용).
+ *
+ * 왜 필요한가: 사진을 많이 쓰는 글에서 한 장씩 세로로 세우면 글이 끝없이 길어진다.
+ * 네이버는 `imageGroup` 으로 이미 묶는데(`naverDoc.js`) 티스토리에는 없었다.
+ *
+ * ⚠️ 티스토리는 `{{IMAGE_i}}` 를 **자체 매크로**(`[##_Image|…|_##]`)로 치환하고,
+ * 그 매크로를 에디터가 다시 펼친다. 그래서 매크로를 감싼 마크업이 저장·발행을
+ * 거쳐 살아남는지는 **실측해야 안다.** (⑦-2: 티스토리 sanitizer 는 `<iframe>` 의
+ * style 을 지우지만 `<div>` 의 인라인 style 은 남긴다 — 그 사실에 기대를 걸고 재본다)
+ *
+ * 표를 쓰는 이유: flex 는 티스토리 본문 폭 계산과 부딪힐 수 있고, 표는 메일 HTML
+ * 시절부터 가장 잘 살아남는 2열 배치 수단이다.
+ */
+function renderFigurePair(imgs) {
+  const cells = imgs
+    .map((img) => {
+      const body = img.placeholder
+        ? img.placeholder
+        : img.src
+          ? `<img src="${esc(img.src)}" alt="${esc(img.alt || '')}" style="max-width:100%;height:auto;border-radius:8px;" />`
+          : '';
+      const cap = img.caption
+        ? `<p style="text-align:center;${S.figcap}">${esc(img.caption)}</p>`
+        : '';
+      return `<td style="width:50%;vertical-align:top;padding:0 4px;text-align:center;">${body}${cap}</td>`;
+    })
+    .join('');
+  return `<table style="width:100%;border:0;border-collapse:collapse;margin:18px 0;"><tbody><tr>${cells}</tr></tbody></table>`;
+}
+
+/** 한 자리에 모인 사진들을 리듬에 맞춰 낸다 (2장이면 나란히, 그 밖엔 한 장씩) */
+function renderFigureRun(imgs) {
+  if (!imgs?.length) return '';
+  if (imgs.length === 2) return renderFigurePair(imgs);
+  return imgs.map(renderFigure).join('\n');
+}
+
 function renderFigure(img) {
   if (!img) return '';
 
@@ -361,21 +399,58 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
      * 고르게 흩뿌린다. 마지막 문단 뒤에는 두지 않는다 — 그러면 다음 소제목과
      * 사진이 붙어 다시 몰린 것처럼 보인다. */
     const mine = bodyImages.filter((b) => b.afterSection === i + 1);
+
+    /* 사진을 **묶음**으로 만든 뒤 자리를 잡는다.
+     *
+     * ① `group` 이 같은 사진끼리 묶는다 (아티클이 지정 — 연관 있는 두 컷).
+     * ② 지정이 없으면 **1·2·2·1 리듬**을 돌린다. 사진을 많이 쓰는 글에서
+     *    한 장씩 세우면 글이 끝없이 길어진다 (naverDoc 이 쓰는 것과 같은 리듬).
+     *    사진이 3장 이하면 리듬을 쓰지 않는다 — 억지로 붙이면 어울리지 않는 두 컷이
+     *    나란히 선다. */
+    const RHYTHM = [1, 2, 2, 1];
+    const runs = [];
+    if (mine.some((b) => b.group)) {
+      const byGroup = new Map();
+      for (const img of mine) {
+        const key = img.group || `__${runs.length}_${byGroup.size}`;
+        if (!byGroup.has(key)) {
+          byGroup.set(key, []);
+          runs.push(byGroup.get(key));
+        }
+        byGroup.get(key).push(img);
+      }
+    } else if (mine.length === 1) {
+      runs.push([mine[0]]);
+    } else {
+      /* ⚠️ 한때 "3장 이하면 묶지 않는다" 를 뒀는데, 배치 단계(`applyClipShotLayout`)가
+       * **섹션당 2장**을 일부러 넣기 시작하자 그 2장이 가드에 걸려 한 장씩 나갔다
+       * (2026-08-01 실측: 배치는 S2:2 S3:2 인데 2열 묶음 0개).
+       *
+       * 섹션에 온 장수를 그대로 존중한다 — 홀수면 첫 장을 단독으로 세우고 나머지를 짝짓는다.
+       * 배치가 이미 리듬을 정하므로 여기서 또 리듬을 돌릴 필요가 없다. */
+      let at = 0;
+      if (mine.length % 2 === 1) runs.push([mine[at++]]);
+      while (at < mine.length) {
+        runs.push(mine.slice(at, at + 2));
+        at += 2;
+      }
+    }
+
     const gaps = Math.max(1, sec.paragraphs.length - 1); // 문단 사이 자리 수
     const slot = new Map();
-    mine.forEach((img, k) => {
-      // 자리를 고르게 나눈다. (사진 3장·문단 4개 → 1·2·3번 문단 뒤)
+    runs.forEach((run, k) => {
+      // 자리를 고르게 나눈다. (묶음 3개·문단 4개 → 1·2·3번 문단 뒤)
       const at = Math.min(
         gaps,
-        Math.max(1, Math.round(((k + 1) * (gaps + 1)) / (mine.length + 1)))
+        Math.max(1, Math.round(((k + 1) * (gaps + 1)) / (runs.length + 1)))
       );
       if (!slot.has(at)) slot.set(at, []);
-      slot.get(at).push(img);
+      slot.get(at).push(run);
     });
 
     sec.paragraphs.forEach((para, pi) => {
       out.push(`<p data-ke-size="${KE.p}" style="${S.p}">${esc(para)}</p>`);
-      for (const img of slot.get(pi + 1) || []) out.push(renderFigure(img));
+      for (const run of slot.get(pi + 1) || []) out.push(renderFigureRun(run));
     });
 
     if (sec.bullets.length) {
@@ -388,9 +463,10 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
       out.push(`<div style="${S.callout}">💡 ${esc(sec.callout)}</div>`);
     }
 
-    // 문단 수보다 사진이 많아 자리를 못 잡은 것은 섹션 끝에 둔다
-    const placedCount = [...slot.values()].reduce((a, v) => a + v.length, 0);
-    for (const img of mine.slice(placedCount)) out.push(renderFigure(img));
+    /* 묶음은 전부 자리를 받는다 (`at` 이 항상 1..gaps 로 떨어지고 slot 이 쌓는다).
+     * 예전에는 "자리를 못 잡은 것" 을 섹션 끝에 다시 넣었는데, 묶음 단위로 바뀐 뒤
+     * 그 계산이 **묶음 수로 이미지 배열을 자르는** 꼴이 되어 사진이 중복된다.
+     * 남는 것이 없으므로 지운다 — 필요해지면 묶음 기준으로 다시 세야 한다. */
     // 이 섹션 뒤에 붙는 공식 영상 임베드
     for (const em of embeds.filter((e) => e.afterSection === i + 1)) {
       out.push(renderEmbed(em));

@@ -566,19 +566,37 @@ export async function writeArticle({ topic, cfg }) {
 
       /* 조사 오류는 지시문으로 두 번 연속 새어나갔다 — 규칙이 기계적이라 코드가 잡는다.
        * 고치지는 않는다(사람 이름 오탐이 있다). 발행 전에 눈으로 확인할 목록만 남긴다. */
-      const { findParticleErrors, findMonotoneEndings, articleText } = await import('./lintKo.js');
-      const particleErrs = findParticleErrors(articleText(article));
+      const { findParticleErrors, findMonotoneEndings, articleText, articleNames } = await import('./lintKo.js');
+      const particleErrs = findParticleErrors(articleText(article), { names: articleNames(article) });
       if (particleErrs.length) {
         log.warn(`조사가 의심되는 곳 ${particleErrs.length}군데 — 발행 전에 확인하세요.`);
         for (const e of particleErrs.slice(0, 8)) {
           log.warn(`  ${e.phrase} → ${e.suggest}   …${e.context}…`);
         }
       }
-      // 같은 어미 3연타 — "기계적, AI 같다"의 첫 신호 (2026-07-29 독자 지적)
+      /* 같은 어미 3연타 — "기계적, AI 같다"의 첫 신호 (2026-07-29 독자 지적).
+       *
+       * ⚠️ 예전에는 **경고만** 했다. 그래서 같은 문제가 세 번 연속 그대로 나갔다.
+       * > 2026-08-01 실측 — 영화 모드 초안 3편: 종결이 100% · 99% · 100% 로
+       * >   "…니다." 였다. 경고는 매번 찍혔지만 아무도 막지 않았다.
+       *
+       * 분량·섹션 수와 같은 급으로 **재시도 사유**로 올린다. 문체는 고쳐 쓰기가
+       * 쉬우므로 한 번 더 요청하는 값이 크다. */
       const mono = findMonotoneEndings(article);
       if (mono.length) {
         log.warn(`같은 어미가 3문장 이상 이어지는 문단 ${mono.length}개 — 리듬을 확인하세요.`);
         for (const m of mono.slice(0, 4)) log.warn(`  섹션${m.section} "…${m.ending}." 연타: ${m.sample}…`);
+        /* `section: 0` 이 "글 전체 분포" 항목이다 (문단 안 3연타는 section >= 1).
+         * 재시도는 전체 도배일 때만 — 문단 하나의 연타로 4분을 다시 쓰는 것은 과하다. */
+        const whole = mono.find((m) => m.section === 0);
+        if (whole && attempt < maxAttempts) {
+          lastErr =
+            '글 전체가 한 종결로 끝납니다(단조로워 AI 가 쓴 것처럼 읽힙니다). ' +
+            '경어체 안에서 ~입니다 / ~이죠 / ~합니다 / 명사 종결을 섞고, ' +
+            '한 종결이 전체의 60% 를 넘지 않게 하세요';
+          log.warn(`${lastErr} — 다시 시도합니다.`);
+          continue;
+        }
       }
 
       article.charCount = chars;

@@ -78,6 +78,29 @@ export function mmss(sec) {
 }
 
 /**
+ * 영상 길이(초)만 빠르게 가져온다.
+ *
+ * 영화 모드가 **공식 예고편에 걸쳐 캡처 시각을 나눌 때** 쓴다. `fetchClip` 은
+ * 자막까지 받아 오므로(자막 없는 예고편에서는 헛수고다) 길이만 필요한 자리에는 이걸 쓴다.
+ */
+export async function videoDuration(videoId) {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(String(videoId || ''))) return 0;
+  try {
+    const { spawnSync } = await import('node:child_process');
+    const r = spawnSync(
+      'python',
+      ['-m', 'yt_dlp', '--skip-download', '--print', '%(duration)s', '--js-runtimes', 'node',
+        `https://www.youtube.com/watch?v=${videoId}`],
+      { encoding: 'utf8', maxBuffer: 8e6, timeout: 60_000 }
+    );
+    const n = parseInt(String(r.stdout || '').trim().split('\n').pop(), 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * 영상 정보 + 자막을 가져온다.
  * @returns {Promise<{videoId,title,channel,uploadDate,duration,description,lines,transcript}|null>}
  */
