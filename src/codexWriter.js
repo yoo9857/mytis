@@ -545,6 +545,63 @@ export async function writeArticle({ topic, cfg }) {
         }
       }
 
+      /* 영화 모드 — **배급사 키아트(포스터) 한 장만** 좁게 가져온다.
+       *
+       * 위 블록을 그대로 쓸 수 없다. 배급사·마블 공식 페이지는 한 페이지에 여러 작품
+       * 사진이 섞여 있어 `relatedArticlePhotos` 를 false 로 둘 수밖에 없었는데
+       * (§7-7 ⑥ — 어벤저스 둠스데이 단체 사진이 스파이더맨 글에 실렸다),
+       * 그렇게 끄면 **포스터 수집 경로까지 함께 막힌다.**
+       *
+       * > 2026-08-01 실측 — 그래서 대표 이미지가 감독의 위키미디어 사진이 됐고,
+       * > 결국 소니 포스터를 손으로 받아 photoDir 로 고정했다. 자동으로 돌릴 수 없다.
+       *
+       * 좁히는 방법: **모양과 이름 두 가지를 함께** 본다.
+       *   · 세로로 긴 것만 (포스터는 2:3 계열이고 스틸·단체 사진은 가로다)
+       *   · 파일 이름이나 alt 에 poster/키아트 표시가 있거나 작품명이 박힌 것
+       * og:image 는 쓰지 않는다 — 대개 가로 몽타주이고 다른 작품이 섞인다.
+       *
+       * 그래도 남의 작품 포스터가 걸릴 수 있으니 **찾은 것을 로그에 남긴다.**
+       * 발행 전에 사람이 본다는 전제가 이 모드의 안전망이다. */
+      if (can(mode, 'posterPhoto') && !(article.sourceImages?.length || 0) && article.sources?.length) {
+        const { fetchArticle } = await import('./fetchArticle.js');
+        const filmTitle = String(topic)
+          .replace(/^영화\s*:\s*/, '')
+          .replace(/\s*\(.*$/, '')
+          .trim();
+        const POSTER_WORD = /poster|keyart|key[-_]?art|메인포스터|포스터/i;
+        const found = [];
+        for (const url of article.sources
+          .map((s) => s.url)
+          .filter((u) => u && /^https?:\/\//.test(u))
+          .slice(0, 4)) {
+          if (found.length >= 3) break;
+          try {
+            const s = await fetchArticle(url, cfg, 300);
+            for (const img of s?.images || []) {
+              if (found.length >= 3) break;
+              const portrait = img.h >= img.w * 1.2;
+              if (!portrait) continue;
+              const named = POSTER_WORD.test(`${img.url} ${img.alt}`);
+              const titled = filmTitle && img.alt.includes(filmTitle);
+              if (named || titled) found.push({ ...img, from: new URL(url).hostname });
+            }
+          } catch (err) {
+            log.debug(`포스터 수집 실패 (${url.slice(0, 50)}): ${err.message.slice(0, 60)}`);
+          }
+        }
+        if (found.length) {
+          article.sourceImages = found.map((f) => f.url);
+          log.ok(`배급사 포스터 후보 ${found.length}장 (세로 비율 + 이름 확인)`);
+          for (const f of found) log.info(`  ${f.w}×${f.h} · ${f.from} · ${f.alt || '설명 없음'}`);
+          log.warn('발행 전에 이 포스터가 이 작품의 것인지 눈으로 확인하세요.');
+        } else {
+          log.warn(
+            '배급사 포스터를 찾지 못했습니다 — 대표 이미지가 인물 사진으로 갈 수 있습니다. ' +
+              '공식 포스터를 손으로 받아 photoDir 로 고정하세요.'
+          );
+        }
+      }
+
       const chars = articleCharCount(article);
       log.debug(`생성 결과: 섹션 ${article.sections.length}개 · 본문 ${chars}자 · 태그 ${article.tags.length}개`);
 

@@ -39,7 +39,8 @@ const HELP = `
   영화 (티스토리 Cinematic)
   npm run post -- "영화: 제목 (감독)"        영화 정보·줄거리·결말 글 → 티스토리 발행
   npm run draft -- "영화: 제목 (감독)"       발행 없이 초안만
-                                       스포 없이 쓰려면 config.json 의 movie.spoiler=false
+       --spoiler / --no-spoiler        결말을 밝힐지 (기본값은 config.json 의 movie.spoiler)
+                                       개봉 직후 신작은 --no-spoiler, 구작은 --spoiler
 
   오늘 뭐 읽지? (네이버 책 시리즈)
   npm run book                         알라딘 월간 문학 베스트에서 오늘의 책 선정 → 초안 생성
@@ -93,6 +94,11 @@ function parseArgs(argv) {
     else if (a.startsWith('--visibility=')) flags.visibility = a.split('=')[1];
     else if (a === '--platform') flags.platform = argv[++i];
     else if (a.startsWith('--platform=')) flags.platform = a.split('=')[1];
+    /* 스포일러는 **작품마다 답이 다르다** — 개봉 직후 신작은 스포 X 가 맞고, 구작은
+     * "황해 결말" 처럼 결말 검색 수요가 커서 스포 O 가 맞다. config 전역 토글만
+     * 있으면 매번 뒤집고 되돌리는 것을 잊는다. */
+    else if (a === '--spoiler') flags.spoiler = true;
+    else if (a === '--no-spoiler') flags.spoiler = false;
     else if (a === '--naver') flags.platform = 'naver';
     else if (a === '--both') flags.platform = 'both';
     else if (a.startsWith('--')) flags[a.slice(2)] = true;
@@ -127,6 +133,9 @@ function applyFlags(cfg, flags) {
     cfg.blog.visibility = flags.visibility;
     // 네이버는 값 이름이 다르다 — 'protected' 는 없고 '이웃공개' 계열이 그 자리다
     cfg.naver.visibility = flags.visibility === 'protected' ? 'neighbor' : flags.visibility;
+  }
+  if (flags.spoiler !== undefined) {
+    cfg.movie = { ...(cfg.movie || {}), spoiler: flags.spoiler };
   }
   if (flags.verbose) {
     cfg.verbose = true;

@@ -124,9 +124,38 @@ async function clearAds(page, { timeoutMs = 45_000 } = {}) {
 export async function captureFrames(
   videoId,
   seconds,
-  { title = "", candidates = 5, headless = true } = {},
+  { title = "", candidates = 5, headless = true, minHeight = 720 } = {},
 ) {
   if (!/^[A-Za-z0-9_-]{11}$/.test(videoId) || !seconds?.length) return [];
+
+  /* 소스 화질이 낮으면 **캡처하지 않는다.** 여기까지 오면 우리가 가진 수단이
+   * 전부 무력하다 — 4K 요청은 없는 스트림을 만들지 못하고, 레터박스 크롭은
+   * 480 을 350 으로 더 줄이고, 브라우저를 1920 으로 키우면 흐린 화면이 크게
+   * 늘어나기만 한다. 없는 사진보다 지글거리는 사진이 나쁘다.
+   *
+   * > 2026-08-01 실측 — 황해(2010) 예고편은 유튜브 최대 480p 였다(리마스터도 없다).
+   * > 같은 날 스파이더맨 예고편은 1080p. 구작은 대개 SD 로만 올라와 있다.
+   *
+   * 이 판정은 캡처를 시작하기 전에 한다. 브라우저를 띄우고 광고를 걷어내고
+   * 프레임을 고른 다음에 버리면 2분을 태운다. */
+  try {
+    const h = await runJson(
+      "yt-dlp",
+      ["--no-warnings", "-f", "bestvideo", "--print", "%(height)s", `https://www.youtube.com/watch?v=${videoId}`],
+      { timeoutMs: 60_000 },
+    );
+    if (Number.isFinite(h) && h < minHeight) {
+      log.warn(
+        `예고편 최대 화질이 ${h}p 라 장면 캡처를 건너뜁니다 (기준 ${minHeight}p). ` +
+          `이 화질로 캡처하면 지글거립니다 — 사진은 공식 포스터와 인물 사진으로 채웁니다.`,
+      );
+      return [];
+    }
+    if (Number.isFinite(h)) log.debug(`예고편 최대 화질 ${h}p — 캡처를 진행합니다.`);
+  } catch (err) {
+    /* 못 재면 막지 않는다. 화질을 몰라서 캡처를 포기하는 것이 더 손해다. */
+    log.debug(`예고편 화질을 확인하지 못했습니다 (${err.message}) — 그대로 진행합니다.`);
+  }
 
   const work = path.join(DIRS.tmp, "cand");
   fs.rmSync(work, { recursive: true, force: true });
