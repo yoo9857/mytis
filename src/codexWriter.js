@@ -297,6 +297,15 @@ function normalizeArticle(raw, { topic, cfg }) {
       .filter((e) => e.nameKo || e.nameEn),
     secondaryKeywords: arr(raw.secondaryKeywords).map(str).filter(Boolean),
     tags,
+    /* ⚠️ **여기에 없는 키는 버려진다.** 이 함수는 고정된 모양을 만들기 때문에
+     * 스키마에 필드를 추가해도 여기 한 줄을 안 넣으면 아티클에 남지 않는다.
+     *
+     * > 2026-08-01 발각 — `spoiler` 는 영화 스키마 required 에 처음부터 있었는데
+     * > 발행된 글 두 편 모두 그 키가 없었다. 제목의 "(스포 O)" 표기는 지시문이
+     * > 시켜서 됐던 것이고, 필드는 한 번도 통과한 적이 없다. `angle` 도 같았다.
+     * > 이 함정은 `npm run doctor` 의 스키마-정규화 대조가 잡는다(modes/index.js). */
+    angle: str(raw.angle),
+    spoiler: raw.spoiler === true,
     directAnswer: str(raw.directAnswer),
     keyTakeaways: arr(raw.keyTakeaways).map(str).filter(Boolean),
     sections,
@@ -316,6 +325,17 @@ function normalizeArticle(raw, { topic, cfg }) {
     imageBriefs,
     generatedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * `normalizeArticle` 이 실제로 만들어 내는 **최상위 키 목록**.
+ *
+ * 스키마 required 와 이 목록을 대조하면, 스키마에만 있고 아티클까지 오지 못하는
+ * 필드를 찾을 수 있다 (`npm run doctor`). 목록을 손으로 옮겨 적지 않고 빈 입력으로
+ * 한 번 돌려서 얻는다 — 옮겨 적으면 그것부터 낡는다.
+ */
+export function articleShapeKeys(cfg) {
+  return Object.keys(normalizeArticle({}, { topic: '점검', cfg }));
 }
 
 function articleCharCount(article) {
@@ -654,6 +674,22 @@ export async function writeArticle({ topic, cfg }) {
           log.warn(`${lastErr} — 다시 시도합니다.`);
           continue;
         }
+      }
+
+      /* 재시도까지 하고도 안 되면 **코드가 섞는다.**
+       *
+       * 재시도는 4분을 더 태우고 결과도 나아지지 않았다 (황해: 재시도 포함
+       * 10분 30초를 쓰고 93%). 그런데 `~습니다` → `~죠` 는 뜻이 바뀌지 않는
+       * 기계적 변환이라 사람이 할 이유가 없다 — 지난 글은 손으로 20곳을 고쳤다.
+       * 안전한 형태만 바꾸고 큰따옴표 안은 건드리지 않는다 (endings.js 머리말). */
+      const { varyEndings } = await import('./endings.js');
+      const varied = varyEndings(article, { max: 0.6 });
+      if (varied.changed) {
+        log.info(
+          `문장 끝맺음 ${varied.changed}곳을 "~죠" 로 바꿨습니다 — ` +
+            `${Math.round(varied.before.ratio * 100)}% → ${Math.round(varied.after.ratio * 100)}% ` +
+            `("…${varied.before.top}." 비중)`
+        );
       }
 
       article.charCount = chars;

@@ -576,7 +576,10 @@ async function cmdDoctor(cfg) {
       if (id === MODE.MOVIE) return buildMoviePrompt({ topic: '영화: 제목 (감독)', cfg });
       return buildArticlePrompt({ topic: '주제', cfg });
     };
-    const problems = lintModes({ buildPrompt: build, cfg });
+    /* 스키마 required 와 아티클 실제 모양을 함께 대조한다 — codexWriter 를
+     * modes/index.js 에서 import 하면 순환 참조가 되므로 여기서 넘긴다. */
+    const { articleShapeKeys } = await import('./codexWriter.js');
+    const problems = lintModes({ buildPrompt: build, cfg, articleKeys: articleShapeKeys(cfg) });
     if (problems.length) {
       for (const p of problems) log.error(`모드 정합: ${p}`);
       bad += problems.length;

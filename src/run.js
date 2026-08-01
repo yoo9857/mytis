@@ -334,7 +334,7 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
   );
 }
 
-function mapImages(rendered) {
+export function mapImages(rendered) {
   const ordered = [rendered.thumbnail, ...rendered.body].filter(Boolean);
   const files = ordered.map((i) => i.file);
 

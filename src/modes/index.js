@@ -25,6 +25,9 @@
 import topic from './topic.js';
 import news from './news.js';
 import clip from './clip.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { DIRS } from '../paths.js';
 import book from './book.js';
 import movie from './movie.js';
 import drama from './drama.js';
@@ -110,7 +113,7 @@ export function pickVoice(modeId, key, cfg) {
  * 선언과 실제가 어긋난 곳을 찾는다. `npm run doctor` 가 부른다.
  * 지시문을 실제로 만들어 표식을 세므로, 규칙을 빼먹으면 여기서 잡힌다.
  */
-export function lintModes({ buildPrompt, cfg }) {
+export function lintModes({ buildPrompt, cfg, articleKeys }) {
   const problems = [];
   for (const m of ACTIVE) {
     if (!m.schemaFile) problems.push(`${m.label}: schemaFile 선언이 없습니다`);
@@ -153,7 +156,46 @@ export function lintModes({ buildPrompt, cfg }) {
 
     if (!m.platforms?.length) problems.push(`${m.label}: platforms 선언이 없습니다`);
   }
+  if (articleKeys?.length) problems.push(...lintSchemaKeys(articleKeys));
   return problems;
+}
+
+/**
+ * 스키마가 요구하는 필드가 **아티클까지 살아 오는지** 대조한다.
+ *
+ * `normalizeArticle` 은 고정된 모양을 만든다. 그래서 스키마에 필드를 추가해도
+ * 그 함수에 한 줄을 안 넣으면 모델이 채워 보낸 값이 조용히 버려진다.
+ *
+ * > 2026-08-01 발각 — 영화 스키마의 `spoiler` 는 처음부터 required 였는데 발행된
+ * > 글 두 편 모두 그 키가 없었다. 제목의 "(스포 O)" 는 지시문이 시켜서 됐던 것이라
+ * > 겉으로는 아무 문제가 없어 보였다. 같은 날 추가한 `angle` 도 똑같이 사라졌다.
+ * > **겉으로 티가 안 나는 종류의 고장**이라 자동 대조가 필요하다.
+ *
+ * 실제 키 목록은 부르는 쪽(cli.js)이 `articleShapeKeys()` 로 넘긴다 —
+ * 여기서 codexWriter 를 import 하면 순환 참조가 된다.
+ */
+function lintSchemaKeys(articleKeys) {
+  const out = [];
+  const have = new Set(articleKeys);
+  for (const m of ACTIVE) {
+    if (!m.schemaFile) continue;
+    let schema;
+    try {
+      schema = JSON.parse(fs.readFileSync(path.join(DIRS.schema, m.schemaFile), 'utf8'));
+    } catch (e) {
+      out.push(`${m.label}: 스키마를 읽지 못했습니다 (${m.schemaFile}) — ${e.message.split('\n')[0]}`);
+      continue;
+    }
+    for (const key of schema.required || []) {
+      if (!have.has(key)) {
+        out.push(
+          `${m.label}: 스키마가 "${key}" 를 요구하는데 아티클에 남지 않습니다 — ` +
+            'codexWriter.js 의 normalizeArticle 에 한 줄을 넣으세요'
+        );
+      }
+    }
+  }
+  return out;
 }
 
 /**
