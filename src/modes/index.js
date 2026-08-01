@@ -91,7 +91,14 @@ export function pickVoice(modeId, key, cfg) {
   const voices = MODES[modeId]?.voices || [];
   if (!voices.length) return null;
   const pinKey = MODES[modeId]?.voicePin;
-  const wanted = pinKey ? String(cfg?.article?.[pinKey] || '').trim() : '';
+  /* 고정 자리를 **두 곳** 본다. config.json 이 모드별 블록(`movie.voice`)과
+   * 글 블록(`article.movieVoice`) 둘 다 갖고 있어서다.
+   * > 2026-08-01 발각: `movie.voice` 를 채워도 아무 일도 일어나지 않았다 —
+   * > 여기서 `article.movieVoice` 만 읽고 있었다. 설정 파일에 있는 칸이
+   * > 아무 것도 안 하면 다음 사람이 채우고 왜 안 되는지 찾는다. */
+  const wanted = String(
+    (pinKey ? cfg?.article?.[pinKey] : '') || cfg?.[modeId]?.voice || '',
+  ).trim();
   const pinned = voices.find((v) => v.name === wanted);
   if (pinned) return pinned;
   let h = 0;
