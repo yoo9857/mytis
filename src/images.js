@@ -423,7 +423,10 @@ export async function renderImages(article, cfg) {
           bg.file
         );
         const focus = bg.isPerson ? 'center 25%' : 'center center';
-        const p = await renderPlainPhoto(browser, bgDataUri, [bw, bh], focus, resolveLook(cfg.images.look));
+        /* noText = 이미 완성된 이미지(카드·표지·본문 페이지). 룩을 입히지 않는다.
+         * 종이 페이지에 goldenHour 를 씌우면 흰 종이가 누렇게 뜬다. */
+        const bodyLook = brief.noText === true ? LOOKS.neutral : resolveLook(cfg.images.look);
+        const p = await renderPlainPhoto(browser, bgDataUri, [bw, bh], focus, bodyLook);
         const file = path.join(DIRS.images, `${prefix}-body${i}.png`);
         await p.screenshot({ path: file, type: 'png' });
         await p.close();
@@ -539,8 +542,13 @@ export async function renderImages(article, cfg) {
           isThumb,
           layout,
           bgDataUri,
-          // 전역 룩 — 레이아웃 자기 필터 뒤에 붙는다 (레이아웃 의도가 먼저다)
-          photoLook: resolveLook(cfg.images.look).filter,
+          /* 전역 룩 — 레이아웃 자기 필터 뒤에 붙는다 (레이아웃 의도가 먼저다).
+           *
+           * ⚠️ noText 는 **이미 완성된 이미지**라는 신호다(글귀 카드·작가 카드·
+           * 표지·제사 페이지). 여기에 룩을 입히면 우리가 맞춰 둔 색이 무너진다.
+           * > 2026-08-01 실측: 표지 지배색으로 만든 맑은 하늘색 글귀 카드가
+           * > goldenHour 필터를 먹고 회색으로 탁해졌다. */
+          photoLook: noText ? '' : resolveLook(cfg.images.look).filter,
           // 인물 사진은 얼굴이 잘리지 않도록 크롭 위치를 바꾼다
           bgPosition: isPerson ? personBgPosition(layout, bg.portrait) : '',
           credit: bgDataUri && cfg.images.showCredit ? bg.credit : '',
@@ -551,7 +559,15 @@ export async function renderImages(article, cfg) {
 
       // 사진 밝기에 맞춰 스크림 세기를 자동 조절한다.
       // 어두운 사진에 기본 스크림을 그대로 얹으면 탁해지고, 밝은 사진은 글자가 묻힌다.
-      if (bgDataUri) {
+      if (bgDataUri && noText) {
+        /* 스크림은 **글자를 읽히게 하려고** 까는 것이다. 글자를 얹지 않는 이미지에는
+         * 탁하게 만드는 효과만 남는다 (2026-08-01: 글귀 카드가 비네트에 덮였다). */
+        await page.evaluate(() => {
+          const el = document.querySelector('.scrim');
+          if (el) el.style.opacity = '0';
+        });
+        await page.waitForTimeout(120);
+      } else if (bgDataUri) {
         const luma = await measureLuma(page, bgDataUri);
         if (luma !== null) {
           const opacity = Math.min(1, Math.max(0.35, 0.35 + (luma / 255) * 0.9));

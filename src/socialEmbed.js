@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { log } from './log.js';
-import { FILES } from './paths.js';
+import { FILES, todayStr } from './paths.js';
 import { runCodexJson } from './codexWriter.js';
 
 /**
@@ -316,7 +316,7 @@ ${list}
   깨진 임베드가 본문에 실립니다. 못 찾았으면 빈 배열로 두세요 — 그게 정답일 수 있습니다.
 
 # 오늘 날짜
-${new Date().toISOString().slice(0, 10)}
+${todayStr()}
 
 지정된 JSON 스키마에 맞는 JSON 객체 하나만 반환하세요.`;
 

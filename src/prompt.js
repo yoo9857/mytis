@@ -1,3 +1,5 @@
+import { todayStr } from './paths.js';
+
 /**
  * 독자를 끌어당기는 편집 기술 + 신뢰를 지키는 선.
  * 후킹은 세게 하되, 제목이 약속한 것을 본문이 반드시 지키게 한다.
@@ -145,11 +147,35 @@ function legalDisputeRules() {
   절차 용어(잠정조치·약식명령 등)를 **설명해 주는 것**은 훈계가 아니라 정보입니다 — 그건 쓰세요.`;
 }
 
-function imageBriefRules(a, bodyImages) {
-  return `# 이미지 브리프
-- imageBriefs 첫 번째 항목은 placement="thumbnail", afterSection=0 인 대표 이미지 1개.
-- 그 뒤에 placement="body" 이미지 ${bodyImages}개를 만드세요. afterSection은 1 이상 ${a.sectionCount} 이하의 서로 다른 값.
-- headline은 **대표 이미지 위에 크게 얹히는 문구**입니다. 목록·검색결과·공유 카드에서
+/**
+ * 이미지 브리프 규칙.
+ *
+ * `book: true` 면 **연예 리캡용 규칙 두 개를 갈아끼운다** — 모순되는 지시를 덧붙이면
+ * 모델이 최소한만 지킨다(§7-2). 그래서 덧붙이지 않고 바꾼다.
+ *  ① 스탯 카드(수치 얹은 그라디언트 카드) 금지 — 책 에세이 톤과 안 맞는다는
+ *     독자 피드백(2026-07-29)이 있었는데 이 공용 규칙이 statValue 를 계속 요구했다.
+ *  ② 헤드라인 문형 — "옥순이 멈추라고 한 이유" 같은 방송 리캡 어법을 책 글에 쓰면
+ *     표지 그림 위에 낚시 문구가 얹힌다.
+ */
+function imageBriefRules(a, bodyImages, { book = false } = {}) {
+  const statRules = book
+    ? `- **statValue / statLabel 은 항상 빈 문자열로 두세요.** 책 글에는 수치 카드를 쓰지 않습니다.
+  독자 피드백(2026-07-29): "배경이나 관련 이미지가 아니니 보기 좋지 않음". 순위·퍼센트를
+  그라디언트 카드로 만들면 서점 광고처럼 보입니다. 수치는 본문과 표가 이미 말합니다.`
+    : `- statValue / statLabel 은 그 이미지가 강조할 **본문에 실제로 등장하는 핵심 수치**입니다.
+  - 예: statValue="70만원", statLabel="월 최대 납입액"
+  - 본문에 없는 숫자를 만들어내지 마세요. 강조할 수치가 없는 이미지는 둘 다 빈 문자열로 두세요.
+  - 이미지마다 서로 다른 수치를 고르세요.`;
+
+  const headlineRules = book
+    ? `- headline 은 대표 이미지 위에 얹히는 문구입니다. **책 글에서는 짧고 조용하게** —
+  이 글의 각도를 한 조각으로 보여 주는 말입니다 (12자 이내).
+  - 좋은 예: "고장 난 우산" / "갇힌 물에서 바다로" / "여름을 다시 꺼내는 책"
+  - 나쁜 예: "3계단 올라 1위" (순위 기사), "2년 반 뒤 1위" (숫자만 남는다),
+    "옥순이 멈추라고 한 이유" (방송 리캡 어법)
+  - ⚠️ **표지 사진에는 headline 을 얹지 마세요.** 표지에는 이미 제목·저자명·원제가
+    인쇄돼 있어 글자가 두세 겹으로 겹칩니다. 표지를 쓰는 브리프는 noText: true 로 두세요.`
+    : `- headline은 **대표 이미지 위에 크게 얹히는 문구**입니다. 목록·검색결과·공유 카드에서
   독자가 이 글을 클릭할지 여기서 갈립니다. **시적인 표현이 아니라 궁금하게 만드는 말**을 쓰세요.
   **원칙: 답을 알고 싶게 만드세요.** 다 말해 버리면 클릭할 이유가 없어집니다.
   - 우선순위 ① **답이 궁금해지는 한 줄.** 무슨 일이 있었는지는 알려 주고,
@@ -163,12 +189,14 @@ function imageBriefRules(a, bodyImages) {
   - 물음표는 쓰지 않아도 됩니다. 문장을 **끝내지 않는 것**만으로 궁금해집니다.
   - ⚠️ **나쁜 예(실제로 나왔던 것)**: "눈물 뒤의 직진", "말의 속도가 남긴 간격",
     "진심에도 속도가 있다" ← 무슨 글인지 알 수 없고 클릭할 이유가 없습니다.
-    감상을 압축한 문학적 표현은 여기 쓰지 마세요.
+    감상을 압축한 문학적 표현은 여기 쓰지 마세요.`;
+
+  return `# 이미지 브리프
+- imageBriefs 첫 번째 항목은 placement="thumbnail", afterSection=0 인 대표 이미지 1개.
+- 그 뒤에 placement="body" 이미지 ${bodyImages}개를 만드세요. afterSection은 1 이상 ${a.sectionCount} 이하의 서로 다른 값.
+${headlineRules}
 - eyebrow는 헤드라인 위에 붙는 작은 분류 라벨입니다(2~8자). 이미지마다 다르게 쓰세요.
-- statValue / statLabel 은 그 이미지가 강조할 **본문에 실제로 등장하는 핵심 수치**입니다.
-  - 예: statValue="70만원", statLabel="월 최대 납입액"
-  - 본문에 없는 숫자를 만들어내지 마세요. 강조할 수치가 없는 이미지는 둘 다 빈 문자열로 두세요.
-  - 이미지마다 서로 다른 수치를 고르세요.
+${statRules}
 - photoQuery는 배경으로 깔 실사 사진을 스톡 사진 사이트(Unsplash/Pexels)에서 찾을 **영어** 검색어입니다.
   - 반드시 영어 2~4단어. 한국어를 쓰면 검색이 실패합니다.
   - 카메라로 실제 찍을 수 있는 구체적 장면이어야 합니다. 추상 개념(예: "financial freedom")은 금지.
@@ -237,7 +265,7 @@ export function buildClipPrompt({ clip, cfg, today = new Date(), buzz = '' }) {
   for (const ch of String(clip?.videoId || clip?.title || '')) vh = (vh * 31 + ch.codePointAt(0)) % 100000;
   const clipVoice = CLIP_VOICES[vh % CLIP_VOICES.length];
   const a = cfg.article;
-  const dateStr = today.toISOString().slice(0, 10);
+  const dateStr = todayStr(today);
   const bodyImages = cfg.images.enabled ? cfg.images.bodyImages : 0;
   const upload = clip.uploadDate
     ? `${clip.uploadDate.slice(0, 4)}-${clip.uploadDate.slice(4, 6)}-${clip.uploadDate.slice(6, 8)}`
@@ -605,7 +633,7 @@ ${imageBriefRules(a, bodyImages)}
  */
 export function buildNewsPrompt({ url, cfg, today = new Date(), source = null }) {
   const a = cfg.article;
-  const dateStr = today.toISOString().slice(0, 10);
+  const dateStr = todayStr(today);
   const bodyImages = cfg.images.enabled ? cfg.images.bodyImages : 0;
 
   // 본문을 미리 뽑아 왔으면 프롬프트에 실어 보낸다 (codex 는 샌드박스라 URL 을 직접 못 받는다)
@@ -831,15 +859,23 @@ const BOOK_VOICES = [
  */
 export function buildBookPrompt({ topic, cfg, today = new Date() }) {
   const a = cfg.article;
-  const dateStr = today.toISOString().slice(0, 10);
+  const dateStr = todayStr(today);
   // 책 글은 사진이 많아야 한다 (독자 피드백 2026-07-29: "중간중간 사진이 부족")
   const bodyImages = cfg.images.enabled ? cfg.images.bodyImages + 2 : 0;
   // "책: 투명한 나선 — 히가시노 게이고 (북다)" → 제목 부분만
   const book = String(topic).replace(/^책\s*:\s*/, '').trim();
-  // 목소리는 책 제목이 정한다 — 같은 책은 항상 같은 목소리
+  /* 목소리는 **책이** 정한다 — 같은 책은 재생성해도 같은 목소리라야 검토를 반복할 수 있다.
+   *
+   * 그러므로 해시는 **첫 줄(제목·저자·출판사)만** 본다. topic 에 취재 재료를 붙여
+   * 넘기는 경우가 있고, 그것까지 해시에 넣으면 붙여넣은 자료에 따라 목소리가 바뀐다
+   * (2026-08-01 실측: 『수족관』이 취재문 유무로 '정밀한 평론가' ↔ '마감 노동자 소설가'). */
+  const bookKey = book.split('\n')[0].trim();
   let h = 0;
-  for (const ch of book) h = (h * 31 + ch.codePointAt(0)) % 100000;
-  const voice = BOOK_VOICES[h % BOOK_VOICES.length];
+  for (const ch of bookKey) h = (h * 31 + ch.codePointAt(0)) % 100000;
+  /* 사람이 목소리를 고정할 수 있다 — config.json `article.bookVoice` 에 이름을 적으면
+   * 로테이션을 끄고 그 목소리로만 쓴다 (비우면 책 제목 해시로 돌린다). */
+  const pinned = BOOK_VOICES.find((v) => v.name === String(a.bookVoice || '').trim());
+  const voice = pinned || BOOK_VOICES[h % BOOK_VOICES.length];
 
   return `당신은 네이버 블로그에서 '오늘 뭐 읽지?' 시리즈를 쓰는 북 큐레이터입니다.
 아래 책 한 권을 소개하는 글을 완성하세요.
@@ -884,6 +920,39 @@ ${dateStr}
 - 책 본문 발췌는 **출판사·언론이 이미 공개한 한두 문장**만, 큰따옴표 + 출처 귀속으로.
 - 출판사 소개문을 그대로 옮기지 마세요. 사실만 취하고 문장은 새로 쓰세요.
 - sources 에는 실제로 읽은 서평·기사·출판사 페이지 URL 만 넣으세요.
+
+# 서점 페이지에서 무엇이 '출판사 소개'인가 (실패 사례로 만든 규칙)
+서점 상품 페이지에는 출판사 소개 말고도 글자가 많습니다. **다음은 책에 대한 정보가
+아닙니다.** 출판사 소개나 작품 내용으로 인용하면 거짓이 됩니다.
+- 페이지 **푸터**: 사업자등록번호·통신판매업신고번호·주소·대표자명
+- **이벤트·굿즈 배너**, 다른 책 광고, 시리즈 추천
+- **독자 리뷰·마이리뷰** — 독자의 감상이지 출판사의 소개가 아닙니다
+
+> 실패 실측 (2026-08-01, 『수족관』): *"출판사 소개에 따르면 작품의 시간적 배경은
+> **2003년**의 뜨거운 여름"* 이라고 쓰고 그 숫자를 **제목·seoTitle·directAnswer·
+> 이미지 브리프 3개**에 박았습니다. 그런데 '2003' 의 유일한 출처는 알라딘 푸터의
+> **통신판매업신고 "2003-서울중구-01520"** 이었고, '장마' 는 **독자 리뷰** 문장이었습니다.
+> 출판사 소개에는 연도도 계절도 없었습니다.
+
+→ **작품의 배경 연도·계절·장소는 출판사 소개문이나 공개 발췌에 그렇게 적혀 있을
+때만** 쓰세요. 없으면 쓰지 마세요. 없는 숫자를 글의 축으로 세우면 제목부터 거짓입니다.
+→ 도서관 소장 검색, 가격비교 사이트는 **sources 에 넣지 마세요.** 독자에게 쓸모가
+없고 "소장 6건", "10% 할인가" 같은 문장이 keyTakeaways 를 채웁니다.
+
+# 이 글은 순위 기사가 아닙니다 (독자 피드백 2026-08-01)
+순위·판매량·독자 통계는 **오늘 이 책을 고른 이유**일 뿐, 글의 축이 아닙니다.
+독자는 "이 책 어떤 책이야?" 를 알고 싶어서 들어옵니다. 순위표를 보러 오지 않습니다.
+
+- **title 에 순위·계단·퍼센트를 넣지 마세요.** "3계단 올라 2년 반 만에 1위" 는
+  연예 뉴스 제목이고, 책 소개 글의 제목이 아닙니다.
+- 순위 이야기는 **한 섹션 안에서 몇 문장으로** 끝냅니다. 프롤로그·결말·에필로그로
+  번지게 두지 마세요. 같은 숫자를 여러 섹션에서 되풀이하면 글이 통계 요약이 됩니다.
+- 축은 **책 안에서** 찾으세요 — 공개된 발췌의 비유, 제목의 뜻, 인물이 원하는 것,
+  출판사 소개가 세운 질문. 그것이 이 글이 독자에게 건네는 것입니다.
+
+> 실패 실측 (2026-08-01, 『수족관』): 제목이 "수족관, 3계단 올라 2년 반 만에 1위",
+> seoTitle·metaDescription·directAnswer·프롤로그·포인트 섹션까지 전부 순위 숫자였습니다.
+> 독자 반응: *"이런 내용은 뉴스 스타일이고, 독자가 책을 소개하고 읽는 스타일로 하고 싶다."*
 
 # 글의 각도 — 이 글만의 관점 하나를 먼저 정하세요
 잘 되는 책 에세이는 서지 정보가 아니라 **하나의 관점**으로 책을 꿰뚫습니다.
@@ -1009,7 +1078,7 @@ ${voice.rules}
   이 표기로 저자의 실물 사진(자유 라이선스)을 찾아 본문에 싣습니다.
 - 확실하지 않으면 nameEn 을 빈 문자열로. 추측한 표기는 검색을 망칩니다.
 
-${imageBriefRules(a, bodyImages)}
+${imageBriefRules(a, bodyImages, { book: true })}
 - photoQuery 는 두 종류를 섞으세요 (실사진이 부족한 슬롯을 스톡이 채웁니다):
   - **읽는 분위기**: "open book coffee table", "bookstore shelves warm light",
     "reading nook window", "person reading cafe"
@@ -1035,7 +1104,7 @@ ${imageBriefRules(a, bodyImages)}
  */
 export function buildArticlePrompt({ topic, cfg, today = new Date() }) {
   const a = cfg.article;
-  const dateStr = today.toISOString().slice(0, 10);
+  const dateStr = todayStr(today);
   const year = today.getFullYear();
   const bodyImages = cfg.images.enabled ? cfg.images.bodyImages : 0;
 

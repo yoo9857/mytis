@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import { FILES, DIRS } from './paths.js';
 
-/** 의존성 없는 최소 .env 파서 */
-function loadEnvFile(file) {
+/** 의존성 없는 최소 .env 파서 (스크립트에서도 쓴다 — book-today.mjs) */
+export function loadEnvFile(file = FILES.env) {
   if (!fs.existsSync(file)) return {};
   const out = {};
   const text = fs.readFileSync(file, 'utf8').replace(/^﻿/, '');

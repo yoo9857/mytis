@@ -632,13 +632,19 @@ export async function fetchBackgrounds(article, cfg, slots) {
        * 카드 구석에 얹는 `credit` 은 ASCII 만 쓴다 — 한글·일본어 저작자명은
        * 본문 하단 '이미지 출처' 에 그대로 남는다(`photographer`). */
       const isWm = it.source === 'wikimedia';
-      const who = isWm ? it.author || '작자 미상' : it.owner ? `@${it.owner}` : '';
-      const license = isWm ? it.license || 'Wikimedia Commons' : it.permalink ? 'Instagram' : '';
+      /* manifest 가 크레딧을 **직접 적어 두면 그대로 쓴다.**
+       * 위키미디어(저작자+라이선스)와 인스타(@계정) 두 모양만 있었는데,
+       * 책 글에는 서점 상품컷(예스24·알라딘)과 우리가 만든 카드가 들어온다 —
+       * 어느 쪽도 owner/permalink 로는 표현되지 않아 크레딧이 통째로 비었다. */
+      const who = it.photographer || (isWm ? it.author || '작자 미상' : it.owner ? `@${it.owner}` : '');
+      const license = it.license || (isWm ? 'Wikimedia Commons' : it.permalink ? 'Instagram' : '');
       result[slot] = {
         file: path.join(localDir, name),
-        credit: isWm
-          ? [license, 'Wikimedia Commons'].filter(Boolean).join(' · ')
-          : [who, license].filter(Boolean).join(' · '),
+        credit:
+          it.credit ||
+          (isWm
+            ? [license, 'Wikimedia Commons'].filter(Boolean).join(' · ')
+            : [who, license].filter(Boolean).join(' · ')),
         photographer: who,
         license,
         source: 'local-photo',

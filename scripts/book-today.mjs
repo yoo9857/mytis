@@ -17,6 +17,11 @@
  */
 import fs from 'node:fs';
 import { chromium } from 'playwright';
+import { todayStr } from '../src/paths.js';
+import { loadEnvFile } from '../src/config.js';
+
+/* 이 스크립트는 단독 실행되므로 .env 를 직접 읽는다 (블로그 대조에 NAVER_BLOG 가 필요) */
+const ENV = { ...loadEnvFile(), ...process.env };
 
 const DONE_FILE = 'books.done.txt';
 /* **월간** 베스트 · **문학 분야만** (시리즈 정체성: 서재/문학책 카테고리).
@@ -28,14 +33,63 @@ const LIST_URLS = [1, 55889].map(
     `https://www.aladin.co.kr/shop/common/wbest.aspx?BestType=MonthlyBest&BranchType=1&CID=${cid}&Year=${now.getFullYear()}&Month=${now.getMonth() + 1}`
 );
 
-/** 이미 쓴 책 제목 목록 */
+/** 괄호(판본·시리즈 표기)를 떼고 비교한다 — 목록의 "불안의 책 (먼슬리 클래식)" 과
+ *  발행글 제목의 "불안의 책" 이 같은 책이다. */
+function baseTitle(t) {
+  return String(t || '')
+    .replace(/\s*[(（][^)）]*[)）]\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 이미 쓴 책 제목 목록 (기록 파일) */
 function doneTitles() {
   if (!fs.existsSync(DONE_FILE)) return [];
   return fs
     .readFileSync(DONE_FILE, 'utf8')
     .split('\n')
-    .map((l) => l.replace(/^\[[^\]]*\]\s*/, '').trim())
-    .filter(Boolean);
+    /* `[날짜] 제목 -> URL` — 날짜와 **주소를 모두** 떼야 제목만 남는다.
+     * 주소를 안 떼면 `b.title.includes(d)` 가 영영 거짓이 되어 한 방향으로만
+     * 비교된다 (2026-08-01 발견). */
+    .map((l) => l.replace(/^\[[^\]]*\]\s*/, '').replace(/\s*->\s*\S+\s*$/, '').trim())
+    .filter(Boolean)
+    .map(baseTitle);
+}
+
+/** 블로그에 **실제로 발행된** 글 제목 (RSS).
+ *
+ * 왜 필요한가: books.done.txt 는 발행 성공 시에만 주소가 붙고, 다른 컴퓨터에서
+ * 작업하면 파일이 커밋되지 않아 기록이 사라진다.
+ *
+ * > 2026-08-01 실측: 다른 기기에서 발행한 『불안의 책』·『사춘기 엄마의 오장육부』가
+ * > 기록에 없어 『불안의 책』을 **두 번째로 뽑았다.** 파일만 믿으면 중복 발행된다.
+ *
+ * 기록 파일이 아니라 **블로그가 사실의 출처**다.
+ */
+async function publishedTitles(page) {
+  const blogId = ENV.NAVER_BLOG || '';
+  if (!blogId) {
+    console.error('⚠ NAVER_BLOG 이 없어 블로그 대조를 건너뜁니다 (기록 파일만 봅니다).');
+    return null;
+  }
+  try {
+    /* page.evaluate 안의 fetch 는 안 된다 — 그때 페이지는 알라딘이고
+     * rss.blog.naver.com 은 크로스오리진이라 CORS 로 막힌다.
+     * request 컨텍스트는 브라우저 밖이라 CORS 를 타지 않는다. */
+    const res = await page.context().request.get(`https://rss.blog.naver.com/${blogId}.xml`, {
+      timeout: 20_000,
+    });
+    if (!res.ok()) throw new Error(`RSS ${res.status()}`);
+    const xml = await res.text();
+    const titles = [...xml.matchAll(/<title><!\[CDATA\[([^\]]*)\]\]><\/title>/g)].map((m) => m[1]);
+    /* 첫 두 개는 채널 제목(피드·이미지)이라 글 제목이 아니다 */
+    const posts = titles.slice(2);
+    if (!posts.length) throw new Error('RSS 에서 글 제목을 못 읽었습니다');
+    return posts;
+  } catch (e) {
+    console.error(`⚠ 블로그 대조 실패 (${e.message}) — 기록 파일만 봅니다.`);
+    return null;
+  }
 }
 
 /** 만화·잡지·수험서는 시리즈 소개가 어려워 거른다 — 제목과 출판사 둘 다 본다 */
@@ -77,13 +131,32 @@ try {
   books.sort((a, b) => a.rank - b.rank);
 
   const done = doneTitles();
+  const posted = await publishedTitles(page);
+
+  /** 이 책을 이미 썼는가 — 기록 파일과 블로그 발행글 **양쪽**을 본다 */
+  function isDone(b) {
+    const base = baseTitle(b.title);
+    if (!base) return false;
+    if (done.some((d) => base.includes(d) || d.includes(base))) return true;
+    /* 발행글 제목은 "수족관, 2년 반 만의 역주행" 처럼 책 제목 + 각도다 */
+    return !!posted?.some((t) => t.includes(base));
+  }
+
   const fresh = books.filter(
-    (b) =>
-      b.title &&
-      !SKIP.test(b.title) &&
-      !SKIP.test(b.publisher) &&
-      !done.some((d) => b.title.includes(d) || d.includes(b.title))
+    (b) => b.title && !SKIP.test(b.title) && !SKIP.test(b.publisher) && !isDone(b)
   );
+
+  /* 블로그에는 있는데 기록에 없는 책을 알려 준다 — 기록이 어긋난 것을 조용히 넘기면
+   * 다음 실행에서 또 중복을 뽑는다 */
+  if (posted) {
+    const drift = books.filter((b) => {
+      const base = baseTitle(b.title);
+      return base && posted.some((t) => t.includes(base)) && !done.some((d) => base.includes(d) || d.includes(base));
+    });
+    for (const b of drift) {
+      console.error(`⚠ 기록 누락: '${b.title}' 은 블로그에 발행돼 있으나 ${DONE_FILE} 에 없습니다.`);
+    }
+  }
 
   if (!fresh.length) {
     console.error('후보가 없습니다 (전부 썼거나 목록을 못 읽었습니다).');
@@ -94,7 +167,7 @@ try {
     const pick = fresh[0];
     const topic = `책: ${pick.title} — ${pick.author} (${pick.publisher})`;
     if (process.argv.includes('--save')) {
-      fs.appendFileSync(DONE_FILE, `[${new Date().toISOString().slice(0, 10)}] ${pick.title}\n`);
+      fs.appendFileSync(DONE_FILE, `[${todayStr()}] ${pick.title}\n`);
     }
     console.log(topic);
   } else {
