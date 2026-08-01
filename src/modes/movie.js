@@ -1,0 +1,54 @@
+/** 목소리 — pickVoice() 가 첫 줄 해시로 고르고, config.article.<voicePin> 으로 고정한다 */
+const VOICES = [
+  {
+    name: '극장 자리 지키는 사람',
+    rules: `당신의 목소리: **극장 자리 지키는 사람** (많이 본 사람의 담담한 안내).
+- **해요체**입니다 ("~거든요", "~어요", "~더라고요"). 글 전체가 그렇습니다.
+- 1인칭은 **"저"** 입니다 — 해요체에 "나는" 이 섞이면 격이 깨집니다.
+- 줄거리·결말은 **감정을 빼고 사건만** 정확히 옮깁니다. 여기서 문체를 자랑하지 마세요.
+  독자는 "무슨 일이 일어나는지" 를 알려고 왔습니다.
+- 대신 **프롤로그와 해석 섹션에서만** 자기 목소리를 냅니다.
+- 시그니처: 프롤로그를 **이 영화와 자신이 만난 장면**으로 엽니다
+  ("초등학생 때 봤는데 그 뒤로 새가 무서웠어요" 같은 한두 줄).`,
+  },
+  {
+    name: '영화 읽어주는 사람',
+    rules: `당신의 목소리: **영화 읽어주는 사람** (구조를 읽어 주는 해설자).
+- 경어체 평서 위주 ("~입니다", "~합니다", "~죠"). 건조하고 정확합니다.
+- 장면이 **서사에서 하는 일**을 봅니다 — 감독이 무엇을 아꼈고 왜 이 순서인가.
+- 줄거리는 시간순으로 또박또박. 해석은 반드시 **화면에 있는 것**을 근거로.
+- 시그니처: 해석 섹션을 **"이 장면이 없었다면" 한 문단**으로 닫습니다
+  (사실과 상상을 분명히 구분해서).`,
+  },
+];
+
+/** "영화: 제목 (감독)" → 정보·줄거리·결말 (티스토리 Cinematic) */
+export default {
+  id: 'movie', key: 'MOVIE', label: '영화',
+  detect: (t) => /^영화\s*:/.test(t),
+  capabilities: {
+    /* 사진 공급이 이 모드의 가장 어려운 문제다.
+     * 참고 글(2026-08-01 벤치마킹)은 스틸 19장으로 82자당 1장을 맞췄지만
+     * 그 스틸은 전부 배급사 저작권이다 — §6 이 금지한 유형.
+     * 사용자 결정: **공식 소스만.** 그래서 주력은 사진이 아니라 예고편 임베드다. */
+    sourcePhoto: true,
+    relatedArticlePhotos: true,
+    clipShots: false,             // v1. 입력이 유튜브 주소가 아니어서 경로가 다르다
+    youtubeEmbeds: true,          // **이 모드의 이미지 공급원.** 공식 예고편
+    socialEmbeds: false,          // 배급사 계정 근황은 작품 소개와 무관
+    allowTables: true,            // 개요·감독·출연·상영시간
+  },
+  schemaFile: 'movie.schema.json',
+  rules: ['readabilityRules', 'calloutRules', 'legalDisputeRules', 'imageBriefRules'],
+  voices: VOICES,
+  voicePin: 'movieVoice',
+  sections: ['프롤로그', '영화 정보', '줄거리', '결말', '등장인물', '해석', '포인트'],
+  platforms: ['tistory'],
+  /** 책 모드와 **정반대**인 규칙 */
+  conflicts: {
+    titleInHeading: 'require',    // 소제목에 영화 제목을 넣는다 — 검색어다
+    spoiler: 'choice',            // config.movie.spoiler 로 갈래
+    statCard: 'forbid',
+  },
+  foreignWords: ['서지 정보', '옮긴이', '쪽수'],
+};

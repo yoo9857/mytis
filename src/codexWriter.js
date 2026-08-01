@@ -3,8 +3,14 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { DIRS, FILES, stamp, safeSlug } from './paths.js';
 import { log, fmtDuration } from './log.js';
-import { buildArticlePrompt, buildNewsPrompt, buildClipPrompt, buildBookPrompt } from './prompt.js';
-import { MODE, MODE_LABEL, detectMode, resolveMode, can } from './mode.js';
+import {
+  buildArticlePrompt,
+  buildNewsPrompt,
+  buildClipPrompt,
+  buildBookPrompt,
+  buildMoviePrompt,
+} from './prompt.js';
+import { MODE, MODE_LABEL, MODES, detectMode, resolveMode, can } from './mode.js';
 
 /** 주제 문자열이 기사 URL 인지 판별한다. */
 export function isUrl(text) {
@@ -334,7 +340,11 @@ export async function writeArticle({ topic, cfg }) {
    * 조언형 callout 이 계속 나왔다 (2026-07-29 · 6차 시도까지 재발 —
    * 이 라우팅 자체가 한 번 조용히 빠져서 6차도 옛 스키마로 나갔다).
    * codex 는 --output-schema 의 description 을 프롬프트보다 강하게 따른다. */
-  const schemaFile = detectMode(topic) === MODE.BOOK ? FILES.bookSchema : FILES.articleSchema;
+  /* 스키마는 **모드 선언에서** 읽는다 (src/modes/<id>.js 의 schemaFile).
+   * 예전에는 여기 삼항식으로 하드코딩돼 있었고, 모드를 추가할 때마다 이 줄을
+   * 같이 고쳐야 했다 — 잊으면 새 모드가 article.schema.json 으로 나간다. */
+  const detected = detectMode(topic);
+  const schemaFile = path.join(DIRS.schema, MODES[detected]?.schemaFile || 'article.schema.json');
   if (!fs.existsSync(schemaFile)) {
     throw new Error(`아티클 스키마를 찾을 수 없습니다: ${schemaFile}`);
   }
@@ -399,11 +409,23 @@ export async function writeArticle({ topic, cfg }) {
     log.info('검색과 집필에 수 분이 걸립니다. 기다려 주세요...');
 
     try {
-      let prompt = clip
-        ? buildClipPrompt({ clip, cfg, buzz })
-        : fromNews
-          ? buildNewsPrompt({ url: topic, cfg, source })
-          : buildArticlePrompt({ topic, cfg });
+      /* 지시문은 **모드로** 고른다.
+       *
+       * ⚠️ 예전에는 `clip / fromNews / else` 세 갈래였다. 그래서 `buildBookPrompt` 는
+       * import 되어 있는데 **한 번도 호출되지 않았다** — 책 글이 연예 이슈 톤의
+       * `buildArticlePrompt` 로 쓰였고, 책다운 것은 스키마(book.schema.json)뿐이었다.
+       *
+       * > 2026-08-01 발견: 그래서 BOOK_VOICES·'읽은 척 금지'·섹션 7개 구조가
+       * > 모델에 닿은 적이 없었다. "스키마가 프롬프트를 이긴다" 로 보였던 현상의
+       * > 절반은 **프롬프트가 아예 없었기 때문**이다.
+       *
+       * mode.js 가 모드를 정하므로 여기서 조건을 새로 세우지 말고 mode 로 분기한다. */
+      let prompt;
+      if (mode === MODE.CLIP) prompt = buildClipPrompt({ clip, cfg, buzz });
+      else if (mode === MODE.BOOK) prompt = buildBookPrompt({ topic, cfg });
+      else if (mode === MODE.MOVIE) prompt = buildMoviePrompt({ topic, cfg, spoiler: cfg.movie?.spoiler !== false });
+      else if (mode === MODE.NEWS) prompt = buildNewsPrompt({ url: topic, cfg, source });
+      else prompt = buildArticlePrompt({ topic, cfg });
       if (attempt > 1 && lastErr) {
         prompt += `\n\n# 재시도 사유\n직전 시도 결과가 기준에 못 미쳤습니다: ${lastErr}\n이번에는 분량과 섹션 수를 반드시 채우세요.`;
       }

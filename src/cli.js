@@ -36,6 +36,11 @@ const HELP = `
   npm run probe                        에디터 구조 덤프 (셀렉터가 깨졌을 때 진단)
   npm run doctor                       설정·환경 점검
 
+  영화 (티스토리 Cinematic)
+  npm run post -- "영화: 제목 (감독)"        영화 정보·줄거리·결말 글 → 티스토리 발행
+  npm run draft -- "영화: 제목 (감독)"       발행 없이 초안만
+                                       스포 없이 쓰려면 config.json 의 movie.spoiler=false
+
   오늘 뭐 읽지? (네이버 책 시리즈)
   npm run book                         알라딘 월간 문학 베스트에서 오늘의 책 선정 → 초안 생성
                                        (검토 뒤 npm run publish -- out/<글>.json --naver)
@@ -321,6 +326,15 @@ async function cmdPublishFile(cfg, file, flags = {}) {
   }
 
   const platforms = resolvePlatforms(flags);
+  /* 모드가 선언한 플랫폼과 어긋나면 경고한다 (막지는 않는다) —
+   * 영화 글은 티스토리, 책 글은 네이버를 전제로 규칙이 짜여 있다. */
+  try {
+    const { platformOk, MODE_LABEL } = await import('./mode.js');
+    const md = article.mode || 'topic';
+    for (const p of platforms) {
+      if (!platformOk(md, p)) log.warn(`${MODE_LABEL[md]} 모드는 ${PLATFORM_LABEL[p]} 를 전제로 만들어지지 않았습니다 — 레이아웃·규칙이 어긋날 수 있습니다.`);
+    }
+  } catch { /* 경고 실패로 발행을 막지 않는다 */ }
   log.info(`발행 대상: ${platforms.map((p) => PLATFORM_LABEL[p]).join(' + ')}`);
 
   const rendered = await renderImages(article, cfg);
@@ -506,6 +520,37 @@ async function checkYoutubeDeps() {
 async function cmdDoctor(cfg) {
   log.banner('환경 점검');
   let bad = 0;
+
+  /* 모드 선언과 실제 지시문이 어긋난 곳을 먼저 잡는다.
+   * 모드가 늘 때마다 규칙을 빼먹었고(영화 모드 두 곳), 라우팅이 빠져
+   * buildBookPrompt 가 아예 호출되지 않은 적도 있다 (2026-08-01). */
+  try {
+    const { lintModes, ACTIVE, MODE } = await import('./mode.js');
+    const {
+      buildArticlePrompt,
+      buildNewsPrompt,
+      buildClipPrompt,
+      buildBookPrompt,
+      buildMoviePrompt,
+    } = await import('./prompt.js');
+    const build = (id) => {
+      if (id === MODE.CLIP) return buildClipPrompt({ clip: { title: 't', videoId: 'v', lines: [] }, cfg });
+      if (id === MODE.NEWS) return buildNewsPrompt({ url: 'https://example.com/a', cfg });
+      if (id === MODE.BOOK) return buildBookPrompt({ topic: '책: 제목 — 저자', cfg });
+      if (id === MODE.MOVIE) return buildMoviePrompt({ topic: '영화: 제목 (감독)', cfg });
+      return buildArticlePrompt({ topic: '주제', cfg });
+    };
+    const problems = lintModes({ buildPrompt: build, cfg });
+    if (problems.length) {
+      for (const p of problems) log.error(`모드 정합: ${p}`);
+      bad += problems.length;
+    } else {
+      log.ok(`모드 정합 OK (${ACTIVE.map((m) => m.label).join(' · ')})`);
+    }
+  } catch (err) {
+    log.error(`모드 점검 실패: ${err.message.split('\n')[0]}`);
+    bad++;
+  }
 
   const { cmd, shell } = resolveCodex();
   log.info(`codex 실행 파일: ${cmd}${shell ? ' (shell 경유)' : ''}`);

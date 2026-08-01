@@ -25,6 +25,7 @@ export const FILES = {
   failed: path.join(ROOT, 'topics.failed.txt'),
   articleSchema: path.join(ROOT, 'src', 'schema', 'article.schema.json'),
   bookSchema: path.join(ROOT, 'src', 'schema', 'book.schema.json'),
+  movieSchema: path.join(ROOT, 'src', 'schema', 'movie.schema.json'),
   photosSchema: path.join(ROOT, 'src', 'schema', 'photos.schema.json'),
   newsfeedSchema: path.join(ROOT, 'src', 'schema', 'newsfeed.schema.json'),
   socialSchema: path.join(ROOT, 'src', 'schema', 'social.schema.json'),

@@ -117,7 +117,43 @@ const UNUSABLE_PATTERN =
 const PREFERRED_PATTERN =
   /\b(concert|live|stage|performance|festival|award|press|interview|red\s*carpet|fan\s*meeting|showcase|airport)\b|공연|콘서트|무대|시상|기자|간담회|행사/i;
 
-async function fromWikimedia(query, { allowShareAlike = true } = {}) {
+/**
+ * 검색어가 **그 사람에 관한 사진**을 물어왔는지 확인한다.
+ *
+ * 커먼즈 검색은 낱말만 맞으면 무엇이든 준다. 라이선스·크기·광고 필터를 다 통과하는데
+ * 사람이 아닌 것이 섞인다 — 특히 **성씨가 지명과 같을 때** 그렇다.
+ *
+ * > 2026-08-01 실측 — `Keigo Higashino` 검색 결과 10건이 전부 사람이 아니었다:
+ * >   東野駅(Higashino station) 사진 6장 · 東野초등학교 2장 ·
+ * >   동명이인(피겨 임원 Ayako Higashino) 1장. 전부 CC BY 이고 800px 이상이라
+ * >   기존 필터를 통과했고, `isPerson: true` 로 표시됐다.
+ * >   (히가시노 게이고 본인 사진은 커먼즈에 **없다** — 없는 게 정답이었다)
+ *
+ * → 이름의 **모든 낱말**이 파일명이나 설명에 있어야 통과시킨다. 성씨만 걸린 것은 버린다.
+ *   §7-3 의 동명이인(황정민 아나운서)보다 한 겹 더 나쁜 경우라 코드로 막는다.
+ */
+function nameMatches(name, haystack) {
+  /* 이름과 대상 문자열을 **같은 방식으로** 정규화한다 — 한쪽만 특수문자를 떼면
+   * 로마자 이름의 하이픈에서 어긋난다.
+   * > 실측: "Hwang Jung-min" → 토큰 "jungmin" 이 파일명 "Hwang Jung-Min" 과
+   * >   맞지 않아 **본인 사진이 탈락**했다. */
+  const norm = (s) =>
+    String(s || '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]/gu, '');
+  const hay = norm(haystack);
+  const parts = String(name || '')
+    .toLowerCase()
+    .split(/[\s,]+/)
+    .map(norm)
+    /* 2글자 이하 토큰(이니셜·조사)은 아무 데나 걸리므로 판정에서 뺀다.
+     * 한글 이름은 짧아도 통째로 쓴다 (예: "은희경"). */
+    .filter((s) => s.length >= 3 || /[가-힣]/.test(s));
+  if (!parts.length) return false;
+  return parts.every((p) => hay.includes(p));
+}
+
+async function fromWikimedia(query, { allowShareAlike = true, mustMatch = '' } = {}) {
   const url =
     'https://commons.wikimedia.org/w/api.php?' +
     new URLSearchParams({
@@ -156,6 +192,13 @@ async function fromWikimedia(query, { allowShareAlike = true } = {}) {
 
       if (UNUSABLE_PATTERN.test(haystack)) {
         log.debug(`인물 사진 제외 (광고·포스터류): ${title.slice(0, 60)}`);
+        return null;
+      }
+
+      /* 그 사람 사진이 맞는지 — 이름의 모든 낱말이 파일명·설명에 있어야 한다.
+       * 없으면 버린다. 인물 사진 0장이 엉뚱한 사진 1장보다 낫다. */
+      if (mustMatch && !nameMatches(mustMatch, haystack)) {
+        log.debug(`인물 사진 제외 (이름 불일치 '${mustMatch}'): ${title.slice(0, 60)}`);
         return null;
       }
 
@@ -876,7 +919,8 @@ export async function fetchBackgrounds(article, cfg, slots) {
     for (let slot = startSlot; slot < Math.min(slots, startSlot + people.length); slot++) {
       const person = people[Math.min(slot - startSlot, people.length - 1)];
       const name = person.nameEn || person.nameKo;
-      const opts = { allowShareAlike: cfg.images.allowShareAlike !== false };
+      /* mustMatch — 검색 결과가 실제로 이 사람 사진인지 검사한다 (nameMatches 주석 참고) */
+      const opts = { allowShareAlike: cfg.images.allowShareAlike !== false, mustMatch: name };
       // 공연 현장 사진이 잘 걸리도록 검색어를 넓혀가며 시도한다
       for (const q of [`${name} concert`, `${name} performance`, name]) {
         try {
