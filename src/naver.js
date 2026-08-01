@@ -391,8 +391,17 @@ export async function injectDocument(page, article, { cfg, images, imageMeta, cr
  *   - 검색 결과에 원서·타 판본이 섞인다("Invisible Helix" 3종) —
  *     제목이 정확히 일치하는 첫 카드가 한국어판이다.
  */
-export async function attachBookMaterial(page, title) {
-  log.step(`글감 첨부: 책 "${title}"`);
+/**
+ * 글감 첨부의 **공통 흐름**. 탭 이름만 다르고 나머지는 같다 (책 · 장소 · 영화 …).
+ *
+ * `attachBookMaterial` 이 책 전용으로 굳어 있었는데, 장소(GPS)를 붙이려면 같은
+ * 흐름이 한 벌 더 필요했다 — 복사하면 실측으로 얻은 예외 처리가 두 곳으로 갈린다.
+ *
+ * `loose` 는 **장소용**이다. 책은 검색 결과의 말단 텍스트가 제목과 정확히 일치하지만,
+ * 장소는 이름 뒤에 지점·분류가 붙어 나오는 일이 많아 정확 일치로는 못 집는다.
+ */
+export async function attachMaterial(page, { tab, query, label = tab, loose = false, align = 'center' }) {
+  log.step(`글감 첨부: ${label} "${query}"`);
 
   // 커서를 본문 끝으로 — 카드는 커서 자리에 삽입된다
   await page.locator('.se-text-paragraph').last().click();
@@ -402,7 +411,7 @@ export async function attachBookMaterial(page, title) {
   await sleep(page, 1500);
 
   const input = page.locator('[class*="search"] input, [class*="side"] input[type="text"]').first();
-  await input.fill(title);
+  await input.fill(query);
   await input.press('Enter');
 
   /* 결과 패널이 **접힌 채** 올 때가 있다 — 에디터가 직전 상태(축소)를 기억한다
@@ -421,29 +430,37 @@ export async function attachBookMaterial(page, title) {
     await shot(page, 'naver-material-fail');
     throw new Error('글감 결과 패널이 펼쳐지지 않았습니다.');
   }
-  // 책 탭으로 좁힌다 — 쇼핑(나선호스…)이 섞이지 않게
-  await page.locator('button:text-is("책")').first().click({ timeout: 2500 }).catch(() => {}); // 30초 기본 대기 금지 — 책 선택이 70초 걸린 주범
+  // 해당 탭으로 좁힌다 — 책 글에서 쇼핑(나선호스…)이 섞여 나온 적이 있다
+  await page.locator(`button:text-is("${tab}")`).first().click({ timeout: 2500 }).catch(() => {}); // 30초 기본 대기 금지 — 책 선택이 70초 걸린 주범
   await sleep(page, 1200);
 
   /* 같은 글자가 **본문에도** 있다 — 서지 표 셀과 참고 자료에 책 제목이 그대로
    * 들어 있어서, 문서 전체에서 첫 일치를 집으면 본문을 클릭한다 (2026-07-29 실측:
    * 오클릭 여파로 라이브러리 패널까지 열려 발행 버튼이 막혔다).
    * 글감 패널의 위치를 '전체 글감' 탭으로 잡고, **그 아래·오른쪽 일치만** 받는다. */
-  const rect = await page.evaluate((q) => {
-    const tab = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '전체 글감');
-    if (!tab) return null;
-    const t = tab.getBoundingClientRect();
-    const els = [...document.querySelectorAll('div,strong,span,a,p')].filter(
-      (e) => e.childElementCount === 0 && e.textContent.trim() === q
-    );
-    for (const el of els) {
-      const r = el.getBoundingClientRect();
-      if (!r.width || !r.height) continue;
-      if (r.top > t.top && r.left > t.left - 60) return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  const rect = await page.evaluate(({ q, loose }) => {
+    const tabEl = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '전체 글감');
+    if (!tabEl) return null;
+    const t = tabEl.getBoundingClientRect();
+    const leaves = [...document.querySelectorAll('div,strong,span,a,p')].filter((e) => e.childElementCount === 0);
+    const norm = (x) => x.replace(/\s/g, '');
+    /* 정확 일치를 먼저 본다. 못 찾으면(장소) 앞부분 일치 → 포함 순으로 넓힌다.
+     * 넓히는 순서를 고정해야 "가장 그럴듯한 것" 이 아니라 **가장 좁은 일치**가 이긴다. */
+    const tiers = loose
+      ? [(e) => norm(e.textContent) === norm(q), (e) => norm(e.textContent).startsWith(norm(q)), (e) => norm(e.textContent).includes(norm(q))]
+      : [(e) => e.textContent.trim() === q];
+    for (const match of tiers) {
+      for (const el of leaves) {
+        if (!match(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        if (r.top > t.top && r.left > t.left - 60) return { x: r.x + r.width / 2, y: r.y + r.height / 2, text: el.textContent.trim().slice(0, 60) };
+      }
     }
     return null;
-  }, title);
-  if (!rect) throw new Error('글감 검색 결과에서 책 카드를 찾지 못했습니다.');
+  }, { q: query, loose });
+  if (!rect) throw new Error(`글감 검색 결과에서 ${label} 카드를 찾지 못했습니다.`);
+  log.debug(`글감 결과 선택: "${rect.text}"`);
   await page.mouse.click(rect.x, rect.y);
   await sleep(page, 2500);
 
@@ -463,7 +480,7 @@ export async function attachBookMaterial(page, title) {
   /* 카드를 **대표 사진 바로 아래**로 올린다 (2026-07-29 독자 요청 — 처음엔 제목
    * 바로 아래였는데 썸네일 아래가 낫다고 확정). UI 삽입은 커서 위치라 끝에 붙는데,
    * material 컴포넌트는 왕복이 확인됐으므로 setDocumentData 로 자리만 옮긴다. */
-  const ok = await page.evaluate(() => {
+  const ok = await page.evaluate((alignWanted) => {
     const e = window.__seEd();
     const cur = e.getDocumentData();
     const comps = cur.document.components;
@@ -471,19 +488,35 @@ export async function attachBookMaterial(page, title) {
     if (at < 0) return false;
     // align:center 는 2026-07-29 왕복 실측으로 살아남는 것을 확인했다 (unknown 0)
     const [card] = comps.splice(at, 1);
-    card.align = 'center';
+    card.align = alignWanted;
     const firstImage = comps.findIndex((c) => c['@ctype'] === 'image');
     const titleAt = comps.findIndex((c) => c['@ctype'] === 'documentTitle');
     comps.splice((firstImage >= 0 ? firstImage : titleAt) + 1, 0, card);
     e.setDocumentData({ ...cur, document: { ...cur.document, components: comps } });
     return true;
-  });
+  }, align);
   if (!ok) {
     await shot(page, 'naver-material-fail');
-    throw new Error('책 카드가 문서에 들어가지 않았습니다.');
+    throw new Error(`${label} 카드가 문서에 들어가지 않았습니다.`);
   }
   await sleep(page, 1500);
-  log.ok('책 카드 첨부 완료 (글감 > 책 · 대표 사진 아래 · 가운데)');
+  log.ok(`${label} 카드 첨부 완료 (글감 > ${tab} · 대표 사진 아래)`);
+}
+
+/** 글감 > 책 (책 글 전용 — 기존 호출부를 그대로 둔다) */
+export async function attachBookMaterial(page, title) {
+  return attachMaterial(page, { tab: '책', query: title, label: '책' });
+}
+
+/**
+ * 글감 > 장소 — 네이버 지도의 장소 카드를 붙인다 (GPS·주소·지도가 함께 실린다).
+ *
+ * 지역 검색에서 이 카드가 있는 글이 유리하다. 사용자 요구(2026-08-01): "gps 써서".
+ * 장소명은 **네이버 지도에 등재된 이름**이어야 한다 — 없으면 검색 결과가 비고,
+ * 그때는 발행을 막지 않고 경고만 한다 (책 카드와 같은 기준).
+ */
+export async function attachPlaceMaterial(page, place) {
+  return attachMaterial(page, { tab: '장소', query: place, label: '장소', loose: true });
 }
 
 /** 발행 설정 레이어 열기 */
@@ -763,6 +796,20 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
     } catch (err) {
       log.warn(`책 글감 첨부 실패 (발행은 계속합니다): ${err.message.slice(0, 100)}`);
       // 실패해도 패널은 반드시 닫는다 — 열려 있으면 발행 레이어가 안 열린다
+      await page.locator('button:has-text("글감")').first().click({ timeout: 2500 }).catch(() => {});
+      await sleep(page, 800);
+      await page.keyboard.press('Escape').catch(() => {});
+    }
+  }
+
+  /* 글감 > 장소 — `article.place` 가 있으면 지도 카드를 붙인다.
+   * 네이버 지역 검색에서 이 카드가 있는 글이 유리하고, 독자에게도 위치가 바로 보인다.
+   * 실패해도 발행은 계속한다 — 장소명이 지도에 없을 수 있다(책 카드와 같은 기준). */
+  if (article.place) {
+    try {
+      await attachPlaceMaterial(page, article.place);
+    } catch (err) {
+      log.warn(`장소 글감 첨부 실패 (발행은 계속합니다): ${err.message.slice(0, 100)}`);
       await page.locator('button:has-text("글감")').first().click({ timeout: 2500 }).catch(() => {});
       await sleep(page, 800);
       await page.keyboard.press('Escape').catch(() => {});

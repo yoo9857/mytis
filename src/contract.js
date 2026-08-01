@@ -185,10 +185,16 @@ export function checkContract(article, modeId) {
 
   if (!inRange(m.flowChars, c.chars)) add('chars', m.flowChars, c.chars.join('~') + '자');
   if (!inRange(m.sections, c.sections)) add('sections', m.sections, c.sections.join('~') + '개');
-  if (!inRange(m.photos, c.photos)) add('photos', m.photos, c.photos.join('~') + '장');
-  if (m.photos && !inRange(m.photoDensity, c.photoDensity)) {
-    add('photoDensity', m.photoDensity + '자/장', c.photoDensity.join('~') + '자/장',
-      '보이는 글 전부 ÷ 사진 수. 참고 글 실측 249자/장.');
+  /* 사진을 **일부러 끈 글**(사용자가 현장 사진을 직접 붙이는 후기 등)에는 사진 규격을
+   * 대지 않는다. 그러지 않으면 `--no-images` 를 쓸 때마다 게이트에 막히고,
+   * 막히는 것이 일상이 되면 `--force` 습관만 생긴다. */
+  const photosOff = !(article.imageBriefs || []).length && article.bodyImageCount === 0;
+  if (!photosOff) {
+    if (!inRange(m.photos, c.photos)) add('photos', m.photos, c.photos.join('~') + '장');
+    if (m.photos && !inRange(m.photoDensity, c.photoDensity)) {
+      add('photoDensity', m.photoDensity + '자/장', c.photoDensity.join('~') + '자/장',
+        '보이는 글 전부 ÷ 사진 수. 참고 글 실측 249자/장.');
+    }
   }
   if (c.captions === 'fact-only' && m.vagueCaptions.length) {
     add('captions', m.vagueCaptions.length + '개', '0개',

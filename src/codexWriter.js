@@ -305,6 +305,9 @@ function normalizeArticle(raw, { topic, cfg }) {
      * > 시켜서 됐던 것이고, 필드는 한 번도 통과한 적이 없다. `angle` 도 같았다.
      * > 이 함정은 `npm run doctor` 의 스키마-정규화 대조가 잡는다(modes/index.js). */
     angle: str(raw.angle),
+    /* 네이버 글감 > 장소 카드에 쓸 **네이버 지도 등재 장소명**.
+     * 지어내면 검색이 비어 카드가 안 붙는다 — 확인한 이름만. */
+    place: str(raw.place),
     spoiler: raw.spoiler === true,
     directAnswer: str(raw.directAnswer),
     keyTakeaways: arr(raw.keyTakeaways).map(str).filter(Boolean),
