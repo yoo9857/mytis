@@ -309,6 +309,33 @@ async function cmdPublishFile(cfg, file, flags = {}) {
     /* lint 실패로 발행을 막지 않는다 */
   }
 
+  /* 영상 글의 **큰따옴표 인용을 자막과 기계 대조**한다.
+   *
+   * 자동 자막에서 딴 인용은 축자성이 없고, 모델이 어절을 주워 문장을 만들기도 한다.
+   * > 2026-08-01: "영호가 가장 꼴찌예요" 의 낱말이 자막 888자에 흩어져 있었다.
+   * 실존 인물의 발언이라 조용히 나가면 안 된다 — 경고만 하고 막지는 않는다. */
+  if (article.mode === 'clip' && article.clipVideoId) {
+    try {
+      const { verifyQuotes, quoteReport } = await import('./verifyQuotes.js');
+      const subFile = path.join(DIRS.tmp, 'subs', `${article.clipVideoId}.ko.json3`);
+      if (fs.existsSync(subFile)) {
+        const j = JSON.parse(fs.readFileSync(subFile, 'utf8'));
+        const transcript = (j.events || [])
+          .filter((e) => e.segs)
+          .map((e) => e.segs.map((x) => x.utf8).join(''))
+          .join(' ');
+        const { total, missing, rebuilt } = quoteReport(verifyQuotes(article, transcript));
+        for (const r of missing) log.warn(`인용이 자막에 없습니다 (${r.where}): "${r.quote}"${r.reason ? ` — ${r.reason}` : ''}`);
+        for (const r of rebuilt) log.info(`인용 재구성 (${r.where}): "${r.quote}" — 자막 조각 경계. 화면과 대조하세요`);
+        if (!missing.length) log.ok(`인용 ${total}건 자막 대조 통과`);
+      } else {
+        log.warn('자막 캐시가 없어 인용을 대조하지 못했습니다.');
+      }
+    } catch (err) {
+      log.debug(`인용 대조 실패: ${err.message.split('\n')[0]}`);
+    }
+  }
+
   /* '오늘 뭐 읽지?' 시리즈 연결 — 직전에 발행한 책의 링크를 글 끝에 잇는다.
    * 시리즈는 이어 읽게 만들어야 시리즈다 (내부 링크는 검색에도 좋다).
    * 주소는 books.done.txt 에서 읽는다 (발행 성공 시 아래에서 기록). */

@@ -93,6 +93,21 @@ function pickScenes(article) {
  * 캡션에는 codex 가 쓴 장면 설명과 시각을 함께 남긴다 — 어느 대목인지
  * 독자가 알 수 있어야 하고, 출처 표기이기도 하다.
  */
+/**
+ * 장면 캡처의 alt 를 만든다.
+ *
+ * 예전에는 `${제목} — ${시각} 장면` 한 틀이었다. 그래서 **19장의 alt 가
+ * 시각만 다른 같은 문장**이었다 — 검색에도 쓸모없고, 화면 낭독기로 듣는 사람에게는
+ * 아무 정보가 없다 (2026-08-01 지적).
+ *
+ * 캡션이 있으면 그것을 쓴다. 캡션은 그 대목이 무엇인지 말하므로 alt 의 일과 같다.
+ */
+function clipAlt(title, sec, caption) {
+  const mm = `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+  const c = String(caption || '').trim();
+  return c ? `${c} — ${title} ${mm}` : `${title} — ${mm} 장면`;
+}
+
 function applyClipShotLayout(article, cfg, scenes, shots) {
   const bySec = new Map(shots.map((s) => [s.sec, s]));
   let got = scenes.filter((s) => bySec.has(s.sec));
@@ -179,7 +194,7 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
       statLabel: oldThumb.statLabel || '',
       photoQuery: '',
       caption: '',
-      alt: `${article.title} — ${mmss(got[0].sec)} 장면`,
+      alt: clipAlt(article.title, got[0].sec, got[0].caption),
       afterSection: 0,
     },
     ...placed.map((s) => ({
@@ -194,7 +209,7 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
        * 사진마다 숫자가 앞에 붙으면 독자가 읽는 흐름을 끊는다. 어느 대목인지는
        * 사진과 앞뒤 문단이 이미 말해 준다. 시각은 alt 에만 남겨 둔다. */
       caption: s.caption,
-      alt: `${article.title} — ${mmss(s.sec)} 장면`,
+      alt: clipAlt(article.title, s.sec, s.caption),
       afterSection: s.at,
     })),
   ];

@@ -728,7 +728,27 @@ export async function fetchBackgrounds(article, cfg, slots) {
       };
       log.debug(`슬롯 ${slot}: ${path.basename(s.file)} (장면 ${s.sec}초)`);
     }
-    if (result.some(Boolean)) log.ok(`장면 캡처 ${result.filter(Boolean).length}장 사용`);
+    if (result.some(Boolean)) {
+      log.ok(`장면 캡처 ${result.filter(Boolean).length}장 사용`);
+      /* 로컬 사진 분기와 같다 — **스톡 검색으로 섞지 않는다.**
+       *
+       * 캡처가 몇 장 빠져도 그 자리는 비워 두고 그라디언트로 간다.
+       * 영상 글에서 독자가 보려는 것은 '그 장면' 이고, 스톡은 정의상 그 장면이 아니다.
+       *
+       * > 2026-08-01 실측: 18장 중 2장이 중복 판정으로 지워졌는데(264초·593초)
+       * > `clipShots` 에는 경로가 남아 있어, 발행 때 그 2칸을 **스톡으로 채우려**
+       * > codex 검색이 돌았다. 나는솔로 출연자를 다룬 캡션 옆에 무관한 스톡 인물
+       * > 사진이 실릴 수 있었다 (§7-3 ③ 과 같은 실패).
+       *
+       * 클립 모드는 sourcePhoto·relatedArticlePhotos 가 모두 false 이고, 방송용
+       * 가명을 쓰는 출연자라 위키미디어 인물 검색도 성과가 없다 — 여기서 끝내는 것이
+       * 맞다. 부족한 장면은 캡처를 다시 뜨는 것으로 해결한다. */
+      const filled = result.filter(Boolean).length;
+      if (filled < slots) {
+        log.info(`장면 ${slots - filled}칸이 비었습니다 — 스톡으로 채우지 않고 그라디언트로 둡니다.`);
+      }
+      return result;
+    }
   }
 
   const sourcePool = [article.sourceImage, ...(article.sourceImages || [])].filter(Boolean);
