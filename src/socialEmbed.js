@@ -54,8 +54,22 @@ const UA =
 const OFFICIAL_HINTS =
   /official|공식|entertainment|엔터테인먼트|records|studios?|cube|starship|hybe|pledis|\bsm\b|\bjyp\b|\byg\b|kakao|antenna|fnc|wm\b|mbc|kbs|sbs|jtbc|tvn|mnet|tving|coupangplay|netflix/i;
 
-/** 팬·비공식 계정 신호. 이게 걸리면 임베드하지 않는다. */
-const FAN_HINTS = /\bfan(s|cam|base|page)?\b|팬|직캠|백업|backup|archive|아카이브|update(s)?\b|\bbot\b|daily|pics?\b|media\b/i;
+/**
+ * 팬·비공식 계정 신호. 이게 걸리면 임베드하지 않는다.
+ *
+ * ⚠️ **외국 저자·감독은 이 목록이 유일한 방어선이다.** `OFFICIAL_HINTS` 는 한국 연예
+ * 소속사 이름(hybe·sm·jyp·엔터테인먼트…) 위주라 외국 인물에게는 아무 신호도 걸리지
+ * 않는다. 그래서 팬 계정이 그냥 통과한다.
+ *
+ * > 2026-08-02 실측 — 해리 포터 책 글에 `@jkrowling_stories` 게시물이 임베드됐다.
+ * > 팬 계정인데 `fan|팬|update|daily|pics|media|archive|bot` 어디에도 걸리지 않았다.
+ * > 임베드는 **내용을 우리가 통제할 수 없다** — 그 계정이 무엇을 올렸는지 모른 채
+ * > 우리 글에 실린다. 작가의 정치적 발언 같은, 글의 주제와 무관한 것이 딸려 올 수 있다.
+ *
+ * `<인물명>_stories` · `~quotes` · `~edits` · `~universe` 같은 형태는 거의 팬 계정이다.
+ */
+const FAN_HINTS =
+  /\bfan(s|cam|base|page)?\b|팬|직캠|백업|backup|archive|아카이브|update(s)?\b|\bbot\b|daily|pics?\b|media\b|stor(y|ies)\b|quotes?\b|edits?\b|universe\b|world\b|lovers?\b|forever\b|_hq\b|club\b/i;
 
 /**
  * @param {object} opts
