@@ -158,7 +158,11 @@ function applyFlags(cfg, flags) {
     cfg.naver = { ...cfg.naver, category: flags.category };
     cfg.blog = { ...cfg.blog, category: flags.category };
   }
-  if (flags.collage) cfg.naver = { ...cfg.naver, collage: true };
+  /* 두 플랫폼 모두 같은 스위치를 쓴다 — 기본은 한 장씩, 켜면 짝으로 묶는다. */
+  if (flags.collage) {
+    cfg.naver = { ...cfg.naver, collage: true };
+    cfg.blog = { ...cfg.blog, collage: true };
+  }
   if (flags.noImages) {
     cfg.images = { ...cfg.images, enabled: false, thumbnail: false, bodyImages: 0 };
   }

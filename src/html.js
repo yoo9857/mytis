@@ -407,7 +407,8 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
      *    한 장씩 세우면 글이 끝없이 길어진다 (naverDoc 이 쓰는 것과 같은 리듬).
      *    사진이 3장 이하면 리듬을 쓰지 않는다 — 억지로 붙이면 어울리지 않는 두 컷이
      *    나란히 선다. */
-    const RHYTHM = [1, 2, 2, 1];
+    /* 자동 묶기 여부. 기본은 꺼짐 — 네이버(`naver.collage`)와 같은 기본값이다. */
+    const collage = cfg.blog?.collage === true;
     const runs = [];
     if (mine.some((b) => b.group)) {
       const byGroup = new Map();
@@ -419,15 +420,26 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
         }
         byGroup.get(key).push(img);
       }
-    } else if (mine.length === 1) {
-      runs.push([mine[0]]);
-    } else {
-      /* ⚠️ 한때 "3장 이하면 묶지 않는다" 를 뒀는데, 배치 단계(`applyClipShotLayout`)가
-       * **섹션당 2장**을 일부러 넣기 시작하자 그 2장이 가드에 걸려 한 장씩 나갔다
-       * (2026-08-01 실측: 배치는 S2:2 S3:2 인데 2열 묶음 0개).
+    } else if (!collage || mine.length === 1) {
+      /* **기본은 한 장씩이다.** 자동 묶기는 `blog.collage` 를 켜야 돈다.
        *
-       * 섹션에 온 장수를 그대로 존중한다 — 홀수면 첫 장을 단독으로 세우고 나머지를 짝짓는다.
-       * 배치가 이미 리듬을 정하므로 여기서 또 리듬을 돌릴 필요가 없다. */
+       * 한때 섹션에 온 장수를 그대로 존중해(홀수면 첫 장 단독, 나머지 짝) 무조건 묶었다.
+       * 영화 글에서 사진을 나란히 붙이려고 그렇게 고친 것인데, `html.js` 는 모드를 보지
+       * 않으므로 **다른 모드까지 전부 묶여 버렸다.**
+       *
+       * > 2026-08-02 사용자 지적 — 영상(클립) 글은 사진을 이어붙이는 양식이 아닌데
+       * >   2열 표가 8개 나왔다. 8절에 사진 8장이 몰려 4쌍이 붙었다.
+       *
+       * 그리고 두 플랫폼의 기본값이 **반대**였다. 네이버는 `naver.collage` 기본 false 로
+       * 자동 묶기가 꺼져 있고 `group` 지정만 묶는데, 티스토리만 무조건 묶었다.
+       * "규칙이 플랫폼마다 다르면 글쓴이가 결과를 예측할 수 없다" 고 적어 두고
+       * 정작 반대 방향으로 맞춘 셈이다 — 네이버와 같게 되돌린다.
+       *
+       * 나란히 붙이려면 아티클이 `imageBriefs[].group` 으로 **어느 두 장을** 붙일지
+       * 지정한다. 관계없는 두 장이 붙으면 둘 다 죽기 때문에 코드가 임의로 정하지 않는다. */
+      for (const img of mine) runs.push([img]);
+    } else {
+      /* `collage` 를 켠 글만 — 섹션에 온 장수를 존중한다(홀수면 첫 장 단독, 나머지 짝). */
       let at = 0;
       if (mine.length % 2 === 1) runs.push([mine[at++]]);
       while (at < mine.length) {
