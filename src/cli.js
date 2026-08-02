@@ -458,6 +458,26 @@ async function cmdPublishFile(cfg, file, flags = {}) {
       lines[at] = `${lines[at]} -> ${naverUrl}`;
       fs.writeFileSync('books.done.txt', lines.join('\n'));
       log.debug(`books.done.txt 에 주소 기록: ${naverUrl}`);
+    } else {
+      /* 줄이 없으면 **새로 붙인다.**
+       *
+       * 이 블록은 `npm run book` 이 미리 써 둔 줄에 주소만 채우도록 되어 있었다.
+       * 그래서 **사람이 책을 직접 지정하면 아무 기록도 남지 않았다** —
+       * 다음에 같은 책을 또 고를 수 있다는 뜻이다.
+       *
+       * > 2026-08-02 발각 — 사용자가 지정한 『책 읽고 싶어서 회사를 그만뒀습니다』를
+       * > 발행했는데 done 목록에 남지 않았다. 2026-07-31 에 이미 한 번,
+       * > 커밋되지 않은 done 목록 때문에 발행한 책을 다시 고른 적이 있다(§7-4).
+       * > **중복 판단의 근거가 되는 목록에 빠지는 경로가 있으면 그 목록을 못 믿는다.** */
+      const { todayStr } = await import('./paths.js');
+      const title = String(article.topic || article.title || '')
+        .split('\n')[0]
+        .replace(/^책\s*:\s*/, '')
+        .split(/\s+—\s+/)[0]
+        .trim();
+      const text = fs.readFileSync('books.done.txt', 'utf8').replace(/\s*$/, '');
+      fs.writeFileSync('books.done.txt', `${text}\n[${todayStr()}] ${title} -> ${naverUrl}\n`);
+      log.ok(`books.done.txt 에 새 줄로 기록: ${title}`);
     }
   }
 }
