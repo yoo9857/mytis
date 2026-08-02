@@ -685,6 +685,18 @@ export async function writeArticle({ topic, cfg }) {
        * 10분 30초를 쓰고 93%). 그런데 `~습니다` → `~죠` 는 뜻이 바뀌지 않는
        * 기계적 변환이라 사람이 할 이유가 없다 — 지난 글은 손으로 20곳을 고쳤다.
        * 안전한 형태만 바꾸고 큰따옴표 안은 건드리지 않는다 (endings.js 머리말). */
+      /* 이미지를 끈 글은 **브리프도 비운다.**
+       * 모델은 지시문에 "본문 0개" 라고 적어도 대표 브리프 하나는 내놓는 일이 있다.
+       * 그 한 장 때문에 "사진을 쓰는 글" 로 판정돼 사진 규격에 막히고, 렌더도 안 되니
+       * 아무 데도 쓰이지 않는 값이 남는다. 여기서 끊는다. */
+      if (cfg.images?.enabled === false) {
+        if (article.imageBriefs?.length) {
+          log.info(`이미지를 끈 글이라 imageBriefs ${article.imageBriefs.length}개를 비웠습니다.`);
+        }
+        article.imageBriefs = [];
+        article.bodyImageCount = 0;
+      }
+
       const { autoFix, checkContract, formatViolations } = await import('./contract.js');
       for (const line of autoFix(article, mode)) log.info(`자동 교정 — ${line}`);
       /* 교정 뒤에도 남은 것을 여기서 보여 준다. 발행 게이트(cli.js)가 다시 대조하지만,
