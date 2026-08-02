@@ -74,6 +74,7 @@ const HELP = `
   --both            --platform both 와 같음
   --verbose         상세 로그 (codex 진행 상황 포함)
   --no-images       생성 이미지를 만들지 않음 (사진을 직접 붙일 글)
+  --collage         네이버 사진 자동 묶기 (기본 꺼짐 — 보통은 imageBriefs[].group 으로 지정)
   --category <이름>  이번 실행만 카테고리 지정 (config 전역값을 뒤집지 않는다)
   --force           모드 출력 규격 위반을 무시하고 발행 (권하지 않음 — 규격을 고치세요)
 
@@ -107,6 +108,10 @@ function parseArgs(argv) {
     /* 사진을 직접 붙일 글(현장 사진이 있는 후기 등)에서는 생성 이미지를 끈다.
      * 스톡·그라디언트 카드가 섞이면 본인 사진과 톤이 어긋난다. */
     else if (a === '--no-images') flags.noImages = true;
+    /* 네이버 사진 자동 묶기. 기본은 꺼져 있다 — 관계없는 두 장이 나란히 붙으면 둘 다
+     * 죽기 때문이다(naverDoc.js). 연관 있는 컷은 `imageBriefs[].group` 으로 지정하는 것이
+     * 정석이고, 이 플래그는 "아무렇게나 묶어도 되는 글" 을 위한 예외다. */
+    else if (a === '--collage') flags.collage = true;
     /* 카테고리는 글 성격마다 다르다 — config 전역값(`오늘 뭐 읽지?`)이 책 시리즈에
      * 맞춰져 있어서, 다른 글을 낼 때마다 설정을 뒤집고 되돌리는 것을 잊는다. */
     else if (a === '--category') flags.category = argv[++i];
@@ -153,6 +158,7 @@ function applyFlags(cfg, flags) {
     cfg.naver = { ...cfg.naver, category: flags.category };
     cfg.blog = { ...cfg.blog, category: flags.category };
   }
+  if (flags.collage) cfg.naver = { ...cfg.naver, collage: true };
   if (flags.noImages) {
     cfg.images = { ...cfg.images, enabled: false, thumbnail: false, bodyImages: 0 };
   }

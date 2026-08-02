@@ -392,6 +392,32 @@ export async function injectDocument(page, article, { cfg, images, imageMeta, cr
  *     제목이 정확히 일치하는 첫 카드가 한국어판이다.
  */
 /**
+ * 글감 패널을 **열려 있을 때만** 닫는다.
+ *
+ * 글감 버튼은 토글이다. 실패 경로에서 무조건 한 번 누르면 **이미 닫힌 패널이 다시 열린다.**
+ * 열려 있으면 발행 설정 레이어가 아예 안 열린다 (2026-07-29 실측).
+ *
+ * > 2026-08-02 실측 — 책 카드 첨부가 문서 삽입 단계에서 실패했다. 그 지점에서는 패널이
+ * >   이미 닫혀 있었는데 catch 블록이 버튼을 눌러 되열었고, 그래서 발행 레이어를 못 열어
+ * >   **발행 자체가 실패했다.** 되돌리는 코드가 오히려 망가뜨린 경우다.
+ */
+async function closeMaterialPanel(page) {
+  const isOpen = () =>
+    page
+      .locator('button:text-is("전체 글감")')
+      .first()
+      .isVisible()
+      .catch(() => false);
+  for (let k = 0; k < 3; k++) {
+    if (!(await isOpen())) break;
+    await page.locator('button:has-text("글감")').first().click({ timeout: 2500 }).catch(() => {});
+    await sleep(page, 700);
+  }
+  await page.keyboard.press('Escape').catch(() => {});
+  await sleep(page, 400);
+}
+
+/**
  * 글감 첨부의 **공통 흐름**. 탭 이름만 다르고 나머지는 같다 (책 · 장소 · 영화 …).
  *
  * `attachBookMaterial` 이 책 전용으로 굳어 있었는데, 장소(GPS)를 붙이려면 같은
@@ -503,9 +529,18 @@ export async function attachMaterial(page, { tab, query, label = tab, loose = fa
   log.ok(`${label} 카드 첨부 완료 (글감 > ${tab} · 대표 사진 아래)`);
 }
 
-/** 글감 > 책 (책 글 전용 — 기존 호출부를 그대로 둔다) */
+/**
+ * 글감 > 책 (책 글 전용 — 기존 호출부를 그대로 둔다)
+ *
+ * ⚠️ `loose: true` 다. 책도 **제목이 정확히 일치하지 않는다** —
+ * > 2026-08-02 실측 — 검색어는 "해리 포터와 마법사의 돌" 인데 카드 제목은
+ * >   "해리 포터와 마법사의 돌 1 (무선)" 이었다. 정확 일치로는 못 집어 첨부가 실패하고,
+ * >   그 여파로 발행 레이어까지 안 열려 **발행 자체가 실패했다.**
+ * 이전 책들(투명한 나선·악의·수족관)은 제목이 그대로 일치해 드러나지 않았다.
+ * 판본·권수 표기가 붙는 책에서 처음 터졌다.
+ */
 export async function attachBookMaterial(page, title) {
-  return attachMaterial(page, { tab: '책', query: title, label: '책' });
+  return attachMaterial(page, { tab: '책', query: title, label: '책', loose: true });
 }
 
 /**
@@ -785,7 +820,11 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
   /* 책 글은 글 끝에 **글감 > 책 카드**를 단다 (독자 구조의 ⑧ 책등록).
    * 카드의 link·sign·dataId 는 네이버 서명값이라 손으로 만들 수 없다 —
    * 사진·장소와 같은 전략으로 UI 로 삽입하고 문서에서 확인만 한다. */
-  if (article.mode === 'book') {
+  /* `article.skipMaterial` 로 끌 수 있다.
+   * 카드는 있으면 좋은 것이고 **없어도 글은 나간다.** 그런데 첨부가 실패하면 그 여파로
+   * 발행 레이어까지 못 열려 발행 자체가 죽는다 (2026-08-02 실측 — 해리 포터 글이
+   * 같은 지점에서 두 번 실패했다). 곁가지가 본체를 막으면 곁가지를 끌 수단이 있어야 한다. */
+  if (article.mode === 'book' && !article.skipMaterial) {
     const bookTitle = String(article.topic || article.title || '')
       .replace(/^책\s*:\s*/, '')
       .split('—')[0]
@@ -795,10 +834,7 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
       await attachBookMaterial(page, bookTitle);
     } catch (err) {
       log.warn(`책 글감 첨부 실패 (발행은 계속합니다): ${err.message.slice(0, 100)}`);
-      // 실패해도 패널은 반드시 닫는다 — 열려 있으면 발행 레이어가 안 열린다
-      await page.locator('button:has-text("글감")').first().click({ timeout: 2500 }).catch(() => {});
-      await sleep(page, 800);
-      await page.keyboard.press('Escape').catch(() => {});
+      await closeMaterialPanel(page);
     }
   }
 
@@ -810,9 +846,7 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
       await attachPlaceMaterial(page, article.place);
     } catch (err) {
       log.warn(`장소 글감 첨부 실패 (발행은 계속합니다): ${err.message.slice(0, 100)}`);
-      await page.locator('button:has-text("글감")').first().click({ timeout: 2500 }).catch(() => {});
-      await sleep(page, 800);
-      await page.keyboard.press('Escape').catch(() => {});
+      await closeMaterialPanel(page);
     }
   }
 

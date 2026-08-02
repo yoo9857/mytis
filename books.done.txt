@@ -7,3 +7,4 @@
 [2026-08-01] 수족관 -> https://blog.naver.com/web_dev5/224364620843
 [2026-08-01] 악의 -> https://blog.naver.com/web_dev5/224364640136
 [2026-08-02] 책 읽고 싶어서 회사를 그만뒀습니다 -> https://blog.naver.com/web_dev5/224365491526
+[2026-08-02] 해리 포터와 마법사의 돌 -> https://blog.naver.com/web_dev5/224365545691
