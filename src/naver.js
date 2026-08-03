@@ -5,6 +5,7 @@ import { shot, setDialogPolicy } from './browser.js';
 import { DIRS, stamp } from './paths.js';
 import { buildDocument, summarize } from './naverDoc.js';
 import { pickCategory } from './category.js';
+import { MODES } from './mode.js';
 
 /**
  * 네이버 블로그(스마트에디터 ONE) 글쓰기 자동화.
@@ -856,7 +857,12 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
     aliases: cfg.naver.categoryAliases,
     fallback: cfg.naver.categoryFallback,
   });
-  await setTags(page, article.tags, { max: cfg.naver.tagCount });
+  /* 태그 상한은 **모드 규격**을 따른다. `cfg.naver.tagCount`(=10)로 자르면
+   * 규격이 12~16 을 요구하는 모드에서 앞의 10개만 나간다 — codexWriter 의
+   * 같은 버그를 고친 날 발행에서 15개 중 10개만 붙어 드러났다 (2026-08-03).
+   * 네이버 자체 상한(30)은 setTags 가 지킨다. */
+  const tagMax = MODES[article.mode]?.contract?.tags?.[1] || cfg.naver.tagCount;
+  await setTags(page, article.tags, { max: tagMax });
   await setVisibility(page, cfg.naver.visibility);
   await setPublishOptions(page, cfg);
 
