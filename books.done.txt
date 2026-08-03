@@ -8,3 +8,5 @@
 [2026-08-01] 악의 -> https://blog.naver.com/web_dev5/224364640136
 [2026-08-02] 책 읽고 싶어서 회사를 그만뒀습니다 -> https://blog.naver.com/web_dev5/224365491526
 [2026-08-02] 해리 포터와 마법사의 돌 -> https://blog.naver.com/web_dev5/224365545691
+[2026-08-03] 독서의 기술 -> https://blog.naver.com/web_dev5/224366351040
+[2026-08-03] 세네카, 오늘을 빼앗기고 있는 당신에게 -> https://blog.naver.com/web_dev5/224366369435
