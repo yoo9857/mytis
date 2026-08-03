@@ -1,0 +1,68 @@
+{
+  "title": "악의 — 히가시노 게이고, 양윤옥 옮김 (현대문학)",
+  "collectedAt": "2026-08-01",
+  "note": "서점 상품 페이지의 표지·미리보기 실물컷과 우리가 만든 카드다. 수집은 고르기 위한 것이며 발행 허가가 아니다 — 위험은 발행자가 진다 (HANDOVER §6). 저자 사진은 발행자가 제공한 기자회견 보도사진이다 — 촬영자·매체 미상이라 크레딧을 특정할 수 없다.",
+  "pages": [
+    "https://www.yes24.com/product/goods/76108857",
+    "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=198223504"
+  ],
+  "items": [
+    {
+      "file": "01.jpg",
+      "what": "표지 실물컷 (타이프라이터 + 독버섯)",
+      "photographer": "현대문학",
+      "license": "예스24 상품 이미지",
+      "credit": "현대문학 · 예스24 상품 이미지",
+      "pageUrl": "https://www.yes24.com/product/goods/76108857"
+    },
+    {
+      "file": "03.jpg",
+      "what": "뒤표지 (줄거리 · 옮긴이의 말)",
+      "photographer": "현대문학",
+      "license": "알라딘 미리보기",
+      "credit": "현대문학 · 알라딘 미리보기",
+      "pageUrl": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=198223504"
+    },
+    {
+      "file": "04.jpg",
+      "what": "표제지 (흑백 속표지)",
+      "photographer": "현대문학",
+      "license": "알라딘 미리보기",
+      "credit": "현대문학 · 알라딘 미리보기",
+      "pageUrl": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=198223504"
+    },
+    {
+      "file": "06.jpg",
+      "what": "차례 — 장마다 '누구의 기록'",
+      "photographer": "현대문학",
+      "license": "알라딘 미리보기",
+      "credit": "현대문학 · 알라딘 미리보기",
+      "pageUrl": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=198223504"
+    },
+    {
+      "file": "08.jpg",
+      "what": "첫 장 표제지 (사건 — 노노구치 오사무의 수기)",
+      "photographer": "현대문학",
+      "license": "알라딘 미리보기",
+      "credit": "현대문학 · 알라딘 미리보기",
+      "pageUrl": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=198223504"
+    },
+    {
+      "file": "card-author.png",
+      "what": "작가 카드 (저자 사진 + 이력)",
+      "photographer": "",
+      "license": "기자회견 보도사진 · 출처 미상",
+      "credit": "기자회견 보도사진",
+      "pageUrl": "",
+      "note": "발행자가 직접 저장해 제공한 사진. EXIF·워터마크가 없어 촬영자·매체를 특정할 수 없다. 크레딧을 지어내지 않는다."
+    },
+    {
+      "file": "card-quote.png",
+      "what": "글귀 카드 (『악의』 92쪽 공개 발췌)",
+      "photographer": "",
+      "license": "발췌 출처 예스24 '책 속으로'",
+      "credit": "인용 (C) 히가시노 게이고 · 현대문학",
+      "pageUrl": "https://www.yes24.com/product/goods/76108857"
+    }
+  ]
+}
