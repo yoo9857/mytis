@@ -410,14 +410,31 @@ export async function setBody(page, html) {
 
     // 기본모드로 되돌려 위지윅 모델에 반영시킨다
     await setMode(page, 'basic');
-    await sleep(page, 2000);
 
-    const len = await wysiwygTextLength(page);
+    /* ⚠️ **고정 대기 2초로는 모자랐다.**
+     *
+     * HTML 모드에서 기본모드로 돌아오면 에디터 iframe 이 다시 붙는데, 그 시점이
+     * 글 길이·네트워크에 따라 흔들린다. 2초 뒤 한 번만 재면 0 자가 나오고,
+     * 그러면 멀쩡히 들어간 본문을 두고 위지윅 폴백을 또 돌린다.
+     *
+     * > 2026-08-03 실측: 티스토리 발행 2건 모두 `기본모드 반영이 부족합니다
+     * > (본문 0자)` 가 찍혔고, 곧이어 같은 함수가 폴백 뒤 7,156자를 정상으로 읽었다.
+     * > 측정기는 멀쩡했고 **타이밍만 일렀다.** 주 경로가 매번 죽고 폴백으로만
+     * > 발행되고 있었다 — 폴백이 깨지는 날 글이 빈 채로 나간다.
+     *
+     * 그래서 **채워질 때까지 폴링**한다. 진짜로 비었으면 그때 폴백으로 간다. */
+    let len = 0;
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      await sleep(page, 700);
+      len = await wysiwygTextLength(page);
+      if (len > 200) break;
+    }
     if (len > 200) {
       log.ok(`본문 입력 완료 (${html.length.toLocaleString()}자 → 본문 ${len.toLocaleString()}자)`);
       return true;
     }
-    log.warn(`기본모드 반영이 부족합니다 (본문 ${len}자). 위지윅 직접 입력으로 재시도합니다.`);
+    log.warn(`기본모드 반영이 부족합니다 (10초 대기 뒤 본문 ${len}자). 위지윅 직접 입력으로 재시도합니다.`);
   }
 
   // 폴백: 위지윅에 직접 주입
