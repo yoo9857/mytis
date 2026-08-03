@@ -1,0 +1,149 @@
+{
+  "collectedAt": "2026-07-28T14:16:07.470Z",
+  "pages": [
+    "https://ko.www.laqua.jp/spa/facilities/spa-zone/",
+    "https://ko.www.laqua.jp/spa/"
+  ],
+  "kept": [
+    {
+      "file": "out\\photos\\collected\\p01.png",
+      "url": "https://ko.www.laqua.jp/files/20210221/spa_hjmt_top_2.png",
+      "bytes": 1801287,
+      "w": 1136,
+      "h": 592
+    },
+    {
+      "file": "out\\photos\\collected\\p02.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathL01.jpg",
+      "bytes": 153927,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p03.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathL02.jpg",
+      "bytes": 251815,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p04.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathL03.jpg",
+      "bytes": 247089,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p05.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathL04.jpg",
+      "bytes": 466996,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p06.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathL05.jpg",
+      "bytes": 395262,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p07.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathL06.jpg",
+      "bytes": 295540,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p08.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathL07.jpg",
+      "bytes": 158155,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p09.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_syuhuti.jpg",
+      "bytes": 388624,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p10.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_telmale.jpg",
+      "bytes": 160450,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p11.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_yalvi.jpg",
+      "bytes": 311515,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p12.jpg",
+      "url": "https://ko.www.laqua.jp/files/20171103/_I8A1151.jpeg",
+      "bytes": 303503,
+      "w": 2000,
+      "h": 1333
+    },
+    {
+      "file": "out\\photos\\collected\\p13.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathM01.jpg",
+      "bytes": 273621,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p14.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathM02.jpg",
+      "bytes": 251815,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p15.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathM03.jpg",
+      "bytes": 243676,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p16.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathM04.jpg",
+      "bytes": 417380,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p17.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_bathM05.jpg",
+      "bytes": 355551,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p18.jpg",
+      "url": "https://ko.www.laqua.jp/files/20210728/men_mizu.jpeg",
+      "bytes": 796060,
+      "w": 2000,
+      "h": 1500
+    },
+    {
+      "file": "out\\photos\\collected\\p19.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_vilden.jpg",
+      "bytes": 327040,
+      "w": 960,
+      "h": 720
+    },
+    {
+      "file": "out\\photos\\collected\\p20.jpg",
+      "url": "https://ko.www.laqua.jp/themes/default/img/spa/spazone/img_velle.jpg",
+      "bytes": 261593,
+      "w": 960,
+      "h": 720
+    }
+  ]
+}

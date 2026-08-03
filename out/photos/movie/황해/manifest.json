@@ -1,0 +1,15 @@
+{
+  "title": "황해 (2010, 나홍진)",
+  "note": "대표는 배급사 공식 포스터(영화진흥위원회 KoBiz 제공). 본문은 영화 화면 캡처 — 예고편이 유튜브 최대 480p 라 캡처를 거부당했고(구작), 1080p 영상에서 대신 떴다. 화면 하단 24% 는 잘라냈다: 그 자리에 유튜브 채널의 자체 내레이션 자막이 크게 박혀 있어 그대로 쓰면 남의 요약 영상에서 가져온 티가 난다. 화면의 저작권자는 제작사다 — 발행 허가가 아니며 위험은 발행자가 진다 (HANDOVER §6).",
+  "items": [
+    { "file": "01-poster.jpg", "what": "공식 포스터 (칸 주목할 만한 시선 셀렉션)", "photographer": "Wellmade STARM / Popcorn Film", "license": "배급사 공식 포스터", "credit": "(C) Wellmade STARM, Popcorn Film", "pageUrl": "https://www.koreanfilm.or.kr/eng/films/index/filmsView.jsp?movieCd=20101222" },
+    { "file": "02-majak.jpg", "what": "마작판에 앉은 구남", "photographer": "", "license": "영화 화면 캡처", "credit": "(C) Wellmade STARM, Popcorn Film", "pageUrl": "" },
+    { "file": "03-alley.jpg", "what": "낡은 건물 앞 골목", "photographer": "", "license": "영화 화면 캡처", "credit": "(C) Wellmade STARM, Popcorn Film", "pageUrl": "" },
+    { "file": "04-taewon.jpg", "what": "사업가 태원", "photographer": "", "license": "영화 화면 캡처", "credit": "(C) Wellmade STARM, Popcorn Film", "pageUrl": "" },
+    { "file": "05-gunam.jpg", "what": "구남 클로즈업", "photographer": "", "license": "영화 화면 캡처", "credit": "(C) Wellmade STARM, Popcorn Film", "pageUrl": "" },
+    { "file": "06-myunga.jpg", "what": "청부업자 면가 클로즈업", "photographer": "", "license": "영화 화면 캡처", "credit": "(C) Wellmade STARM, Popcorn Film", "pageUrl": "" },
+    { "file": "07-fight.jpg", "what": "복도에서 벌어지는 몸싸움", "photographer": "", "license": "영화 화면 캡처", "credit": "(C) Wellmade STARM, Popcorn Film", "pageUrl": "" },
+    { "file": "08-call.jpg", "what": "선글라스를 쓰고 통화하는 면가", "photographer": "", "license": "영화 화면 캡처", "credit": "(C) Wellmade STARM, Popcorn Film", "pageUrl": "" },
+    { "file": "09-bed.jpg", "what": "쓰러진 사람을 붙잡는 장면", "photographer": "", "license": "영화 화면 캡처", "credit": "(C) Wellmade STARM, Popcorn Film", "pageUrl": "" }
+  ]
+}
