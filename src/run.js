@@ -334,31 +334,48 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
   );
 }
 
+/**
+ * `renderImages` 결과를 각 소비자의 모양으로 옮겨 담는다.
+ *
+ * ⚠️ **표시(flag)를 빠뜨리지 마세요.** buildHtml 은 여기서 담아 준 것만 봅니다.
+ * `isStepCard` 를 안 옮기면 대표 이미지가 절차 카드인데도 본문에 HTML 흐름도가
+ * 또 그려집니다 (같은 6줄이 그림과 글로 두 번).
+ *
+ * > 2026-08-03: 이 함수를 고치고도 같은 증상이 남았다. `cli.js` 가 **이 함수를 쓰지 않고
+ * > 같은 코드를 복사해** 갖고 있었기 때문이다. 호출 지점이 넷이었다
+ * > (cli.js · run.js 두 곳 · scripts/repreview.mjs). 복사본을 지우고 여기로 모았다.
+ */
 export function mapImages(rendered) {
   const ordered = [rendered.thumbnail, ...rendered.body].filter(Boolean);
   const files = ordered.map((i) => i.file);
 
+  /** 표시는 한 곳에서 만든다 — 세 모양이 서로 어긋나지 않게 */
+  const thumbFlags = { isStepCard: rendered.thumbnail?.isStepCard === true };
+  const bodyFlags = (b) => ({ isInfoCard: b.isInfoCard === true });
+
   const withPlaceholders = {
     thumbnail: rendered.thumbnail
-      ? { placeholder: '{{IMAGE_0}}', alt: rendered.thumbnail.alt, caption: '' }
+      ? { placeholder: '{{IMAGE_0}}', alt: rendered.thumbnail.alt, caption: '', ...thumbFlags }
       : null,
     body: rendered.body.map((b, i) => ({
       placeholder: `{{IMAGE_${(rendered.thumbnail ? 1 : 0) + i}}}`,
       alt: b.alt,
       caption: b.caption,
       afterSection: b.afterSection,
+      ...bodyFlags(b),
     })),
   };
 
   const withLocalSrc = {
     thumbnail: rendered.thumbnail
-      ? { src: pathToFileURL(rendered.thumbnail.file).href, alt: rendered.thumbnail.alt }
+      ? { src: pathToFileURL(rendered.thumbnail.file).href, alt: rendered.thumbnail.alt, ...thumbFlags }
       : null,
     body: rendered.body.map((b) => ({
       src: pathToFileURL(b.file).href,
       alt: b.alt,
       caption: b.caption,
       afterSection: b.afterSection,
+      ...bodyFlags(b),
     })),
   };
 

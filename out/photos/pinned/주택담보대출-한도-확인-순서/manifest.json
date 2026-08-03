@@ -1,0 +1,54 @@
+{
+  "note": "렌더 결과를 고정한 것이다. 원저작권은 각 원저작자에게 있다.",
+  "items": [
+    {
+      "file": "00-thumb.png",
+      "source": "",
+      "photographer": "",
+      "license": "",
+      "permalink": ""
+    },
+    {
+      "file": "01.png",
+      "source": "pexels",
+      "photographer": "Max Vakhtbovych",
+      "license": "",
+      "permalink": "https://www.pexels.com/photo/shot-of-an-empty-kitchen-in-an-apartment-for-rent-7546561/"
+    },
+    {
+      "file": "02.png",
+      "source": "pexels",
+      "photographer": "Jakub Zerdzicki",
+      "license": "",
+      "permalink": "https://www.pexels.com/photo/a-calculator-on-a-desk-20552572/"
+    },
+    {
+      "file": "03.png",
+      "source": "pexels",
+      "photographer": "Vanessa Garcia",
+      "license": "",
+      "permalink": "https://www.pexels.com/photo/photo-of-book-on-top-of-wooden-table-6325886/"
+    },
+    {
+      "file": "04.png",
+      "source": "unsplash",
+      "photographer": "Jakub Żerdzicki",
+      "license": "",
+      "permalink": "https://unsplash.com/photos/a-person-sitting-at-a-desk-with-a-calculator-and-a-notebook-LNnmSumlwO4"
+    },
+    {
+      "file": "05.png",
+      "source": "pexels",
+      "photographer": "Curtis Adams",
+      "license": "",
+      "permalink": "https://www.pexels.com/photo/empty-bedroom-with-glass-windows-7028101/"
+    },
+    {
+      "file": "06.png",
+      "source": "",
+      "photographer": "",
+      "license": "",
+      "permalink": ""
+    }
+  ]
+}

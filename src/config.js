@@ -173,7 +173,31 @@ let cached = null;
 export function loadConfig({ reload = false } = {}) {
   if (cached && !reload) return cached;
 
-  const env = { ...loadEnvFile(FILES.env), ...process.env };
+  /* `.env` 파일 값과 프로세스 환경변수를 **따로 들고 있는다.**
+   * 아래 "블로그를 갈아탔으면 카테고리를 물려주지 않는다" 판단에 둘의 구분이 필요하다. */
+  const fileEnv = loadEnvFile(FILES.env);
+  const env = { ...fileEnv, ...process.env };
+
+  /**
+   * 블로그를 명령줄에서 **다른 곳으로** 갈아탔는가.
+   *
+   * 티스토리가 두 개다(classic-m 연예 / eco-m 경제). `.env` 기본값은 classic-m 이고
+   * 경제 글은 `TISTORY_BLOG=eco-m` 으로 갈아타 발행한다. 그런데 카테고리는
+   * `.env` 의 `TISTORY_CATEGORY` 가 그대로 따라와서, **다른 블로그에 없는
+   * 카테고리를 찾다가 실패한다.**
+   *
+   * > 2026-08-03 실측 사고: eco-m 에 부동산 글을 발행했는데 `.env` 의
+   * > `TISTORY_CATEGORY=스타·연예인` 이 config.json 의 `"auto"` 를 덮어써서
+   * > "카테고리 없음" 으로 나갔다. 발행 후에는 본문을 고칠 수 없다.
+   */
+  const blogSwitched =
+    !!process.env.TISTORY_BLOG &&
+    !!fileEnv.TISTORY_BLOG &&
+    process.env.TISTORY_BLOG.trim() !== fileEnv.TISTORY_BLOG.trim();
+  const naverSwitched =
+    !!process.env.NAVER_BLOG &&
+    !!fileEnv.NAVER_BLOG &&
+    process.env.NAVER_BLOG.trim() !== fileEnv.NAVER_BLOG.trim();
 
   let fileCfg = {};
   if (fs.existsSync(FILES.config)) {
@@ -188,9 +212,14 @@ export function loadConfig({ reload = false } = {}) {
 
   // .env 가 config.json 을 덮어씀
   if (env.TISTORY_BLOG) cfg.blog.name = env.TISTORY_BLOG;
-  if (env.TISTORY_CATEGORY) cfg.blog.category = env.TISTORY_CATEGORY;
+  /* 블로그를 갈아탔으면 `.env` 의 카테고리는 **쓰지 않는다** (위 blogSwitched 주석).
+   * 명령줄에서 카테고리를 직접 준 경우는 그것이 이긴다 — 사람이 명시한 것이다.
+   * 둘 다 없으면 config.json 값이 남는다 (보통 "auto" — 글 내용으로 고른다). */
+  const tistoryCategory = blogSwitched ? process.env.TISTORY_CATEGORY : env.TISTORY_CATEGORY;
+  if (tistoryCategory) cfg.blog.category = tistoryCategory;
   if (env.NAVER_BLOG) cfg.naver.blogId = env.NAVER_BLOG;
-  if (env.NAVER_CATEGORY) cfg.naver.category = env.NAVER_CATEGORY;
+  const naverCategory = naverSwitched ? process.env.NAVER_CATEGORY : env.NAVER_CATEGORY;
+  if (naverCategory) cfg.naver.category = naverCategory;
   if (env.MONEYTI_HEADLESS === '1') cfg.browser.headless = true;
   if (env.MONEYTI_HEADLESS === '0') cfg.browser.headless = false;
 

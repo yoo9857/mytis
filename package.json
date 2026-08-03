@@ -22,7 +22,8 @@
     "post:both": "node src/cli.js post --both",
     "book": "node src/cli.js book",
     "gate": "node scripts/gate.mjs",
-    "repreview": "node scripts/repreview.mjs"
+    "repreview": "node scripts/repreview.mjs",
+    "imgprompts": "node scripts/img-prompts.mjs"
   },
   "dependencies": {
     "playwright": "^1.49.0"

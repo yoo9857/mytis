@@ -4,7 +4,7 @@ import path from 'node:path';
 import { ensureDirs, DIRS, FILES } from './paths.js';
 import { log } from './log.js';
 import { loadConfig, blogUrls, naverUrls, validateForPublish } from './config.js';
-import { runTopic, generate, publish, publishToNaver, PLATFORM_LABEL } from './run.js';
+import { runTopic, generate, publish, publishToNaver, mapImages, PLATFORM_LABEL } from './run.js';
 import { launchBrowser, firstPage, saveSession } from './browser.js';
 import { ensureLoggedIn, isLoggedIn, discoverBlog, genericUrls } from './kakaoLogin.js';
 import {
@@ -447,17 +447,10 @@ async function cmdPublishFile(cfg, file, flags = {}) {
   const results = {};
   for (const platform of platforms) {
     if (platform === 'tistory') {
-      const images = {
-        thumbnail: rendered.thumbnail
-          ? { placeholder: '{{IMAGE_0}}', alt: rendered.thumbnail.alt, caption: '' }
-          : null,
-        body: rendered.body.map((b, i) => ({
-          placeholder: `{{IMAGE_${(rendered.thumbnail ? 1 : 0) + i}}}`,
-          alt: b.alt,
-          caption: b.caption,
-          afterSection: b.afterSection,
-        })),
-      };
+      /* ⚠️ 이 모양을 **여기서 다시 만들지 않는다.** `run.js` 의 `mapImages` 가 만든다.
+       * > 2026-08-03: 여기 복사본이 있어서, mapImages 에 `isStepCard` 를 넣어도
+       * > 이 경로만 표시를 빠뜨렸다. 같은 것을 두 곳에서 만들면 한쪽은 반드시 낡는다. */
+      const { withPlaceholders: images } = mapImages(rendered);
       const html = buildHtml(article, { cfg, images, imageCredits: credits });
       results.tistory = await publish({ article, html, imageFiles }, cfg);
     } else {
@@ -646,12 +639,18 @@ async function cmdDoctor(cfg) {
       buildClipPrompt,
       buildBookPrompt,
       buildMoviePrompt,
+      buildEconPrompt,
     } = await import('./prompt.js');
+    /* ⚠️ 여기와 codexWriter.js 의 라우팅은 **한 쌍이다.** 한쪽만 고치면 doctor 가
+     * 엉뚱한 지시문으로 대조해서, 규칙이 다 들어 있는 모드를 틀렸다고 말한다.
+     * > 2026-08-03: 경제 모드를 붙이며 이쪽을 빼먹었고, 기사 모드 지시문과 대조되어
+     * > 네 항목이 한꺼번에 틀렸다고 나왔다 (실제로는 라우팅 한 줄이 없던 것). */
     const build = (id) => {
       if (id === MODE.CLIP) return buildClipPrompt({ clip: { title: 't', videoId: 'v', lines: [] }, cfg });
       if (id === MODE.NEWS) return buildNewsPrompt({ url: 'https://example.com/a', cfg });
       if (id === MODE.BOOK) return buildBookPrompt({ topic: '책: 제목 — 저자', cfg });
       if (id === MODE.MOVIE) return buildMoviePrompt({ topic: '영화: 제목 (감독)', cfg });
+      if (id === MODE.ECON) return buildEconPrompt({ topic: '경제: 주제', cfg });
       return buildArticlePrompt({ topic: '주제', cfg });
     };
     /* 스키마 required 와 아티클 실제 모양을 함께 대조한다 — codexWriter 를

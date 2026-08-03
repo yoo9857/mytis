@@ -622,5 +622,60 @@ export async function renderImages(article, cfg) {
     `이미지 ${targets.length}장 생성 (대표 ${result.thumbnail ? 1 : 0} · 본문 ${result.body.length}` +
       ` · 실사 배경 ${photoCount}장 · 연출 ${usedLayouts.join('/')})`
   );
+
+  /* 절차 글이면 **대표 이미지를 흐름도 카드로 바꾼다** (src/infographic.js).
+   *
+   * 왜 스톡 사진보다 나은가: 목록과 공유 카드에서 "무슨 글인지" 가 바로 보인다.
+   * "노트와 펜" 사진은 어떤 경제 글에도 붙을 수 있어서 아무것도 알려주지 않는다.
+   * 라벨은 아티클의 단계 소제목을 그대로 쓰므로 본문과 어긋나지 않는다.
+   *
+   * 단계 글이 아니거나 렌더가 실패하면 아무 일도 하지 않는다 —
+   * 그 경우 위에서 만든 스톡 대표 이미지가 그대로 남는다.
+   * ⚠️ 이 처리를 위쪽 루프의 조건문 **안**에 넣지 않는다. 그러면 사진을 끈 글
+   * (`--no-images`)에서 조용히 빠진다 (CLAUDE.md: 단계를 다른 단계 안에 얹지 않는다). */
+  /* 정보 카드 — `article.cards[]` 를 정사각 이미지로 그려 **본문 이미지에 섞는다.**
+   * 스톡 사진과 나란히 서지만 역할이 다르다: 사진은 호흡의 쉼표이고 카드는 정보다.
+   * 참고 글(dampick) 분석에서 온 것 — 그쪽 카드도 템플릿에 글자를 채운 것이었다.
+   * 카드가 없으면(빈 배열) 아무 일도 하지 않는다. */
+  try {
+    const { renderCards } = await import('./infographic.js');
+    for (const c of await renderCards(article, cfg)) {
+      result.body.push({
+        file: c.file,
+        placement: 'body',
+        alt: `${c.title} — ${article.primaryKeyword || article.title}`,
+        caption: '',
+        afterSection: c.afterSection || 1,
+        layout: `card-${c.type}`,
+        background: null,
+        isInfoCard: true,
+      });
+    }
+  } catch (err) {
+    log.debug(`정보 카드 건너뜀: ${err.message.split('\n')[0]}`);
+  }
+
+  try {
+    const { renderStepCard, steps } = await import('./infographic.js');
+    if (steps(article).length >= 2) {
+      const file = await renderStepCard(article, cfg);
+      if (file) {
+        result.thumbnail = {
+          file,
+          placement: 'thumbnail',
+          alt: `${article.primaryKeyword || article.title} 절차 요약`,
+          caption: '',
+          afterSection: 0,
+          layout: 'stepcard',
+          background: null,
+          /** html.js 가 이 표시를 보고 **HTML 흐름도를 그리지 않는다** — 같은 정보가 두 번 나온다 */
+          isStepCard: true,
+        };
+      }
+    }
+  } catch (err) {
+    log.debug(`절차 카드 건너뜀: ${err.message.split('\n')[0]}`);
+  }
+
   return result;
 }

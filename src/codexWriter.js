@@ -9,6 +9,7 @@ import {
   buildClipPrompt,
   buildBookPrompt,
   buildMoviePrompt,
+  buildEconPrompt,
 } from './prompt.js';
 import { MODE, MODE_LABEL, MODES, detectMode, resolveMode, can } from './mode.js';
 
@@ -325,6 +326,57 @@ function normalizeArticle(raw, { topic, cfg, mode = '' }) {
      * 지어내면 검색이 비어 카드가 안 붙는다 — 확인한 이름만. */
     place: str(raw.place),
     spoiler: raw.spoiler === true,
+    /* 경제 모드 전용 두 필드 (src/schema/econ.schema.json).
+     *
+     * `asOf` — 이 글에 실린 수치·제도의 기준 시점. 금리·세율·한도는 바뀌므로
+     * 기준일이 없는 숫자는 독자를 속인다.
+     * `figures` — 본문 수치와 출처·기준일의 짝. 여기 올릴 수 없는 숫자는 본문에도
+     * 쓰지 않는다는 규칙을 기계가 셀 수 있게 만든 것이다(contract.figures).
+     *
+     * 다른 모드에서는 빈 값으로 남는다 — 스키마에 없으니 모델이 채우지 않는다. */
+    asOf: str(raw.asOf),
+    figures: arr(raw.figures)
+      .map((f) => ({
+        label: str(f?.label),
+        value: str(f?.value),
+        source: str(f?.source),
+        asOf: str(f?.asOf),
+      }))
+      /* 출처 없는 수치는 **버린다.** 남겨 두면 표에 빈 칸으로 실려서,
+       * 근거를 대겠다고 만든 표가 근거가 없다는 증거가 된다. */
+      .filter((f) => f.label && f.value && f.source)
+      /* **가상 사례의 숫자를 기관 출처로 내보내지 않는다.**
+       *
+       * > 2026-08-03 실측: 주담대 글에서 `가상 사례 담보가치 = 10억원 [금융위원회]`,
+       * > `가상 사례 LTV 산출액 = 7억원 [금융위원회]` 가 나왔다. 금융위원회는
+       * > 그런 사례를 발표한 적이 없다. **모델이 자기가 만든 예시에 기관 이름을 붙인 것**이다.
+       *
+       * 계산 예시는 글에 필요하다(지시문이 시킨다). 다만 그 숫자는 본문에서 조건과 함께
+       * 보여주는 것이고, `figures` 는 **기관이 정한 값**만 담는 자리다. 출처를 대겠다고
+       * 만든 표에 거짓 출처가 한 줄 섞이면 표 전체를 믿을 수 없다. */
+      .filter((f) => !/가상|예시|사례|가정|시뮬|만약/.test(f.label)),
+    /* `cards` — 본문에 넣을 정보 카드. infographic.js 가 정사각 이미지로 그린다.
+     * 이미지 검색 키워드가 아니라 **카드에 들어갈 글**이다 (참고: dampick 분석,
+     * learned.md 2026-08-03 — 그쪽 카드도 템플릿에 글자를 채운 것이었다). */
+    cards: arr(raw.cards)
+      .map((c) => ({
+        type: c?.type === 'columns' ? 'columns' : 'reasons',
+        title: str(c?.title),
+        afterSection: Number.isFinite(c?.afterSection) ? Math.max(1, Number(c.afterSection)) : 1,
+        items: arr(c?.items)
+          .map((it) => ({ label: str(it?.label), text: str(it?.text) }))
+          .filter((it) => it.label),
+      }))
+      // 제목이 없거나 항목이 2개 미만이면 카드가 아니다 — 그리면 빈 틀만 나온다
+      .filter((c) => c.title && c.items.length >= 2)
+      .slice(0, 2),
+    /* `checkSites` — 독자가 직접 열어 확인할 기관 조회 페이지. html.js 가 링크 카드로 그린다.
+     * 참고 글 분석에서 나온 것이다: "확인하세요" 와 **확인할 주소를 주는 것**은 다르다
+     * (learned.md 2026-08-03, hye_life 집 구하기 — 인터넷등기소·중개업정보 링크). */
+    checkSites: arr(raw.checkSites)
+      .map((s) => ({ name: str(s?.name), url: str(s?.url), why: str(s?.why) }))
+      // 주소가 없거나 형식이 아니면 버린다 — 막힌 링크는 없는 것보다 나쁘다
+      .filter((s) => s.name && /^https?:\/\//i.test(s.url)),
     directAnswer: str(raw.directAnswer),
     keyTakeaways: arr(raw.keyTakeaways).map(str).filter(Boolean),
     sections,
@@ -461,6 +513,7 @@ export async function writeArticle({ topic, cfg }) {
        * mode.js 가 모드를 정하므로 여기서 조건을 새로 세우지 말고 mode 로 분기한다. */
       let prompt;
       if (mode === MODE.CLIP) prompt = buildClipPrompt({ clip, cfg, buzz });
+      else if (mode === MODE.ECON) prompt = buildEconPrompt({ topic, cfg });
       else if (mode === MODE.BOOK) prompt = buildBookPrompt({ topic, cfg });
       else if (mode === MODE.MOVIE) prompt = buildMoviePrompt({ topic, cfg, spoiler: cfg.movie?.spoiler !== false });
       else if (mode === MODE.NEWS) prompt = buildNewsPrompt({ url: topic, cfg, source });

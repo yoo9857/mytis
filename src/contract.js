@@ -146,6 +146,11 @@ export function measure(article) {
     embeds: (article.embeds || []).length,
     tags: (article.tags || []).length,
     faq: (article.faq || []).length,
+    /** 경제 모드 전용 — 본문 수치와 출처·기준일의 짝 (src/modes/econ.js: contract.figures).
+     *  `figures` 를 선언하지 않은 모드는 아래 checkContract 에서 검사를 건너뛴다. */
+    figures: (article.figures || []).length,
+    /** 출처는 있는데 기준일이 빈 수치. "숫자에 기준일을 붙인다" 는 약속이 반만 지켜진 것 */
+    figuresMissingAsOf: (article.figures || []).filter((f) => !String(f?.asOf || '').trim()).length,
     /** `noSpoilerIn` 이 지정한 자리에서 결말 어휘가 걸린 문장들 */
     spoilerLeaks(fields) {
       leaks.length = 0;
@@ -213,6 +218,18 @@ export function checkContract(article, modeId) {
   if (!inRange(m.embeds, c.embeds)) add('embeds', m.embeds, c.embeds.join('~') + '개');
   if (!inRange(m.tags, c.tags)) add('tags', m.tags, c.tags.join('~') + '개');
   if (!inRange(m.faq, c.faq)) add('faq', m.faq, c.faq.join('~') + '개');
+  /* 수치↔출처 짝 — **이 항목을 선언한 모드에서만** 검사한다 (지금은 경제 모드뿐).
+   * 연예·책·영화 모드에는 figures 가 없으므로 c.figures 가 없고, 조용히 건너뛴다. */
+  if (c.figures) {
+    if (!inRange(m.figures, c.figures)) {
+      add('figures', m.figures + '개', c.figures.join('~') + '개',
+        '본문 수치마다 출처·기준일을 짝지어야 합니다');
+    }
+    if (m.figuresMissingAsOf) {
+      add('figures', m.figuresMissingAsOf + '개 기준일 없음', '0개',
+        '기준일 없는 숫자는 언제 것인지 알 수 없습니다');
+    }
+  }
   for (const leak of m.spoilerLeaks(c.noSpoilerIn)) {
     add('spoilerLeak', leak.field, '결말 없음', leak.text);
   }

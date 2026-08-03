@@ -592,6 +592,7 @@ ${imageBriefRules(a, bodyImages)}
 /* 책 모드 지시문은 src/prompts/book.js 로 옮겼다 — 발행 빈도가 가장 높고
  * 규칙이 가장 자주 바뀌는 모드라 모드 선언과 나란히 두는 편이 낫다. */
 export { buildBookPrompt } from './prompts/book.js';
+export { buildEconPrompt } from './prompts/econ.js';
 
 export function buildMoviePrompt({ topic, cfg, today = new Date(), spoiler = true }) {
   const a = cfg.article;

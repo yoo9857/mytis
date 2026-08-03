@@ -2,6 +2,9 @@
  * 아티클 JSON -> 티스토리 에디터에 넣을 HTML.
  * 스킨에 상관없이 동일하게 보이도록 핵심 요소는 인라인 스타일을 쓴다.
  */
+/* 시각 자료(절차 흐름도·핵심 숫자 카드)는 diagram.js 가 그린다.
+ * 그쪽은 esc 를 자체로 갖고 있다 — 여기서 가져가면 순환 참조가 된다. */
+import { stepFlow, keyFigures } from './diagram.js';
 
 /**
  * 본문 인라인 스타일.
@@ -40,6 +43,36 @@ const S = {
   faqA: 'margin:0 0 10px;font-size:17px;line-height:1.8;color:#333;',
   sources: 'margin:0;padding-left:24px;font-size:15px;line-height:1.95;color:#555;',
   hr: 'margin:44px 0;border:0;border-top:1px solid #e5e5e5;',
+
+  /* --- 절차형 글(경제·부동산) 전용 --------------------------------------
+   * 참고 글 실측(2026-08-03, hye_life 집 구하기): 4,499자에 사진 1장이었고
+   * 대신 **구분선 9개**로 단계를 갈랐다. 절차 글에서 독자가 원하는 것은
+   * 사진이 아니라 **자기가 몇 단계에 있는지**다 (learned.md 2026-08-03). */
+  stepDiv: 'margin:52px 0 0;border:0;border-top:1px solid #ececec;',
+  /* 색은 eco-m 스킨 토큰 `--c-brand`(#123a6b)에 맞춘다 — diagram.js 의 흐름도 원과
+   * **같은 색이어야 한다.** 같은 뜻(단계 번호)이 두 색으로 나오면 독자는 둘을
+   * 다른 것으로 읽는다 (2026-08-03 검증에서 보라/네이비로 갈려 있던 것을 발견).
+   * 이 배지는 "N단계" 소제목에만 붙으므로 경제 모드 밖에는 영향이 없다. */
+  stepBadge:
+    'display:inline-block;min-width:30px;height:30px;line-height:30px;margin-right:10px;' +
+    'border-radius:15px;background:#123a6b;color:#fff;font-size:16px;font-weight:800;' +
+    'text-align:center;vertical-align:2px;padding:0 9px;',
+  checkBox:
+    'margin:0 0 26px;padding:18px 22px;background:#f6fbf7;border:1px solid #cfe8d6;' +
+    'border-radius:8px;',
+  checkTitle: 'display:block;margin:0 0 10px;font-size:16px;font-weight:800;color:#14532d;',
+  checkList: 'margin:0;padding-left:22px;font-size:16px;line-height:1.9;color:#1f2937;',
+  siteWrap: 'margin:0 0 34px;',
+  siteCard:
+    'display:block;margin:0 0 10px;padding:15px 18px;border:1px solid #e5e7eb;border-radius:9px;' +
+    'background:#fff;text-decoration:none;',
+  siteName: 'display:block;font-size:17px;font-weight:700;color:#1d4ed8;margin:0 0 4px;',
+  siteWhy: 'display:block;font-size:15px;line-height:1.6;color:#4b5563;',
+  figTable: 'width:100%;border-collapse:collapse;margin:0 0 12px;font-size:15px;',
+  figTh:
+    'border-bottom:2px solid #e5e7eb;padding:9px 10px;text-align:left;font-size:14px;' +
+    'font-weight:700;color:#6b7280;',
+  figTd: 'border-bottom:1px solid #f0f0f0;padding:9px 10px;vertical-align:top;color:#222;',
 };
 
 /** 티스토리 에디터가 쓰는 글자 크기 힌트. 에디터에서 다시 열었을 때도 제목으로 인식된다. */
@@ -51,6 +84,21 @@ export function esc(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/**
+ * 산문용 — 이스케이프한 뒤 **굵게** 만 태그로 바꾼다.
+ *
+ * 왜 필요한가: 경제 모드 지시문이 "숫자와 기한, 되돌릴 수 없는 지점을 굵게" 라고
+ * 시킨다. 모델은 그것을 마크다운 `**...**` 으로 보내는데, `esc()` 만 거치면
+ * **별표가 그대로 화면에 남는다.** 강조를 지시하면서 렌더를 안 하면 지시가
+ * 오히려 글을 더럽힌다 (2026-08-03 합성 글 검증에서 발각).
+ *
+ * 굵게만 허용한다 — 이탤릭·링크·코드까지 열면 모델이 표를 마크다운으로 그리기 시작하고
+ * 그건 `renderTable` 과 싸운다. 소제목·표 셀에는 쓰지 않는다(제목에 굵게는 이미 굵다).
+ */
+function rich(text) {
+  return esc(text).replace(/\*\*(?=\S)([\s\S]+?)(?<=\S)\*\*/g, '<b>$1</b>');
 }
 
 function anchorId(index) {
@@ -338,6 +386,81 @@ function jsonLd(article, cfg) {
  * @param {object} opts.cfg
  * @param {object} [opts.images]  { thumbnail: {src,alt}, body: [{afterSection,src,alt,caption}] }
  */
+/**
+ * "3단계 · 가계약과 본계약" 같은 소제목에 **번호 배지와 구분선**을 붙인다.
+ *
+ * 왜: 절차 글에서 독자가 가장 먼저 알고 싶은 것은 자기가 몇 단계에 있는지다.
+ * 참고 글(hye_life)은 구분선 9개로 그것을 했고 사진은 1장뿐이었다.
+ * 단계 글이 아니면 아무 것도 하지 않으므로 다른 모드는 영향이 없다.
+ */
+function renderHeading(heading, id) {
+  const m = String(heading).match(/^\s*(\d+)\s*단계\s*[·:—-]?\s*(.*)$/);
+  if (!m) {
+    return `<h2 id="${id}" data-ke-size="${KE.h2}" style="${S.h2}">${esc(heading)}</h2>`;
+  }
+  const [, num, rest] = m;
+  return (
+    `<hr style="${S.stepDiv}" />` +
+    `<h2 id="${id}" data-ke-size="${KE.h2}" style="${S.h2}">` +
+    `<span style="${S.stepBadge}">${esc(num)}</span>${esc(rest || heading)}</h2>`
+  );
+}
+
+/**
+ * '직접 확인할 곳' — 기관 조회 페이지 링크 카드.
+ *
+ * 참고 글의 **진짜 실용성이 여기 있었다**: 공인중개사인지 중개보조인인지 조회하는
+ * 페이지, 등기사건 처리현황을 보는 페이지를 링크 카드로 걸어 두었다.
+ * "확인하세요" 라고 쓰는 것과 **확인할 주소를 주는 것**은 다르다.
+ */
+function checkSitesBlock(sites) {
+  const rows = (sites || []).filter((s) => s?.name && /^https?:\/\//i.test(s.url || ''));
+  if (!rows.length) return '';
+  const cards = rows
+    .map(
+      (s) =>
+        `<a href="${esc(s.url)}" target="_blank" rel="noopener" style="${S.siteCard}">` +
+        `<span style="${S.siteName}">${esc(s.name)}</span>` +
+        `<span style="${S.siteWhy}">${esc(s.why || '')}</span></a>`
+    )
+    .join('\n');
+  return (
+    `<h2 data-ke-size="${KE.h2}" style="${S.h2}">직접 확인할 곳</h2>` +
+    `<div style="${S.siteWrap}">\n${cards}\n</div>`
+  );
+}
+
+/**
+ * `figures` — 본문 수치와 출처·기준일의 짝을 **표로 보여준다.**
+ *
+ * 필드만 만들어 두고 그리지 않으면 약속이 지켜진 것이 아니다. 소개글에서
+ * 독자에게 "숫자에는 출처와 기준일을 붙인다" 고 했고, 독자가 그것을 볼 자리가 여기다.
+ * (2026-08-03: econ 스키마에 figures 를 넣고도 화면에 없던 것을 발각)
+ */
+function figuresBlock(figures, asOf) {
+  const rows = (figures || []).filter((f) => f?.label && f?.value && f?.source);
+  if (!rows.length) return '';
+  const body = rows
+    .map(
+      (f) =>
+        `<tr><td style="${S.figTd}">${esc(f.label)}</td>` +
+        `<td style="${S.figTd}font-weight:700;">${esc(f.value)}</td>` +
+        `<td style="${S.figTd}">${esc(f.source)}</td>` +
+        `<td style="${S.figTd}color:#6b7280;">${esc(f.asOf || '')}</td></tr>`
+    )
+    .join('\n');
+  return (
+    `<h2 data-ke-size="${KE.h2}" style="${S.h2}">이 글의 숫자와 출처</h2>` +
+    `<table style="${S.figTable}"><thead><tr>` +
+    `<th style="${S.figTh}">항목</th><th style="${S.figTh}">값</th>` +
+    `<th style="${S.figTh}">출처</th><th style="${S.figTh}">기준</th>` +
+    `</tr></thead><tbody>\n${body}\n</tbody></table>` +
+    `<p style="${S.figcap}">제도·세율·금리는 바뀝니다.${
+      asOf ? ` 이 글은 ${esc(asOf)} 기준입니다.` : ''
+    } 실제 결정 전에는 위 기관의 최신 공고를 확인하세요.</p>`
+  );
+}
+
 export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
   const out = [];
   const bodyImages = images.body || [];
@@ -352,7 +475,7 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
   // 직답 박스 (GEO 핵심)
   if (article.directAnswer) {
     out.push(
-      `<div style="${S.answer}"><span style="${S.boxTitle}">한 줄 정리</span>${esc(
+      `<div style="${S.answer}"><span style="${S.boxTitle}">한 줄 정리</span>${rich(
         article.directAnswer
       )}</div>`
     );
@@ -360,15 +483,28 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
 
   // 핵심 요약
   if (cfg.seo.includeKeyTakeaways && article.keyTakeaways.length) {
-    const items = article.keyTakeaways.map((t) => `<li>${esc(t)}</li>`).join('\n');
+    const items = article.keyTakeaways.map((t) => `<li>${rich(t)}</li>`).join('\n');
     out.push(
       `<div style="${S.takeaways}"><span style="${S.boxTitle}">이 글의 핵심</span>` +
         `<ul style="${S.ul}margin-bottom:0;">\n${items}\n</ul></div>`
     );
   }
 
-  // 목차 — 섹션 제목에 걸어둔 id 로 이동한다
-  if (cfg.seo.includeTableOfContents && article.sections.length >= 3) {
+  /* 절차 흐름도 — **목차보다 먼저 계산한다.** 흐름도가 나오면 목차를 끈다.
+   * 둘은 같은 정보를 두 번 보여준다 (목차 6줄 + 흐름도 6줄). 흐름도 쪽이 순서를
+   * 보여주고 링크도 걸려 있으므로 목차의 일을 겸한다. */
+  /* 순서를 보여주는 자리는 **글 하나에 하나만** 둔다.
+   *
+   * 후보가 셋이나 된다: ① 대표 이미지로 쓰는 흐름도 카드(infographic.js),
+   * ② HTML 흐름도(diagram.js), ③ 목차. 셋이 같은 6줄을 보여주므로 하나만 남긴다.
+   * 우선순위는 ① > ② > ③ — 그림이 가장 잘 보이고, 그림이 없으면 HTML 흐름도가
+   * 링크까지 갖고 있어 목차의 일을 겸한다. */
+  const stepCardUsed = images.thumbnail?.isStepCard === true;
+  const flow = stepCardUsed ? '' : stepFlow(article, { anchorId });
+  const orderAlreadyShown = stepCardUsed || !!flow;
+
+  // 목차 — 섹션 제목에 걸어둔 id 로 이동한다. 순서를 이미 보여줬으면 생략한다.
+  if (!orderAlreadyShown && cfg.seo.includeTableOfContents && article.sections.length >= 3) {
     const items = article.sections
       .map(
         (s, i) =>
@@ -383,11 +519,20 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
     );
   }
 
+  /* 시각 자료 — **글의 실제 데이터로 그린다** (src/diagram.js).
+   *
+   * 목차 바로 아래에 둔다. 목차는 이동을 위한 목록이고 흐름도는 순서를 보여주는
+   * 그림이라 나란히 있어야 한다. 절차 글이 아니거나 figures 가 없으면 빈 문자열이
+   * 되어 filter(Boolean) 이 걸러낸다 — 다른 모드는 영향이 없다.
+   *
+   * 스톡 사진과 역할이 다르다: 사진은 읽는 호흡의 쉼표이고, 이 도식은 정보다.
+   * "노트와 펜" 사진은 아무것도 설명하지 않지만 6단계 흐름도는 글의 뼈대다. */
+  out.push(flow);
+  out.push(keyFigures(article));
+
   // 본문 섹션
   article.sections.forEach((sec, i) => {
-    out.push(
-      `<h2 id="${anchorId(i)}" data-ke-size="${KE.h2}" style="${S.h2}">${esc(sec.heading)}</h2>`
-    );
+    out.push(renderHeading(sec.heading, anchorId(i)));
 
     /* 사진을 **문단 사이에 끼워 넣는다.**
      *
@@ -461,18 +606,28 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
     });
 
     sec.paragraphs.forEach((para, pi) => {
-      out.push(`<p data-ke-size="${KE.p}" style="${S.p}">${esc(para)}</p>`);
+      out.push(`<p data-ke-size="${KE.p}" style="${S.p}">${rich(para)}</p>`);
       for (const run of slot.get(pi + 1) || []) out.push(renderFigureRun(run));
     });
 
     if (sec.bullets.length) {
-      const items = sec.bullets.map((b) => `<li>${esc(b)}</li>`).join('\n');
-      out.push(`<ul style="${S.ul}">\n${items}\n</ul>`);
+      const items = sec.bullets.map((b) => `<li>${rich(b)}</li>`).join('\n');
+      /* 단계 글의 불릿은 **'확인할 것' 박스**로 감싼다 — 절차에서 독자가 손해를 보는
+       * 지점은 순서가 아니라 각 단계에서 빠뜨린 확인이다. 참고 글은 이것을
+       * 인용 박스로 했다(learned.md 2026-08-03). 단계 글이 아니면 평범한 목록. */
+      if (/^\s*\d+\s*단계/.test(sec.heading)) {
+        out.push(
+          `<div style="${S.checkBox}"><span style="${S.checkTitle}">이 단계에서 확인할 것</span>` +
+            `<ul style="${S.checkList}">\n${items}\n</ul></div>`
+        );
+      } else {
+        out.push(`<ul style="${S.ul}">\n${items}\n</ul>`);
+      }
     }
     const table = renderTable(sec.table);
     if (table) out.push(table);
     if (sec.callout) {
-      out.push(`<div style="${S.callout}">💡 ${esc(sec.callout)}</div>`);
+      out.push(`<div style="${S.callout}">💡 ${rich(sec.callout)}</div>`);
     }
 
     /* 묶음은 전부 자리를 받는다 (`at` 이 항상 1..gaps 로 떨어지고 slot 이 쌓는다).
@@ -507,19 +662,24 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
     out.push(renderSocialEmbed(em));
   }
 
+  /* 직접 확인할 곳 · 숫자와 출처 — 경제 모드에만 값이 있다.
+   * 다른 모드는 필드가 비어 있어 빈 문자열이 되고 filter(Boolean) 이 걸러낸다. */
+  out.push(checkSitesBlock(article.checkSites));
+  out.push(figuresBlock(article.figures, article.asOf));
+
   // FAQ
   if (cfg.seo.includeFaq && article.faq.length) {
     out.push(`<h2 data-ke-size="${KE.h2}" style="${S.h2}">자주 묻는 질문</h2>`);
     for (const f of article.faq) {
       out.push(`<h3 data-ke-size="${KE.h3}" style="${S.faqQ}">Q. ${esc(f.question)}</h3>`);
-      out.push(`<p data-ke-size="${KE.p}" style="${S.faqA}">A. ${esc(f.answer)}</p>`);
+      out.push(`<p data-ke-size="${KE.p}" style="${S.faqA}">A. ${rich(f.answer)}</p>`);
     }
   }
 
   // 마무리
   if (article.conclusion) {
     out.push(`<h2 data-ke-size="${KE.h2}" style="${S.h2}">마치며</h2>`);
-    out.push(`<p data-ke-size="${KE.p}" style="${S.p}">${esc(article.conclusion)}</p>`);
+    out.push(`<p data-ke-size="${KE.p}" style="${S.p}">${rich(article.conclusion)}</p>`);
   }
 
   // 출처 · 이미지 저작자 표기

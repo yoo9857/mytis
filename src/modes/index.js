@@ -31,9 +31,10 @@ import { DIRS } from '../paths.js';
 import book from './book.js';
 import movie from './movie.js';
 import drama from './drama.js';
+import econ from './econ.js';
 
-/** 선언 순서 = 판별 우선순서. 접두사 모드(`책:`·`영화:`)가 URL 판별보다 먼저다. */
-const ALL = [book, movie, drama, clip, news, topic];
+/** 선언 순서 = 판별 우선순서. 접두사 모드(`책:`·`영화:`·`경제:`)가 URL 판별보다 먼저다. */
+const ALL = [econ, book, movie, drama, clip, news, topic];
 
 export const MODES = Object.fromEntries(ALL.map((m) => [m.id, m]));
 
@@ -153,6 +154,12 @@ export function lintModes({ buildPrompt, cfg, articleKeys }) {
     if (c.spoiler === 'never' && !/스포일러|결말·전개 스포일러/.test(prompt)) {
       problems.push(`${m.label}: conflicts.spoiler=never 인데 스포일러 금지 지시가 없습니다`);
     }
+    /* 경제 모드의 축 — **미래를 말하지 않는다.** 연예 글은 "다음 회차 관전 포인트" 를
+     * 쓰는 것이 정상이고 경제 글은 그것이 사고다. 선언만 두면 거짓말이 되므로
+     * 지시문에 실제로 그 금지가 있는지 센다. */
+    if (c.forecast === 'forbid' && !/전망·추천을 쓰지 않습니다|전망과 예측/.test(prompt)) {
+      problems.push(`${m.label}: conflicts.forecast=forbid 인데 전망·예측 금지 지시가 없습니다`);
+    }
 
     if (!m.platforms?.length) problems.push(`${m.label}: platforms 선언이 없습니다`);
 
@@ -164,7 +171,7 @@ export function lintModes({ buildPrompt, cfg, articleKeys }) {
     } else {
       /* 숫자 범위인 항목만 본다. `noSpoilerIn` 은 **필드 이름 배열**이라 여기 넣으면
        * 배열이라는 이유로 오탐이 난다 (처음 판이 다섯 모드 전부를 잘못 잡았다). */
-      const RANGES = ['chars', 'sections', 'photos', 'photoDensity', 'tables', 'embeds', 'tags', 'faq', 'headingWorkTitle'];
+      const RANGES = ['chars', 'sections', 'photos', 'photoDensity', 'tables', 'embeds', 'tags', 'faq', 'headingWorkTitle', 'figures'];
       for (const k of RANGES) {
         const v = ct[k];
         if (v == null) continue; // headingWorkTitle: null = 검사 안 함

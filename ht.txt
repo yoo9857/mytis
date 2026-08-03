@@ -1,0 +1,1728 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <title>[##_page_title_##]</title>
+  <meta charset="utf-8" />
+  <meta name="title" content="[##_page_title_##] :: [##_title_##]" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0e141b" media="(prefers-color-scheme: dark)" />
+  <meta name="referrer" content="no-referrer-when-downgrade" />
+
+  <link rel="alternate" type="application/rss+xml" title="[##_title_##]" href="[##_rss_url_##]" />
+
+  <!-- ─── 검색엔진 소유확인 ───────────────────────────────────────────
+       tistory.com 하위 도메인은 DNS(TXT·CNAME) 방식을 쓸 수 없다.
+       DNS 권한이 카카오에 있어 도메인 업체 로그인 자체가 불가능하다.
+       → 서치콘솔은 "도메인" 속성이 아니라 "URL 접두어" 속성으로 등록하고
+         소유확인은 [HTML 태그] 방식을 쓴다. 확인 후에도 지우지 않는다.
+       ──────────────────────────────────────────────────────────────── -->
+  <meta name="google-site-verification" content="5Fp3LtC1neupztUt1hJ9NmH06OCvyHKgS1oVnmn6dz0" />
+  <!-- 네이버 서치어드바이저 / 빙 웹마스터도 같은 방식. 값 받으면 채운다. -->
+  <!-- <meta name="naver-site-verification" content="" /> -->
+  <!-- <meta name="msvalidate.01" content="" /> -->
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://t1.daumcdn.net" crossorigin />
+  <link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin />
+  <link rel="dns-prefetch" href="//googleads.g.doubleclick.net" />
+
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/xeicon@2.3.3/xeicon.min.css" />
+  <link rel="stylesheet" href="./style.css" />
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       애드센스 — 고치는 곳은 아래 window.ADS 한 군데뿐이다.
+       구글 스크립트 태그도 이 client 값으로 자동 생성되므로,
+       ca-pub 을 두 번 적을 필요가 없다. (예전엔 여기서 어긋나 광고가 안 떴다)
+
+       1) client : 애드센스 → 계정 → 게시자 ID (ca-pub- 로 시작하는 16자리)
+       2) slots  : 애드센스 → 광고 → 광고 단위 기준 → 단위 만들고 '슬롯 ID' 복사
+                   (data-ad-slot 값. 채우지 않은 자리는 그냥 비어 있게 된다)
+
+       · client 가 ca-pub- + 숫자 형식이 아니면 구글 스크립트를 아예 부르지 않는다.
+         (잘못된 ID로 호출하면 애드센스 계정에 오류로 잡힌다)
+       · 자동광고만 쓸 거면 client 만 넣고 slots 는 비워 두면 된다.
+       · 슬롯을 손으로 붙여넣고 싶으면, 원하는 .ad-box 안에 구글이 준
+         <ins class="adsbygoogle"> 코드를 그대로 넣어라. 스크립트가 비켜준다.
+       ═══════════════════════════════════════════════════════════════════ -->
+  <script>
+    window.ADS = {
+      client: 'ca-pub-9021429421997169',
+      slots: {
+        top:       '7524587591',  /* 헤더 아래 리더보드 · 고정 970x90        */
+        topMobile: '',            /* 좁은 화면용 (320x100 또는 반응형 단위)   */
+        inArticle: '',            /* 본문 중간 · 자동 삽입   인아티클 fluid   */
+        bottom:    '',            /* 본문 끝, 태그 위        반응형          */
+        sidebar:   '',            /* 사이드바 상단           300x250         */
+        sticky:    '',            /* 사이드바 스티키         300x600         */
+        infeed:    '',            /* 목록 사이 인피드        fluid           */
+        footer:    ''             /* 푸터 위                 반응형          */
+      },
+      autoAds: false,    /* 자동광고도 함께 쓸 때 true */
+      enabled: true      /* 전체를 잠시 끌 때 false    */
+    };
+
+    /* 구글 스크립트는 유효한 ID가 있을 때만 부른다 — 단일 출처 */
+    (function () {
+      var a = window.ADS;
+      if (!a.enabled || !/^ca-pub-\d{10,}$/.test(a.client)) return;
+      var s = document.createElement('script');
+      s.async = true;
+      s.crossOrigin = 'anonymous';
+      s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' + a.client;
+      document.head.appendChild(s);
+      if (a.autoAds) {
+        var m = document.createElement('meta');
+        m.name = 'google-adsense-account'; m.content = a.client;
+        document.head.appendChild(m);
+      }
+    }());
+  </script>
+
+  <!-- 다크모드 플래시 방지: 페인트 전에 실행되어야 하므로 인라인 -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('skin-theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { }
+    }());
+  </script>
+
+  <script src="//t1.daumcdn.net/tistory_admin/lib/jquery/jquery-1.12.4.min.js"></script>
+  <script src="//t1.daumcdn.net/tistory_admin/assets/skin/common/vh-check.min.js"></script>
+  <script src="./images/common.js" defer></script>
+  <script> (function () { var test = vhCheck(); }()); </script>
+</head>
+
+
+<body id="[##_body_id_##]" class="[##_var_headerslogundisplay_##] [##_var_headerbannerdisplay_##] [##_var_listmore_##] [##_var_listmoremobile_##] <s_if_var_headerbannerimage>use-banner-wrp</s_if_var_headerbannerimage> <s_if_var_headersloguntitle>use-slogan-wrp</s_if_var_headersloguntitle> use-menu-[##_var_topnav_##]-wrp">
+
+  <s_t3>
+    <!-- 사이드바 서랍형일때 wrap-right / wrap-drawer -->
+    <div id="wrap" class="wrap-[##_var_sidebartype_##]">
+
+      <a href="#article-view" class="skip-nav">본문 바로가기</a>
+
+      <!-- 읽기 진행률 (본문 페이지에서만 표시) -->
+      <div class="read-progress" aria-hidden="true"><span class="read-progress-bar"></span></div>
+
+      <!-- ══════════════════ header ══════════════════ -->
+      <header class="header">
+        <div class="line-bottom display-none"></div>
+
+        <!-- ── 1단: 유틸 바 ── -->
+        <div class="topbar">
+          <div class="topbar-inner">
+            <p class="topbar-date"><span class="today-date"></span></p>
+            <div class="topbar-links">
+              <a href="[##_blog_link_##]" class="topbar-link">홈</a>
+              <a href="/tag" class="topbar-link">태그</a>
+              <a href="/guestbook" class="topbar-link">방명록</a>
+              <a href="[##_rss_url_##]" class="topbar-link">RSS</a>
+            </div>
+            <div class="topbar-tools">
+              <button type="button" class="btn-icon btn-theme" aria-label="화면 모드 전환" title="라이트/다크 전환">
+                <i class="xi-sun icon-light" aria-hidden="true"></i>
+                <i class="xi-moon icon-dark" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 2단: 마스트헤드 (로고 + 검색) ── -->
+        <div class="inner-header <s_if_var_headersloguntitle>slogun-use</s_if_var_headersloguntitle> [##_var_topnav_##]">
+
+          <div class="box-header">
+            <h1 class="title-logo">
+              <a href="[##_blog_link_##]" title="[##_title_##]" class="link_logo">
+                <s_if_var_logoImage>
+                  <img src="[##_var_logoImage_##]" class="img_logo" alt="[##_title_##]">
+                </s_if_var_logoImage>
+                <s_not_var_logoImage>
+                  [##_title_##]
+                </s_not_var_logoImage>
+              </a>
+            </h1>
+
+            <!-- search-bar for PC (common.js requestSearch 훅 — 클래스 고정) -->
+            <div class="util use-top">
+              <div class="search">
+                <i class="xi-search search-icon" aria-hidden="true"></i>
+                <label for="searchInputTop" class="screen_out">블로그 내 검색</label>
+                <input id="searchInputTop" class="searchInput" type="text" name="search" value="" placeholder="검색어를 입력하세요" onkeypress="if (event.keyCode == 13) { requestSearch('.util.use-top .searchInput') }" />
+              </div>
+            </div>
+          </div>
+
+          <!-- area-align -->
+          <div class="area-align">
+
+            <s_if_var_headersloguntitle>
+              <!-- area-slogan -->
+              <div class="area-slogun [##_var_topnav_##] <s_if_var_headerslogunmobile>slogunmobileoff</s_if_var_headerslogunmobile>">
+                <strong>[##_var_headersloguntitle_##]</strong>
+                <s_if_var_headersloguntext>
+                  <p>[##_var_headersloguntext_##]</p>
+                </s_if_var_headersloguntext>
+              </div>
+              <!-- // area-slogan -->
+            </s_if_var_headersloguntitle>
+
+            <!-- ── 3단: 글로벌 내비게이션 (스크롤 시 고정) ── -->
+            <div class="area-gnb">
+              <nav class="[##_var_topnav_##]" aria-label="주 메뉴">
+                [##_blog_menu_##]
+              </nav>
+            </div>
+
+            <button type="button" class="button-menu" aria-label="메뉴 열기" aria-expanded="false">
+              <svg xmlns="//www.w3.org/2000/svg" width="20" height="14" viewBox="0 0 20 14">
+                <path fill="#333" fill-rule="evenodd" d="M0 0h20v2H0V0zm0 6h20v2H0V6zm0 6h20v2H0v-2z" />
+              </svg>
+            </button>
+
+            <s_if_var_headerbannerimage>
+              <!-- area-banner -->
+              <div class="area-promotion height400 <s_if_var_bannermobile>bannermobile-on</s_if_var_bannermobile>" style="background-image:url('[##_var_headerbannerimage_##]');">
+                <div class="inner-promotion">
+                  <div class="box-promotion">
+                    <s_if_var_headerbannertitle>
+                      <strong style="color: [##_var_headerbannertitlecolor_##]">[##_var_headerbannertitle_##]</strong>
+                    </s_if_var_headerbannertitle>
+
+                    <s_if_var_headerbannerlink>
+                      <style>
+                        .link-promotion {background:[##_var_headerbannerlinkcolor_##];}
+                        .link-promotion:hover {background:[##_var_headerbannerlinkovercolor_##];}
+                      </style>
+                      <a href="//[##_var_headerbannerlink_##]" class="link-promotion">자세히보기</a>
+                    </s_if_var_headerbannerlink>
+                  </div>
+                </div>
+              </div>
+              <!-- // area-banner -->
+            </s_if_var_headerbannerimage>
+
+          </div>
+          <!-- // area-align -->
+
+        </div>
+        <!-- // inner-header -->
+
+      </header>
+      <!-- ══════════════════ // header ══════════════════ -->
+
+      <!-- 스크롤 시 나타나는 압축 헤더 -->
+      <div class="sticky-bar" aria-hidden="true">
+        <div class="sticky-inner">
+          <a href="[##_blog_link_##]" class="sticky-logo">[##_title_##]</a>
+          <p class="sticky-title"></p>
+          <div class="sticky-tools">
+            <button type="button" class="btn-icon btn-share" aria-label="링크 복사"><i class="xi-link" aria-hidden="true"></i></button>
+            <button type="button" class="btn-icon btn-totop-inline" aria-label="맨 위로"><i class="xi-arrow-up" aria-hidden="true"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 티스토리 자체 수익 영역 -->
+      <div class="revenue-slot revenue-upper">[##_revenue_list_upper_##]</div>
+
+      <!-- 광고: 헤더 아래 리더보드
+           top = 고정 970×90 (넓은 화면 전용) / topMobile = 좁은 화면용 대체 -->
+      <div class="ad ad-leaderboard" data-ad="top" data-ad-min="90">
+        <span class="ad-label">Advertisement</span>
+        <div class="ad-box"><span class="ad-ph">top 970×90</span></div>
+      </div>
+      <div class="ad ad-leaderboard ad-leaderboard-m" data-ad="topMobile" data-ad-min="100">
+        <span class="ad-label">Advertisement</span>
+        <div class="ad-box"><span class="ad-ph">topMobile</span></div>
+      </div>
+
+      <!-- 브레드크럼 -->
+      <nav class="breadcrumb" aria-label="현재 위치">
+        <div class="breadcrumb-inner">
+          <ol class="breadcrumb-list">
+            <li><a href="[##_blog_link_##]"><i class="xi-home-o" aria-hidden="true"></i><span class="screen_out">홈</span></a></li>
+          </ol>
+        </div>
+      </nav>
+
+      <!-- ══════════════════ container ══════════════════ -->
+      <div id="container">
+
+        <main class="main">
+
+          <!-- area-main -->
+          <div class="area-main">
+
+            <!-- ─────────── s_list / 카테고리·검색 리스트 ─────────── -->
+            <div class="area-common">
+              <s_list>
+                <div class="category-banner-wrp display-none">
+                  <div class="category-banner" <s_list_image>style="background-image:url('[##_list_image_##]')"</s_list_image>>
+                    <div class="category-banner-inner">
+                      <div class="category-description-box">
+                        <strong class="category-description">[##_list_description_##]</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="section-head">
+                  <h2 class="title-search article-title-[##_list_style_##] title-border" list-style="[##_list_style_##]"><b class="archives">[##_list_conform_##]</b> <span>[##_list_count_##]</span></h2>
+                  <div class="list-view-toggle" role="group" aria-label="목록 보기 방식">
+                    <button type="button" class="lvt-btn is-on" data-view="grid" aria-label="카드형 보기"><i class="xi-apps" aria-hidden="true"></i></button>
+                    <button type="button" class="lvt-btn" data-view="list" aria-label="목록형 보기"><i class="xi-bars" aria-hidden="true"></i></button>
+                  </div>
+                </div>
+
+                <div class="list-wrap" data-view="grid">
+                  <s_list_rep>
+
+                    <article class="article-type-common article-type-[##_list_style_##]">
+                      <a href="[##_list_rep_link_##]" class="link-article"
+                        data-tiara-action-name="블로그글_클릭"
+                        data-tiara-action-kind="ClickContent"
+                        data-tiara-copy="[##_list_rep_title_text_##]"
+                        data-tiara-image="[##_list_rep_thumbnail_url_##]"
+                        data-tiara-click_url="[##_blog_link_##][##_list_rep_link_##]"
+                        data-tiara-name="[##_list_rep_title_text_##]"
+                        data-tiara-provider="[##_title_##]"
+                        data-tiara-plink="[##_list_rep_link_##]"
+                        data-tiara-id="[##_list_rep_link_##]"
+                      >
+                        <p class="thumbnail" <s_list_rep_thumbnail> has-thumbnail="1" style="background-image:url('[##_list_rep_thumbnail_raw_url_##]')" </s_list_rep_thumbnail>>
+                          <img src="[##_list_rep_thumbnail_raw_url_##]" class="img-thumbnail" role="presentation" loading="lazy">
+                        </p>
+                      </a>
+
+                      <div class="article-content">
+                        <a href="[##_list_rep_link_##]" class="link-article"
+                          data-tiara-action-name="블로그글_클릭"
+                          data-tiara-action-kind="ClickContent"
+                          data-tiara-copy="[##_list_rep_title_text_##]"
+                          data-tiara-image="[##_list_rep_thumbnail_url_##]"
+                          data-tiara-click_url="[##_blog_link_##][##_list_rep_link_##]"
+                          data-tiara-name="[##_list_rep_title_text_##]"
+                          data-tiara-provider="[##_title_##]"
+                          data-tiara-plink="[##_list_rep_link_##]"
+                          data-tiara-id="[##_list_rep_link_##]"
+                        >
+                          <strong class="title">[##_list_rep_title_##]</strong>
+                          <p class="summary">[##_list_rep_summary_##]</p>
+                        </a>
+                        <div class="box-meta">
+                          <a href="[##_list_rep_category_link_##]" class="link-category">[##_list_rep_category_##]</a>
+                          <span class="date">[##_list_rep_regdate_##]</span>
+                          <span class="reply">
+                            <s_rp_count>[##_list_rep_rp_cnt_##]</s_rp_count>
+                          </span>
+                        </div>
+                      </div>
+                    </article>
+                  </s_list_rep>
+                </div>
+
+                <s_list_empty>
+                  <div class="box-no-search type-search">
+                    <span>입력하신 단어의 철자가 정확한지 확인해 보세요.</span>
+                    <span>검색어의 단어 수를 줄이거나, 보다 일반적인 단어로 검색해 보세요.</span>
+                    <span>두 단어 이상의 키워드로 검색 하신 경우, 정확하게 띄어쓰기를 한 후 검색해 보세요.</span>
+                  </div>
+
+                  <div class="box-no-search type-tag">
+                    <span>선택하신 태그에 해당하는 글이 없습니다.</span>
+                    <span>다른 태그를 선택하시거나, 검색 기능을 활용해 보세요.</span>
+                  </div>
+
+                  <div class="box-no-search type-category">
+                    <span>선택하신 카테고리에 해당하는 글이 없습니다.</span>
+                    <span>다른 카테고리를 선택하시거나, 검색 기능을 활용해 보세요.</span>
+                  </div>
+
+                  <div class="box-no-search type-archive">
+                    <span>선택하신 기간에 등록된 글이 없습니다.</span>
+                  </div>
+                </s_list_empty>
+              </s_list>
+            </div>
+            <!-- ─────────── // s_list ─────────── -->
+
+            <!-- ─────────── area-view / 뷰페이지 ─────────── -->
+            <div class="area-view">
+              <!-- s_article_rep -->
+              <s_article_rep>
+
+                <!-- s_permalink_article_rep / 뷰페이지 -->
+                <s_permalink_article_rep>
+                  <!-- 이미지가 없는 경우 article-header-noimg -->
+                  <div class="article-header" thumbnail="<s_article_rep_thumbnail>https://img1.daumcdn.net/thumb/R1440x0/?scode=mtistory2&fname=[##_article_rep_thumbnail_raw_url_##]</s_article_rep_thumbnail>" style="background-image:url('')">
+                    <div class="inner-header">
+                      <div class="box-meta">
+                        <p class="category">[##_article_rep_category_##]</p>
+                        <h2 class="title-article">[##_article_rep_title_##]</h2>
+                        <div class="box-info">
+                          <span class="writer">[##_article_rep_author_##]</span>
+                          <span class="date">[##_article_rep_date_##]</span>
+                          <span class="readtime"></span>
+                          [##_s_ad_isolation_##]
+                        </div>
+                        <div class="box-actions">
+                          <button type="button" class="chip-btn btn-share"><i class="xi-link" aria-hidden="true"></i>링크 복사</button>
+                          <button type="button" class="chip-btn btn-font"><i class="xi-text-size" aria-hidden="true"></i>본문 크기</button>
+                          <button type="button" class="chip-btn btn-print"><i class="xi-print" aria-hidden="true"></i>인쇄</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 목차 (본문 h2/h3 에서 자동 생성) -->
+                  <nav class="toc" aria-label="목차" hidden>
+                    <button type="button" class="toc-head" aria-expanded="true">
+                      <span><i class="xi-list-ul" aria-hidden="true"></i> 목차</span>
+                      <i class="xi-angle-up-min toc-arrow" aria-hidden="true"></i>
+                    </button>
+                    <ol class="toc-list"></ol>
+                  </nav>
+
+                  <!-- 에디터 영역 -->
+                  <div class="article-view" id="article-view">
+                    [##_article_rep_desc_##]
+                  </div>
+
+                  <!-- 광고: 본문 끝 -->
+                  <div class="ad ad-inview" data-ad="bottom" data-ad-min="280">
+                    <span class="ad-label">Advertisement</span>
+                    <div class="ad-box"><span class="ad-ph">애드센스 — bottom (반응형)</span></div>
+                  </div>
+
+                  <!-- article-footer -->
+                  <div class="article-footer">
+
+                    <s_tag_label>
+                      <!-- article-tag -->
+                      <div class="article-tag">
+                        <h3 class="title-footer">Tag</h3>
+                        <div class="box-tag">[##_tag_label_rep_##]</div>
+                      </div>
+                      <!-- // area_tag -->
+                    </s_tag_label>
+
+                    <div class="article-page">
+                      <h3 class="title-footer">'[##_article_rep_category_##]'의 다른글</h3>
+                      <ul>
+                        <li>
+                          <s_article_prev>
+                            <a href="[##_article_prev_link_##]"><span>이전글</span><strong>[##_article_prev_title_##]</strong></a>
+                          </s_article_prev>
+                        </li>
+                        <li><span>현재글</span><strong>[##_article_rep_title_##]</strong></li>
+                        <li>
+                          <s_article_next>
+                            <a href="[##_article_next_link_##]"><span>다음글</span><strong>[##_article_next_title_##]</strong></a>
+                          </s_article_next>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <s_article_related>
+                      <!-- article-related -->
+                      <div class="article-related">
+                        <h3 class="title-footer">관련글</h3>
+                        <ul class="list-related">
+                          <s_article_related_rep>
+                            <li class="item-related">
+                              <a href="[##_article_related_rep_link_##]" class="link-related">
+                                <span class="thumnail" style="background-image:url('<s_article_related_rep_thumbnail>[##_article_related_rep_thumbnail_link_##]</s_article_related_rep_thumbnail>')"></span>
+                                <div class="box_content">
+                                  <strong>[##_article_related_rep_title_##]</strong>
+                                  <span class="date">[##_article_related_rep_date_##]</span>
+                                </div>
+                              </a>
+                            </li>
+                          </s_article_related_rep>
+                        </ul>
+                      </div>
+                      <!-- // article-related -->
+                    </s_article_related>
+
+                    <!-- article-reply -->
+                    <div class="article-reply">
+                      <div class="area-reply">
+                        <s_rp>
+                          [##_comment_group_##]
+                        </s_rp>
+                      </div>
+                    </div>
+                    <!-- // article-reply -->
+
+                  </div>
+                  <!-- // article-footer -->
+
+                </s_permalink_article_rep>
+              </s_article_rep>
+              <!-- // s_article_rep -->
+
+              <!-- s_article_protected / 개별 보호글 페이지 -->
+              <s_article_protected>
+                <s_permalink_article_rep>
+                  <div class="article-header article-header-protected">
+                    <div class="inner-header">
+                      <div class="info_text">
+                        <strong class="title_post">[##_article_rep_title_##]</strong>
+                        <p class="info"><span class="date">[##_article_rep_date_##]</span>ㆍ<span>[##_article_rep_category_##]</span></p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="article-view">
+                    <div class="area-protected">
+                      <p class="text-protected">보호되어 있는 글입니다. <br /> <span>내용을 보시려면 비밀번호를 입력하세요.</span></p>
+                      <form class="protected_form" onsubmit="[##_article_dissolve_##]">
+                        <div class="box-protected">
+                          <input type="password" id="[##_article_password_##]" name="[##_article_password_##]" value="" placeholder="비밀번호" />
+                          <button type="submit">확인</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </s_permalink_article_rep>
+              </s_article_protected>
+              <!-- // s_article_protected -->
+
+              <!-- s_page_rep -->
+              <s_page_rep>
+                <s_permalink_article_rep>
+                  <div class="article-header" thumbnail="<s_article_rep_thumbnail>[##_article_rep_thumbnail_url_##]</s_article_rep_thumbnail>" style="background-image:url('')">
+                    <div class="inner-header">
+                      <div class="box-meta">
+                        <p class="category">공지사항</p>
+                        <h2 class="title-article">[##_article_rep_title_##]</h2>
+                        <div class="box-info">
+                          <span class="writer">[##_article_rep_author_##]</span>
+                          <span class="date">[##_article_rep_date_##]</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="article-view" id="article-view">
+                    [##_article_rep_desc_##]
+                  </div>
+                </s_permalink_article_rep>
+              </s_page_rep>
+              <!-- // s_page_rep -->
+
+              <!-- s_notice_rep / 개별 공지사항 페이지 -->
+              <s_notice_rep>
+                <h2 class="notice-title title-search article-title-[##_list_style_##] display-none" list-style="[##_list_style_##]"><b class="archives">공지사항</b></h2>
+                <s_index_article_rep>
+                  <article class="article-type-common article-type-[##_list_style_##] is-notice">
+                    <a href="[##_notice_rep_link_##]" class="link-article"
+                      data-tiara-action-name="공지목록글_클릭"
+                      data-tiara-action-kind="ClickContent"
+                      data-tiara-copy="[##_notice_rep_title_##]"
+                      data-tiara-image="[##_notice_rep_thumbnail_url_##]"
+                      data-tiara-click_url="[##_blog_link_##][##_notice_rep_link_##]"
+                      data-tiara-name="[##_notice_rep_title_##]"
+                      data-tiara-provider="[##_title_##]"
+                      data-tiara-plink="[##_notice_rep_link_##]"
+                      data-tiara-id="[##_notice_rep_link_##]"
+                    >
+                      <p class="thumbnail notice-thumbnail" <s_notice_rep_thumbnail> has-thumbnail="1" style="background-image:url('[##_notice_rep_thumbnail_url_##]')" </s_notice_rep_thumbnail>>
+                        <img src="" class="img-thumbnail" role="presentation">
+                      </p>
+                    </a>
+                    <div class="article-content">
+                      <a href="[##_notice_rep_link_##]" class="link-article"
+                        data-tiara-action-name="공지목록글_클릭"
+                        data-tiara-action-kind="ClickContent"
+                        data-tiara-copy="[##_notice_rep_title_##]"
+                        data-tiara-image="[##_notice_rep_thumbnail_url_##]"
+                        data-tiara-click_url="[##_blog_link_##][##_notice_rep_link_##]"
+                        data-tiara-name="[##_notice_rep_title_##]"
+                        data-tiara-provider="[##_title_##]"
+                        data-tiara-plink="[##_notice_rep_link_##]"
+                        data-tiara-id="[##_notice_rep_link_##]"
+                      >
+                        <strong class="title">[##_notice_rep_title_##]</strong>
+                        <p class="summary">[##_notice_rep_summary_##]</p>
+                      </a>
+                      <div class="box-meta">
+                        <a href="[##_notice_rep_category_link_##]" class="link-category">공지사항</a>
+                        <span class="date">[##_notice_rep_simple_date_##]</span>
+                      </div>
+                    </div>
+                  </article>
+                </s_index_article_rep>
+
+                <s_permalink_article_rep>
+                  <div class="article-header" thumbnail="<s_notice_rep_thumbnail>[##_notice_rep_thumbnail_url_##]</s_notice_rep_thumbnail>" style="background-image:url('')">
+                    <div class="inner-header">
+                      <div class="box-meta">
+                        <p class="category">공지사항</p>
+                        <h2 class="title-article">[##_notice_rep_title_##]</h2>
+                        <div class="box-info">
+                          <span class="writer">[##_notice_rep_author_##]</span>
+                          <span class="date">[##_notice_rep_date_##]</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="article-view" id="article-view">
+                    [##_notice_rep_desc_##]
+                  </div>
+                </s_permalink_article_rep>
+              </s_notice_rep>
+              <!-- // s_notice_rep -->
+
+              <!-- s_tag / 개별 태그 페이지-->
+              <s_tag>
+                <div class="area-tag">
+                  <h3 class="title-search">Tag</h3>
+                  <div class="box-tag">
+                    <s_tag_rep>
+                      <a href="[##_tag_link_##]" class="[##_tag_class_##]">#[##_tag_name_##]</a>
+                    </s_tag_rep>
+                  </div>
+                </div>
+              </s_tag>
+              <!-- // s_tag -->
+
+              <!-- s_local / 개별 위치로그 페이지 -->
+              <s_local>
+                <div class="area-main">
+                  <section id="localog" class="box_tag_trail row nonEntry main">
+                    <h3 class="title-search">Local Log</h3>
+                    <s_local_spot_rep>
+                      <div class="spot" style="margin-left: [##_local_spot_depth_##]px">
+                        [##_local_spot_##]
+                      </div>
+                    </s_local_spot_rep>
+                    <s_local_info_rep>
+                      <div class="info" style="margin-left: [##_local_info_depth_##]px">
+                        <a href="[##_local_info_link_##]">[##_local_info_title_##]</a>
+                      </div>
+                    </s_local_info_rep>
+                  </section>
+                </div>
+              </s_local>
+              <!-- // s_local -->
+
+              <div class="article-reply">
+                <div class="area-reply">
+                  <!-- s_guest / 개별 방명록 페이지 -->
+                  <s_guest>
+                    [##_guestbook_group_##]
+                  </s_guest>
+                </div>
+              </div>
+
+              <!-- s_paging -->
+              <s_paging>
+                <div class="area-paging">
+                  <a [##_prev_page_##] class="link_page link_prev [##_no_more_prev_##]">
+                    <span class="xi-angle-left-min">
+                      <span class="screen_out">이전</span>
+                    </span>
+                  </a>
+                  <div class="paging_num">
+                    <s_paging_rep>
+                      <a [##_paging_rep_link_##] class="link_num">[##_paging_rep_link_num_##]</a>
+                    </s_paging_rep>
+                  </div>
+                  <a [##_next_page_##] class="link_page link_next [##_no_more_next_##]">
+                    <span class="xi-angle-right-min">
+                      <span class="screen_out">다음</span>
+                    </span>
+                  </a>
+                </div>
+                <div class="area-paging-more">
+                  <a href="#page-more" class="paging-more">더보기</a>
+                </div>
+              </s_paging>
+              <!-- // s_paging -->
+
+            </div>
+            <!-- ─────────── // area-view ─────────── -->
+
+            <!-- ─────────── s_cover_group / 커버(첫 화면) ─────────── -->
+            <s_cover_group>
+              <div class="area-common">
+                <s_cover_rep>
+
+                  <!-- type-crop -->
+                  <s_cover name='crop'>
+                    <div class="area-cover">
+                      <h2 class="title-cover">[##_cover_title_##]</h2>
+                      <div class="box-article">
+                        <s_cover_item>
+                          <article class="article-type-common article-type-crop">
+                            <a href="[##_cover_item_url_##]" class="link-article">
+                              <p class="thumbnail" <s_cover_item_thumbnail> has-thumbnail="1" style="background-image:url('[##_cover_item_thumbnail_##]')" </s_cover_item_thumbnail>>
+                                <img src="" class="img-thumbnail" role="presentation">
+                              </p>
+                            </a>
+                            <div class="article-content">
+                              <a href="[##_cover_item_url_##]" class="link-article">
+                                <strong class="title">[##_cover_item_title_##]</strong>
+                                <p class="summary">[##_cover_item_summary_##]</p>
+                              </a>
+                              <div class="box-meta">
+                                <s_cover_item_article_info>
+                                  <a href="[##_cover_item_url_##]" class="link-category">[##_cover_item_category_##]</a>
+                                  <span class="date">[##_cover_item_simple_date_##]</span>
+                                  <span class="reply">[##_cover_item_comment_count_##]</span>
+                                </s_cover_item_article_info>
+                              </div>
+                            </div>
+                          </article>
+                        </s_cover_item>
+                      </div>
+
+                      <button type="button" class="button-more">더보기</button>
+                    </div>
+                  </s_cover>
+                  <!-- // type-crop -->
+
+                  <!-- type-resize -->
+                  <s_cover name='resize'>
+                    <div class="area-cover">
+                      <h2 class="title-cover">[##_cover_title_##]</h2>
+                      <div class="box-article">
+                        <s_cover_item>
+                          <article class="article-type-common article-type-resize">
+                            <a href="[##_cover_item_url_##]" class="link-article">
+                              <p class="thumbnail" has-thumbnail="1">
+                                <img loading="lazy" <s_cover_item_thumbnail>src="[##_cover_item_thumbnail_##]"</s_cover_item_thumbnail> class="img-thumbnail" role="presentation">
+                              </p>
+                            </a>
+                            <div class="article-content">
+                              <a href="[##_cover_item_url_##]" class="link-article">
+                                <strong class="title">[##_cover_item_title_##]</strong>
+                                <p class="summary">[##_cover_item_summary_##]</p>
+                              </a>
+                              <div class="box-meta">
+                                <s_cover_item_article_info>
+                                  <a href="[##_cover_item_url_##]" class="link-category">[##_cover_item_category_##]</a>
+                                  <span class="date">[##_cover_item_simple_date_##]</span>
+                                  <span class="reply">[##_cover_item_comment_count_##]</span>
+                                </s_cover_item_article_info>
+                              </div>
+                            </div>
+                          </article>
+                        </s_cover_item>
+                      </div>
+
+                      <button type="button" class="button-more">더보기</button>
+                    </div>
+                  </s_cover>
+                  <!-- // type-resize -->
+
+                  <!-- type-thumbnail -->
+                  <s_cover name='thumbnail'>
+                    <div class="area-cover area-cover-thumbnail">
+                      <div class="box-cover-title">
+                        <h2 class="title-cover">[##_cover_title_##]</h2>
+                        <s_cover_url>
+                          <a href="[##_cover_url_##]" class="link-title">more</a>
+                        </s_cover_url>
+                      </div>
+                      <div class="box-article">
+                        <s_cover_item>
+                          <article class="article-type-common article-type-thumbnail">
+                            <a href="[##_cover_item_url_##]" class="link-article">
+                              <p class="thumbnail" <s_cover_item_thumbnail> has-thumbnail="1" style="background-image:url('[##_cover_item_thumbnail_##]')" </s_cover_item_thumbnail>>
+                                <img src="" class="img-thumbnail" role="presentation">
+                              </p>
+                            </a>
+                            <div class="article-content">
+                              <a href="[##_cover_item_url_##]" class="link-article">
+                                <strong class="title">[##_cover_item_title_##]</strong>
+                                <p class="summary">[##_cover_item_summary_##]</p>
+                              </a>
+                              <div class="box-meta">
+                                <s_cover_item_article_info>
+                                  <a href="[##_cover_item_url_##]" class="link-category">[##_cover_item_category_##]</a>
+                                  <span class="date">[##_cover_item_simple_date_##]</span>
+                                  <span class="reply">[##_cover_item_comment_count_##]</span>
+                                </s_cover_item_article_info>
+                              </div>
+                            </div>
+                          </article>
+                        </s_cover_item>
+                      </div>
+                    </div>
+                  </s_cover>
+                  <!-- // type-thumbnail -->
+
+                  <!-- type-poster -->
+                  <s_cover name='poster'>
+                    <div class="area-cover">
+                      <div class="box-cover-title">
+                        <h2 class="title-cover">[##_cover_title_##]</h2>
+                        <s_cover_url>
+                          <a href="[##_cover_url_##]" class="link-title">more</a>
+                        </s_cover_url>
+                      </div>
+
+                      <div class="box-article">
+                        <div class="box-cover-poster">
+                          <s_cover_item>
+                            <article class="article-type-common article-type-poster">
+                              <a href="[##_cover_item_url_##]" class="link-article">
+                                <p class="thumbnail" <s_cover_item_thumbnail>has-thumbnail="1" style="background-image:url('[##_cover_item_thumbnail_##]')" </s_cover_item_thumbnail>>
+                                  <img src="" class="img-thumbnail" role="presentation">
+                                </p>
+                              </a>
+                              <div class="article-content">
+                                <a href="[##_cover_item_url_##]" class="link-article">
+                                  <strong class="title">[##_cover_item_title_##]</strong>
+                                  <p class="summary">[##_cover_item_summary_##]</p>
+                                </a>
+                                <div class="box-meta">
+                                  <s_cover_item_article_info>
+                                    <a href="[##_cover_item_url_##]" class="link-category">[##_cover_item_category_##]</a>
+                                    <span class="date">[##_cover_item_simple_date_##]</span>
+                                    <span class="reply">[##_cover_item_comment_count_##]</span>
+                                  </s_cover_item_article_info>
+                                </div>
+                              </div>
+                            </article>
+                          </s_cover_item>
+                        </div>
+                      </div>
+                    </div>
+                  </s_cover>
+                  <!-- // type-poster -->
+
+                  <!-- type-text -->
+                  <s_cover name='text'>
+                    <div class="area-cover">
+                      <h2 class="title-cover">[##_cover_title_##]</h2>
+                      <div class="box-article">
+                        <s_cover_item>
+                          <article class="article-type-common article-type-text">
+                            <div class="article-content">
+                              <a href="[##_cover_item_url_##]" class="link-article">
+                                <strong class="title">[##_cover_item_title_##]</strong>
+                                <p class="summary">[##_cover_item_summary_##]</p>
+                              </a>
+                              <div class="box-meta">
+                                <s_cover_item_article_info>
+                                  <a href="[##_cover_item_url_##]" class="link-category">[##_cover_item_category_##]</a>
+                                  <span class="date">[##_cover_item_simple_date_##]</span>
+                                  <span class="reply">[##_cover_item_comment_count_##]</span>
+                                </s_cover_item_article_info>
+                              </div>
+                            </div>
+                          </article>
+                        </s_cover_item>
+                      </div>
+                    </div>
+                  </s_cover>
+                  <!-- // type-text -->
+
+                </s_cover_rep>
+              </div>
+            </s_cover_group>
+            <!-- ─────────── // s_cover_group ─────────── -->
+
+          </div>
+          <!-- // area-main -->
+
+          <!-- ══════════════════ aside ══════════════════ -->
+          <aside class="area-aside" aria-label="사이드바">
+
+            <!-- search-bar for MOBILE (common.js requestSearch 훅 — 클래스 고정) -->
+            <div class="util use-sidebar">
+              <div class="search">
+                <i class="xi-search search-icon" aria-hidden="true"></i>
+                <label for="searchInput" class="screen_out">블로그 내 검색</label>
+                <input id="searchInput" class="searchInput" type="text" name="search" value="" placeholder="검색내용을 입력하세요." onkeypress="if (event.keyCode == 13) { requestSearch('.util.use-sidebar .searchInput') }">
+              </div>
+            </div>
+
+            <!-- sidebar 01 : 프로필 -->
+            <s_sidebar>
+              <s_sidebar_element>
+                <div class="box-profile <s_if_var_Profilebgimage>box-profile-invert</s_if_var_Profilebgimage>" style="background-image:url('<s_if_var_Profilebgimage>[##_var_Profilebgimage_##]</s_if_var_Profilebgimage>');">
+                  <div class="inner-box">
+                    <img src="[##_image_##]" class="img-profile" alt="프로필사진">
+                    <p class="tit-g">[##_title_##]</p>
+                    <p class="text-profile">[##_desc_##]</p>
+                    <!-- 블로그 소유자 접속시 보여지는 버튼 -->
+                    [##_subscription_button_##]
+                    <!-- 블로그 소유자가 아닌 경우 보여지는 버튼 그룹 -->
+                    <div class="profile-btn-group [##_role_group_##]">
+                      <button type="button" class="btn-g btn-primary btn-write">글쓰기</button>
+                      <button type="button" class="btn-g btn-blog-manage">블로그 관리</button>
+                    </div>
+                    <div class="box-sns">
+                      <s_if_var_Profilefacebooklink>
+                        <a href="//[##_var_Profilefacebooklink_##]" class="link-sns link-facebook" aria-label="Facebook">
+                          <svg xmlns="//www.w3.org/2000/svg" width="8" height="16" viewBox="0 0 8 16" class="svg">
+                            <path fill="#B3B3B3" fill-rule="evenodd" d="M8 5v3H5v8H2V8H0V5h2V2a2 2 0 0 1 2-2h4v3H6a1 1 0 0 0-1 1v1h3z" />
+                          </svg>
+                        </a>
+                      </s_if_var_Profilefacebooklink>
+                      <s_if_var_Profileyoutubelink>
+                        <a href="//[##_var_Profileyoutubelink_##]" class="link-sns link-youtube" aria-label="YouTube">
+                          <svg xmlns="//www.w3.org/2000/svg" width="16" height="12" viewBox="0 0 16 12" class="svg">
+                            <path fill="#B3B3B3" fill-rule="evenodd" d="M4 0h8a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V4a4 4 0 0 1 4-4zm3 4l3 2-3 2V4z" />
+                          </svg>
+                        </a>
+                      </s_if_var_Profileyoutubelink>
+                      <s_if_var_Profileinstalink>
+                        <a href="//[##_var_Profileinstalink_##]" class="link-sns link-insta" aria-label="Instagram">
+                          <svg xmlns="//www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" class="svg">
+                            <path fill="#B3B3B3" fill-rule="evenodd" d="M4 0h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V4a4 4 0 0 1 4-4zm0 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm4 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm4-3a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
+                          </svg>
+                        </a>
+                      </s_if_var_Profileinstalink>
+                      <s_if_var_Profiletwitterlink>
+                        <a href="//[##_var_Profiletwitterlink_##]" class="link-sns link-twitter" aria-label="Twitter">
+                          <svg xmlns="//www.w3.org/2000/svg" width="16" height="13" viewBox="0 0 16 13" class="svg">
+                            <path fill="#B3B3B3" fill-rule="evenodd" d="M14.476 3.059S14.825 13 5.333 13A10.044 10.044 0 0 1 0 11.471a7.423 7.423 0 0 0 3.81-1.529 3.091 3.091 0 0 1-2.286-1.529h1.524A8.616 8.616 0 0 1 0 4.588h1.524S.45 4.075.762.764a8.438 8.438 0 0 0 6.095 3.059.766.766 0 0 0 .762-.765S7.646 0 11.429 0a4.071 4.071 0 0 1 2.285.765L16 0l-1.524 1.529H16l-1.524 1.53z" />
+                          </svg>
+                        </a>
+                      </s_if_var_Profiletwitterlink>
+                    </div>
+                  </div>
+                </div>
+              </s_sidebar_element>
+            </s_sidebar>
+
+            <!-- 광고: 사이드바 상단 -->
+            <div class="ad ad-sidebar" data-ad="sidebar" data-ad-min="250">
+              <span class="ad-label">Advertisement</span>
+              <div class="ad-box"><span class="ad-ph">애드센스 — sidebar (300×250)</span></div>
+            </div>
+
+            <!-- sidebar 02 : 모듈 -->
+            <s_sidebar>
+              <s_sidebar_element>
+                <!-- 카테고리 메뉴 -->
+                <div class="box-category box-category-2depth">
+                  <h3 class="title-sidebar">Category</h3>
+                  <nav aria-label="카테고리">
+                    [##_category_list_##]
+                  </nav>
+                </div>
+              </s_sidebar_element>
+
+              <s_sidebar_element>
+                <!-- 최근글과 인기글 (common.js 탭 훅 — 클래스 고정) -->
+                <div class="box-recent">
+                  <h3 class="title-sidebar blind">최근글과 인기글</h3>
+                  <ul class="tab-recent">
+                    <li class="tab-button recent_button on"><a class="tab-button" href="#" onclick="return false;">최근글</a></li>
+                    <li class="tab-button sidebar_button"><a class="tab-button" href="#" onclick="return false;">인기글</a></li>
+                  </ul>
+                  <ul class="list-recent">
+                    <s_rctps_rep>
+                      <li>
+                        <a href="[##_rctps_rep_link_##]" class="link-recent">
+                          <s_rctps_rep_thumbnail>
+                            <p class="thumbnail" style="background-image:url('[##_rctps_rep_thumbnail_##]')"></p>
+                          </s_rctps_rep_thumbnail>
+                          <div class="box-recent">
+                            <strong>[##_rctps_rep_title_##]</strong>
+                            <span>[##_rctps_rep_date_##]</span>
+                          </div>
+                        </a>
+                      </li>
+                    </s_rctps_rep>
+                  </ul>
+
+                  <ul class="list-recent list-tab" style="display: none">
+                    <s_rctps_popular_rep>
+                      <li>
+                        <a href="[##_rctps_rep_link_##]" class="link-recent">
+                          <s_rctps_rep_thumbnail>
+                            <p class="thumbnail" style="background-image:url('[##_rctps_rep_thumbnail_##]')"></p>
+                          </s_rctps_rep_thumbnail>
+                          <div class="box-recent">
+                            <strong>[##_rctps_rep_title_##]</strong>
+                            <span>[##_rctps_rep_date_##]</span>
+                          </div>
+                        </a>
+                      </li>
+                    </s_rctps_popular_rep>
+                  </ul>
+                </div>
+              </s_sidebar_element>
+              <!-- // 최근글과 인기글 -->
+
+              <s_sidebar_element>
+                <!-- 태그 -->
+                <div class="box-tag">
+                  <h3 class="title-sidebar">Tag</h3>
+                  <div class="box_tag">
+                    <s_random_tags>
+                      <a href="[##_tag_link_##]" class="[##_tag_class_##]">[##_tag_name_##],</a>
+                    </s_random_tags>
+                  </div>
+                </div>
+              </s_sidebar_element>
+
+              <s_sidebar_element>
+                <!-- 최근댓글 -->
+                <div class="box-reply">
+                  <h3 class="title-sidebar">최근댓글</h3>
+                  <ul class="list-sidebar">
+                    <s_rctrp_rep>
+                      <li>
+                        <a href="[##_rctrp_rep_link_##]" class="link-sidebar">
+                          <strong>[##_rctrp_rep_desc_##]</strong>
+                          <p>[##_rctrp_rep_name_##]</p>
+                        </a>
+                      </li>
+                    </s_rctrp_rep>
+                  </ul>
+                </div>
+              </s_sidebar_element>
+
+              <s_sidebar_element>
+                <!-- 공지사항 -->
+                <s_rct_notice>
+                  <div class="box-notice">
+                    <h3 class="title-sidebar">공지사항</h3>
+                    <ul class="list-sidebar">
+                      <s_rct_notice_rep>
+                        <li>
+                          <a href="[##_notice_rep_link_##]" class="link-sidebar"
+                            data-tiara-action-name="블로그공지_클릭"
+                            data-tiara-action-kind="ClickContent"
+                            data-tiara-copy="[##_notice_rep_title_##]"
+                            data-tiara-click_url="[##_blog_link_##][##_notice_rep_link_##]"
+                            data-tiara-name="[##_notice_rep_title_##]"
+                            data-tiara-provider="[##_title_##]"
+                            data-tiara-plink="[##_notice_rep_link_##]"
+                            data-tiara-id="[##_notice_rep_link_##]"
+                          >[##_notice_rep_title_##]</a>
+                        </li>
+                      </s_rct_notice_rep>
+                    </ul>
+                  </div>
+                </s_rct_notice>
+              </s_sidebar_element>
+
+              <s_sidebar_element>
+                <!-- 글 보관함 -->
+                <div class="box-archive">
+                  <h3 class="title-sidebar">Archives</h3>
+                  <ul class="list-sidebar">
+                    <s_archive_rep>
+                      <li><a href="[##_archive_rep_link_##]" class="link-sidebar">[##_archive_rep_date_##]</a></li>
+                    </s_archive_rep>
+                  </ul>
+                </div>
+              </s_sidebar_element>
+
+              <s_sidebar_element>
+                <!-- 달력 모듈 -->
+                <div class="box-calendar">
+                  <h3 class="title-sidebar"><span class="blind">Calendar</span>Calendar</h3>
+                  <div class="inner-calendar">[##_calendar_##]</div>
+                </div>
+              </s_sidebar_element>
+
+              <s_sidebar_element>
+                <!-- 방문자수 -->
+                <div class="box-visit">
+                  <h3 class="title-sidebar"><span class="blind">방문자수</span>Total</h3>
+                  <p class="text-total">[##_count_total_##]</p>
+                  <ul>
+                    <li class="item-visit">Today : [##_count_today_##]</li>
+                    <li class="item-visit">Yesterday : [##_count_yesterday_##]</li>
+                  </ul>
+                </div>
+              </s_sidebar_element>
+
+              <s_sidebar_element>
+                <!-- 페이스북 트위터 플러그인 (common.js 탭 훅 — 클래스 고정) -->
+                <div class="box-plugins">
+                  <h3 class="title-sidebar blind">페이스북 트위터 플러그인</h3>
+                  <ul class="tab-sns">
+                    <li class="tab-button item-facebook on"><a class="tab-button" href="#" onclick="return false;">Facebook</a></li>
+                    <li class="tab-button item-twitter"><a class="tab-button" href="#" onclick="return false;">Twitter</a></li>
+                  </ul>
+
+                  <div class="plugin-facebook">
+                    <div id="fb-root"></div>
+                    <script>(function (d, s, id) {
+                        var js, fjs = d.getElementsByTagName(s)[0];
+                        if (d.getElementById(id)) return;
+                        js = d.createElement(s); js.id = id;
+                        js.src = '//connect.facebook.net/ko_KR/sdk.js#xfbml=1&version=v3.2&appId=360877073936113&autoLogAppEvents=1';
+                        fjs.parentNode.insertBefore(js, fjs);
+                      }(document, 'script', 'facebook-jssdk'));</script>
+                    <div class="fb-page" data-href="[##_var_facebookurl_##]" data-tabs="timeline" data-small-header="true" data-adapt-container-width="true" data-hide-cover="true" data-show-facepile="false"><blockquote cite="[##_var_facebookurl_##]" class="fb-xfbml-parse-ignore"><a href="[##_var_facebookurl_##]"></a></blockquote>
+                    </div>
+                  </div>
+
+                  <div class="plugin-twitter" style="display: none;">
+                    <a class="twitter-timeline" href="[##_var_twitterurl_##]"></a> <script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+                  </div>
+                </div>
+              </s_sidebar_element>
+            </s_sidebar>
+
+            <!-- 광고: 사이드바 스티키 (화면에 붙어 따라옴) -->
+            <div class="ad ad-sticky" data-ad="sticky" data-ad-min="600">
+              <span class="ad-label">Advertisement</span>
+              <div class="ad-box"><span class="ad-ph">애드센스 — sticky (300×600)</span></div>
+            </div>
+
+          </aside>
+          <!-- ══════════════════ // aside ══════════════════ -->
+
+        </main>
+        <!-- // main -->
+      </div>
+      <!-- ══════════════════ // container ══════════════════ -->
+
+      <!-- 광고: 푸터 위 -->
+      <div class="ad ad-footer" data-ad="footer" data-ad-min="100">
+        <span class="ad-label">Advertisement</span>
+        <div class="ad-box"><span class="ad-ph">애드센스 — footer (반응형)</span></div>
+      </div>
+
+      <div class="revenue-slot revenue-lower">[##_revenue_list_lower_##]</div>
+
+      <!-- ══════════════════ footer ══════════════════ -->
+      <footer id="footer">
+
+        <div class="inner-footer">
+
+          <div class="footer-top">
+            <div class="footer-brand">
+              <strong class="footer-logo">[##_title_##]</strong>
+              <p class="footer-desc">[##_desc_##]</p>
+              <div class="footer-sns">
+                <s_if_var_Profilefacebooklink><a href="//[##_var_Profilefacebooklink_##]" aria-label="Facebook"><i class="xi-facebook" aria-hidden="true"></i></a></s_if_var_Profilefacebooklink>
+                <s_if_var_Profileyoutubelink><a href="//[##_var_Profileyoutubelink_##]" aria-label="YouTube"><i class="xi-youtube-play" aria-hidden="true"></i></a></s_if_var_Profileyoutubelink>
+                <s_if_var_Profileinstalink><a href="//[##_var_Profileinstalink_##]" aria-label="Instagram"><i class="xi-instagram" aria-hidden="true"></i></a></s_if_var_Profileinstalink>
+                <s_if_var_Profiletwitterlink><a href="//[##_var_Profiletwitterlink_##]" aria-label="Twitter"><i class="xi-twitter" aria-hidden="true"></i></a></s_if_var_Profiletwitterlink>
+                <a href="[##_rss_url_##]" aria-label="RSS"><i class="xi-rss" aria-hidden="true"></i></a>
+              </div>
+            </div>
+
+            <nav class="footer-nav" aria-label="사이트맵">
+              <div class="footer-col">
+                <h4>바로가기</h4>
+                <ul>
+                  <li><a href="[##_blog_link_##]">홈</a></li>
+                  <li><a href="/tag">태그</a></li>
+                  <li><a href="/guestbook">방명록</a></li>
+                  <li><a href="[##_rss_url_##]">RSS 구독</a></li>
+                </ul>
+              </div>
+              <div class="footer-col footer-col-category">
+                <h4>카테고리</h4>
+                <!-- 사이드바 카테고리를 스크립트가 복제해 채웁니다 -->
+                <ul class="footer-category-list"></ul>
+              </div>
+              <div class="footer-col">
+                <h4>안내</h4>
+                <div class="box-policy">
+                  <s_if_var_footerLink1Name>
+                    <a href="[##_var_footerLink1Url_##]" class="link-footer">[##_var_footerLink1Name_##]</a>
+                  </s_if_var_footerLink1Name>
+                  <s_if_var_footerLink2Name>
+                    <a href="[##_var_footerLink2Url_##]" class="link-footer">[##_var_footerLink2Name_##]</a>
+                  </s_if_var_footerLink2Name>
+                  <s_if_var_footerLink3Name>
+                    <a href="[##_var_footerLink3Url_##]" class="link-footer">[##_var_footerLink3Name_##]</a>
+                  </s_if_var_footerLink3Name>
+                </div>
+                <div class="box-site">
+                  <button type="button" data-toggle="xe-dropdown" aria-expanded="false">관련사이트</button>
+                  <ul>
+                    <s_link_rep>
+                      <li class="on"><a href="[##_link_url_##]" target="_blank" rel="noopener">[##_link_site_##]</a></li>
+                    </s_link_rep>
+                  </ul>
+                </div>
+              </div>
+            </nav>
+          </div>
+
+          <div class="footer-bottom">
+            <p class="text-info">[##_var_footerCopyright_##]</p>
+            <address>[##_var_footerAddress_##]</address>
+          </div>
+
+        </div>
+
+      </footer>
+      <!-- ══════════════════ // footer ══════════════════ -->
+
+      <button type="button" class="btn-totop" aria-label="맨 위로 이동"><i class="xi-angle-up" aria-hidden="true"></i></button>
+      <div class="drawer-dim" hidden></div>
+
+    </div>
+    <!-- // wrap -->
+
+    <!-- ═════════════ 스킨 스크립트 (common.js 를 건드리지 않고 추가만) ═════════════ -->
+    <script>
+    (function () {
+      'use strict';
+      var d = document, root = d.documentElement, body = d.body;
+      var $ = function (s, c) { return (c || d).querySelector(s); };
+      var $$ = function (s, c) { return Array.prototype.slice.call((c || d).querySelectorAll(s)); };
+      var bodyId = body.id || '';
+      var isView = /tt-body-(page|entry|notice)/.test(bodyId) || !!$('#article-view');
+      var isHome = /tt-body-index|tt-body-home/.test(bodyId);
+
+      /* ── 1. 테마 전환 ─────────────────────────────── */
+      (function theme() {
+        var btn = $('.btn-theme');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var cur = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+          root.setAttribute('data-theme', cur);
+          try { localStorage.setItem('skin-theme', cur); } catch (e) { }
+          adaptInlineColors();          /* 본문 인라인 색을 테마에 맞춘다 */
+        });
+      }());
+
+      /* ── 1.5 본문 인라인 색상 흡수 ──────────────────
+         티스토리 에디터로 쓴 글에는 인라인 color·background 가 박힌다
+         (실측: 글 하나에 231개). 전부 라이트 기준이라 다크에서 두 방향으로 깨진다.
+           · color:#111 같은 어두운 글자 → 어두운 배경 위에서 1.02:1
+           · background:#fff 같은 밝은 판 → 그 위 우리 다크 글자색이 1.08:1
+         발행된 글은 수정할 수 없으므로(HANDOVER §6) 스킨이 흡수한다.
+         원본 style 을 보관해 두고 라이트로 돌아가면 그대로 되돌린다.       */
+      function adaptInlineColors() {
+        var av = $('#article-view');
+        if (!av) return;
+        var dark = root.getAttribute('data-theme') === 'dark';
+
+        /* 되돌리기 — 보관해 둔 원본 style 을 복원 */
+        $$('[data-skin-orig]', av).forEach(function (el) {
+          var o = el.getAttribute('data-skin-orig');
+          if (o) el.setAttribute('style', o); else el.removeAttribute('style');
+          el.removeAttribute('data-skin-orig');
+        });
+        $$('[data-skin-color]', av).forEach(function (el) {
+          el.setAttribute('color', el.getAttribute('data-skin-color'));
+          el.removeAttribute('data-skin-color');
+        });
+        if (!dark) return;
+
+        function lumOf(c) {
+          var m = String(c).match(/[\d.]+/g);
+          if (!m || m.length < 3) return null;
+          if (m.length > 3 && Number(m[3]) < .5) return null;   /* 거의 투명 */
+          var f = function (v) { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+          return .2126 * f(+m[0]) + .7152 * f(+m[1]) + .0722 * f(+m[2]);
+        }
+        function keep(el) {
+          if (!el.hasAttribute('data-skin-orig'))
+            el.setAttribute('data-skin-orig', el.getAttribute('style') || '');
+        }
+
+        /* 1단계 — 밝은 인라인 배경을 어두운 면으로 바꾼다.
+           먼저 배경을 정리해야 2단계에서 글자색을 판단할 수 있다. */
+        $$('[style]', av).forEach(function (el) {
+          var cs = getComputedStyle(el);
+          if (cs.backgroundImage && cs.backgroundImage !== 'none') return;
+          var L = lumOf(cs.backgroundColor);
+          if (L === null || L < .55) return;                    /* 어두운 판은 그대로 */
+          keep(el);
+          el.style.backgroundColor = 'var(--c-bg-inset)';
+          var bl = lumOf(cs.borderTopColor);
+          if (cs.borderTopWidth !== '0px' && bl !== null && bl > .5) el.style.borderColor = 'var(--c-line)';
+          var blf = lumOf(cs.borderLeftColor);
+          if (cs.borderLeftWidth !== '0px' && blf !== null && blf > .8) el.style.borderLeftColor = 'var(--c-brand)';
+        });
+
+        /* 2단계 — 어두운 인라인 글자색을 걷어낸다.
+           지우면 스킨 CSS 가 이어받아 제목은 --c-ink, 본문은 --c-ink-2 가 된다. */
+        $$('[style]', av).forEach(function (el) {
+          if (!el.style.color) return;
+          var L = lumOf(getComputedStyle(el).color);
+          if (L === null || L > .4) return;                     /* 이미 밝은 글자는 둔다 */
+          var bgL = lumOf(getComputedStyle(el).backgroundColor);
+          if (bgL !== null && bgL > .55) return;                /* 밝은 판 위면 짝이 맞다 */
+          keep(el);
+          el.style.color = '';
+        });
+
+        /* 3단계 — 구식 <font color> */
+        $$('font[color]', av).forEach(function (el) {
+          var L = lumOf(getComputedStyle(el).color);
+          if (L === null || L > .4) return;
+          el.setAttribute('data-skin-color', el.getAttribute('color'));
+          el.removeAttribute('color');
+        });
+      }
+      adaptInlineColors();
+
+      /* ── 2. 오늘 날짜 ─────────────────────────────── */
+      (function today() {
+        var el = $('.today-date'); if (!el) return;
+        var n = new Date(), w = ['일', '월', '화', '수', '목', '금', '토'];
+        el.textContent = n.getFullYear() + '. ' + (n.getMonth() + 1) + '. ' + n.getDate() + '. (' + w[n.getDay()] + ')';
+      }());
+
+      /* ── 3. 스티키 헤더 + 읽기 진행률 + 맨 위로 ────── */
+      (function scrollUI() {
+        var sticky = $('.sticky-bar'), prog = $('.read-progress-bar'), top = $('.btn-totop');
+        var titleEl = $('.article-header .title-article'), stTitle = $('.sticky-title');
+        var av = $('#article-view');
+        if (stTitle && titleEl) stTitle.textContent = titleEl.textContent.trim();
+        if (prog && !isView) { var pw = $('.read-progress'); if (pw) pw.style.display = 'none'; }
+
+        var ticking = false;
+        function update() {
+          var y = window.pageYOffset || root.scrollTop;
+          if (sticky) sticky.classList.toggle('is-on', y > 260);
+          if (top) top.classList.toggle('is-on', y > 600);
+          body.classList.toggle('is-scrolled', y > 10);
+          if (prog && av) {
+            var s = av.offsetTop, h = av.offsetHeight, vh = window.innerHeight;
+            var p = (y + vh - s) / (h + vh) * 100;
+            prog.style.width = Math.max(0, Math.min(100, p)) + '%';
+          }
+          ticking = false;
+        }
+        window.addEventListener('scroll', function () {
+          if (!ticking) { ticking = true; window.requestAnimationFrame(update); }
+        }, { passive: true });
+        update();
+
+        function toTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+        if (top) top.addEventListener('click', toTop);
+        var ti = $('.btn-totop-inline'); if (ti) ti.addEventListener('click', toTop);
+      }());
+
+      /* ── 4. 브레드크럼 ────────────────────────────── */
+      (function crumb() {
+        var wrap = $('.breadcrumb'), list = $('.breadcrumb-list');
+        if (!wrap || !list) return;
+        var cat = $('.article-header .box-meta .category');
+        var listTitle = $('.title-search .archives');
+        var items = [];
+        if (cat && cat.textContent.trim()) items.push({ t: cat.textContent.trim(), h: null });
+        else if (listTitle && listTitle.textContent.trim()) items.push({ t: listTitle.textContent.trim(), h: null });
+        var art = $('.article-header .title-article');
+        if (art) items.push({ t: art.textContent.trim(), h: null, last: true });
+        if (!items.length) { wrap.style.display = 'none'; return; }
+        items.forEach(function (it) {
+          var li = d.createElement('li');
+          li.textContent = it.t;
+          if (it.last) li.className = 'is-current';
+          list.appendChild(li);
+        });
+      }());
+
+      /* ── 5. 본문 목차 자동 생성 ───────────────────── */
+      (function toc() {
+        var nav = $('.toc'), ol = $('.toc-list'), av = $('#article-view');
+        if (!nav || !ol || !av) return;
+        var hs = $$('h2, h3', av).filter(function (h) { return h.textContent.trim().length > 1; });
+        if (hs.length < 3) return;
+        hs.forEach(function (h, i) {
+          if (!h.id) h.id = 'sec-' + (i + 1);
+          var li = d.createElement('li');
+          li.className = 'toc-item toc-' + h.tagName.toLowerCase();
+          var a = d.createElement('a');
+          a.href = '#' + h.id; a.textContent = h.textContent.trim();
+          li.appendChild(a); ol.appendChild(li);
+        });
+        nav.hidden = false;
+
+        var head = $('.toc-head');
+        head.addEventListener('click', function () {
+          var open = nav.classList.toggle('is-fold');
+          head.setAttribute('aria-expanded', String(!open));
+        });
+
+        if ('IntersectionObserver' in window) {
+          var links = $$('.toc-list a');
+          var io = new IntersectionObserver(function (es) {
+            es.forEach(function (e) {
+              if (!e.isIntersecting) return;
+              links.forEach(function (l) {
+                l.parentNode.classList.toggle('is-on', l.getAttribute('href') === '#' + e.target.id);
+              });
+            });
+          }, { rootMargin: '-80px 0px -70% 0px' });
+          hs.forEach(function (h) { io.observe(h); });
+        }
+      }());
+
+      /* ── 6. 읽는 데 걸리는 시간 ───────────────────── */
+      (function readtime() {
+        var el = $('.readtime'), av = $('#article-view');
+        if (!el || !av) return;
+        var n = (av.textContent || '').replace(/\s+/g, '').length;
+        if (!n) { el.style.display = 'none'; return; }
+        el.textContent = '약 ' + Math.max(1, Math.round(n / 500)) + '분';
+      }());
+
+      /* ── 7. 본문 유틸 (링크복사 / 글자크기 / 인쇄) ── */
+      (function tools() {
+        $$('.btn-share').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var url = location.href;
+            var done = function () { toast('링크를 복사했습니다'); };
+            if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, fallback);
+            else fallback();
+            function fallback() {
+              var t = d.createElement('textarea'); t.value = url; d.body.appendChild(t);
+              t.select(); try { d.execCommand('copy'); done(); } catch (e) { } d.body.removeChild(t);
+            }
+          });
+        });
+        var sizes = ['', 'fs-lg', 'fs-xl'], si = 0;
+        var av = $('#article-view');
+        try { si = parseInt(localStorage.getItem('skin-fs') || '0', 10) || 0; } catch (e) { }
+        if (av && sizes[si]) av.classList.add(sizes[si]);
+        var fb = $('.btn-font');
+        if (fb && av) fb.addEventListener('click', function () {
+          if (sizes[si]) av.classList.remove(sizes[si]);
+          si = (si + 1) % sizes.length;
+          if (sizes[si]) av.classList.add(sizes[si]);
+          try { localStorage.setItem('skin-fs', String(si)); } catch (e) { }
+          toast(['기본 크기', '조금 크게', '크게'][si]);
+        });
+        var pb = $('.btn-print'); if (pb) pb.addEventListener('click', function () { window.print(); });
+      }());
+
+      function toast(msg) {
+        var t = $('.skin-toast');
+        if (!t) { t = d.createElement('div'); t.className = 'skin-toast'; d.body.appendChild(t); }
+        t.textContent = msg; t.classList.add('is-on');
+        clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove('is-on'); }, 1800);
+      }
+
+      /* ── 7.5 썸네일 정규화 ─────────────────────────
+         [##_..._thumbnail_raw_url_##] 는 스킴 없는 경로나 파일명만 줄 때가 있다.
+         그대로 쓰면 목록 이미지칸이 통째로 빈다. 여기서 세 가지를 한다.
+           1) 스킴 보정 (//… , fname 만 온 경우 → 티스토리 리사이저 경유)
+           2) img 를 정면으로 세우고 background 는 폴백으로 남긴다
+           3) 깨진 이미지는 감춰서 '엑스박스' 대신 빈 카드로 만든다        */
+      (function thumbs() {
+        /* 티스토리 썸네일 URL 을 정리한다.
+           _raw_url_ 은 서명이 붙은 원본이다 (1200px, ?credential=…&expires=…&signature=…).
+           카드는 300~470px 이므로 리사이저에 태워 750px 로 줄인다.
+
+           리사이저 규격 — 실측으로 확정한 것(다섯 형식을 브라우저에서 직접 로드해 봤다):
+             원본 그대로                      ✓ 1200×1200
+             fname=encodeURIComponent(원본)   ✓  750×750   ← 이것만 맞다
+             fname=원본 (인코딩 안 함)         ✗ 실패  (서명의 & 가 쿼리를 끊는다)
+             쿼리 떼고 인코딩                  ✗ 실패  (서명이 빠져 거부된다)
+           티스토리 자신도 인코딩해서 쓴다.
+
+           그래도 리사이저가 실패할 수 있으므로 원본으로 한 번 되돌아간다.
+           두 번 다 실패하면 빈 판을 그린다.                                    */
+        var RESIZE = 'https://img1.daumcdn.net/thumb/R750x0/?scode=mtistory2&fname=';
+        var CDN = /^https?:\/\/(blog\.kakaocdn\.net|[a-z0-9-]+\.daumcdn\.net)\//i;
+
+        function absolutize(u) {
+          if (!u) return '';
+          u = String(u).trim().replace(/^url\((['"]?)([\s\S]*?)\1\)$/, '$2').trim();
+          if (!u || u === 'none') return '';
+          if (/^data:/.test(u)) return u;
+          if (/^\/\//.test(u)) return 'https:' + u;
+          if (/^\//.test(u)) return location.origin + u;
+          if (!/^https?:\/\//.test(u)) return '';   /* 정체불명 — 손대지 않는다 */
+          return u;
+        }
+
+        function resized(u) {
+          if (!u || /^data:/.test(u)) return u;
+          if (/\/thumb\//.test(u)) return u;        /* 이미 리사이저를 거쳤다 */
+          if (!CDN.test(u)) return u;               /* 외부 이미지는 그대로 */
+          return RESIZE + encodeURIComponent(u);
+        }
+
+        function blank(box, img) {
+          box.style.backgroundImage = '';
+          box.classList.add('is-empty');
+          if (img) img.setAttribute('data-broken', '');
+        }
+
+        /* 되는 이미지를 먼저 지우지 않는다.
+           티스토리가 인라인으로 넣어준 배경은 이미 화면에 떠 있다.
+           줄인 URL 이 확실히 로드된 뒤에만 바꿔 끼운다.
+           (그 순서를 어겼더니 썸네일이 떴다가 회색판에 덮였다 — 실측) */
+        function swapWhenReady(box, img, url, onFail) {
+          var probe = new Image();
+          probe.onload = function () {
+            box.style.backgroundImage = "url('" + url + "')";
+            if (img) {
+              img.removeAttribute('data-broken');
+              if (img.getAttribute('src') !== url) img.setAttribute('src', url);
+            }
+          };
+          probe.onerror = function () { onFail && onFail(); };
+          probe.src = url;
+        }
+
+        $$('.thumbnail').forEach(function (box) {
+          var img = $('.img-thumbnail', box);
+          var bg = '';
+          try { bg = getComputedStyle(box).backgroundImage; } catch (e) { }
+          var origin = absolutize(img && img.getAttribute('src')) || absolutize(bg);
+
+          if (!origin) {
+            if (box.hasAttribute('has-thumbnail')) blank(box, img);
+            return;
+          }
+
+          if (img) {
+            img.setAttribute('decoding', 'async');
+            if (!img.getAttribute('loading')) img.setAttribute('loading', 'lazy');
+          }
+
+          var small = resized(origin);
+          if (small === origin) {
+            /* 줄일 것이 없다 — 원본이 실패하면 그때 빈 판 */
+            swapWhenReady(box, img, origin, function () { blank(box, img); });
+            return;
+          }
+          /* 줄인 것 → 실패하면 원본 → 그것도 실패하면 빈 판 */
+          swapWhenReady(box, img, small, function () {
+            swapWhenReady(box, img, origin, function () { blank(box, img); });
+          });
+        });
+      }());
+
+      /* ── 8. 본문 표 가로스크롤 · 이미지 지연로딩 ──── */
+      (function content() {
+        var av = $('#article-view'); if (!av) return;
+        $$('table', av).forEach(function (tb) {
+          if (tb.parentNode.classList.contains('table-scroll')) return;
+          var w = d.createElement('div'); w.className = 'table-scroll';
+          tb.parentNode.insertBefore(w, tb); w.appendChild(tb);
+        });
+        $$('img', av).forEach(function (im) {
+          if (!im.getAttribute('loading')) im.setAttribute('loading', 'lazy');
+          im.setAttribute('decoding', 'async');
+        });
+        $$('iframe', av).forEach(function (f) {
+          if (!f.getAttribute('loading')) f.setAttribute('loading', 'lazy');
+          if (f.parentNode.classList.contains('embed-ratio')) return;
+          var w = d.createElement('div'); w.className = 'embed-ratio';
+          f.parentNode.insertBefore(w, f); w.appendChild(f);
+        });
+        $$('a[href^="http"]', av).forEach(function (a) {
+          if (a.hostname !== location.hostname) { a.target = '_blank'; a.rel = 'noopener nofollow'; }
+        });
+      }());
+
+      /* ── 9. 목록 보기 방식 (카드형 / 목록형) ──────── */
+      (function listview() {
+        var wrap = $('.list-wrap'), btns = $$('.lvt-btn');
+        if (!wrap || !btns.length) return;
+        var saved = 'grid';
+        try { saved = localStorage.getItem('skin-listview') || 'grid'; } catch (e) { }
+        apply(saved);
+        btns.forEach(function (b) {
+          b.addEventListener('click', function () {
+            apply(b.dataset.view);
+            try { localStorage.setItem('skin-listview', b.dataset.view); } catch (e) { }
+          });
+        });
+        function apply(v) {
+          wrap.setAttribute('data-view', v);
+          btns.forEach(function (b) { b.classList.toggle('is-on', b.dataset.view === v); });
+        }
+      }());
+
+      /* ── 10. 푸터 카테고리 (사이드바에서 복제) ────── */
+      (function footcat() {
+        var src = $('.area-aside .box-category .tt_category');
+        var dst = $('.footer-category-list');
+        if (!src || !dst) { var c = $('.footer-col-category'); if (c) c.style.display = 'none'; return; }
+        var items = $$('.category_list > li > a', src).slice(0, 8);
+        if (!items.length) { var c2 = $('.footer-col-category'); if (c2) c2.style.display = 'none'; return; }
+        items.forEach(function (a) {
+          var li = d.createElement('li'), na = d.createElement('a');
+          na.href = a.getAttribute('href');
+          na.textContent = (a.textContent || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+          li.appendChild(na); dst.appendChild(li);
+        });
+      }());
+
+      /* ── 11. 사이드바 드로어 ───────────────────────
+         common.js 가 .area-aside 에 .area-aside-on 을, 딤에 .bg-dimmed 를 붙인다.
+         여기서는 그 상태를 읽어 aria / 스크롤잠금 / ESC 만 얹는다. */
+      (function drawer() {
+        var aside = $('.area-aside'), btn = $('.button-menu'), dim = $('.drawer-dim');
+        if (!aside || !btn) return;
+        function isOpen() { return aside.classList.contains('area-aside-on'); }
+        function sync() {
+          var open = isOpen();
+          btn.setAttribute('aria-expanded', String(open));
+          btn.setAttribute('aria-label', open ? '메뉴 닫기' : '메뉴 열기');
+          body.classList.toggle('drawer-open', open);
+          if (dim) dim.hidden = !open;
+        }
+        if (window.MutationObserver) {
+          new MutationObserver(sync).observe(aside, { attributes: true, attributeFilter: ['class'] });
+        } else {
+          btn.addEventListener('click', function () { setTimeout(sync, 60); });
+        }
+        if (dim) dim.addEventListener('click', function () { if (isOpen()) btn.click(); });
+        d.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && isOpen()) btn.click();
+        });
+        sync();
+      }());
+
+      /* ── 12. 애드센스 슬롯 ─────────────────────────
+         · client 가 유효해야만 <ins> 를 만든다
+         · 손으로 붙여넣은 ins.adsbygoogle 가 이미 있으면 손대지 않는다
+         · 슬롯 ID 가 없는 자리는 광고 없이 접는다 (빈 상자를 남기지 않는다) */
+      (function ads() {
+        var cfg = window.ADS || {};
+        var slots = cfg.slots || {};
+        var live = cfg.enabled !== false && /^ca-pub-\d{10,}$/.test(cfg.client || '');
+        /* fixed:[w,h] 는 고정 크기 단위. 고정 단위는 줄어들지 않으므로
+           들어갈 폭이 없는 화면에서는 아예 띄우지 않는다(minVw).
+           반응형 단위를 만들면 fixed 를 지우고 fmt:'auto' 만 남기면 된다. */
+        var FMT = {
+          top:       { fixed: [970, 90], minVw: 1010, alt: 'topMobile' },
+          topMobile: { fmt: 'auto', min: 100, maxVw: 1009 },
+          bottom:    { fmt: 'auto', min: 280 },
+          footer:    { fmt: 'auto', min: 100 },
+          sidebar:   { fmt: 'auto', min: 250 },
+          sticky:    { fmt: 'auto', min: 600 },
+          inArticle: { fmt: 'fluid', layout: 'in-article', min: 280 },
+          infeed:    { fmt: 'fluid', min: 250 }
+        };
+        var VW = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+
+        function collapse(wrap, why) {
+          wrap.classList.add('is-empty');
+          wrap.setAttribute('aria-hidden', 'true');
+          if (why && !ads.warned) {
+            ads.warned = true;
+            console.info('[스킨] 애드센스 — ' + why
+              + ' skin.html 의 window.ADS 에서 값을 채우면 표시됩니다.');
+          }
+        }
+
+        function mount(wrap, name) {
+          var box = $('.ad-box', wrap);
+          if (!box) return;
+          var spec = FMT[name] || { fmt: 'auto', min: 200 };
+          var minH = spec.fixed ? spec.fixed[1] : (spec.min || 200);
+
+          /* 이미 사람이 붙여넣은 코드가 있으면 그대로 둔다 */
+          if (box.querySelector('ins.adsbygoogle')) {
+            var ph0 = $('.ad-ph', box); if (ph0) ph0.parentNode.removeChild(ph0);
+            box.style.minHeight = minH + 'px';
+            try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { }
+            return;
+          }
+
+          /* 고정 크기 단위는 폭이 되는 화면에서만. 아니면 대체 슬롯에 넘긴다 */
+          if (spec.minVw && VW < spec.minVw) { collapse(wrap, ''); return; }
+          if (spec.maxVw && VW > spec.maxVw) { collapse(wrap, ''); return; }
+
+          var slot = String(slots[name] || '').replace(/\D/g, '');
+          if (!live) { collapse(wrap, 'client(게시자 ID)가 설정되지 않았습니다.'); return; }
+          if (!slot) { collapse(wrap, 'slots.' + name + ' 이 비어 있습니다.'); return; }
+
+          var ph = $('.ad-ph', box); if (ph) ph.parentNode.removeChild(ph);
+          box.style.minHeight = minH + 'px';
+
+          var ins = d.createElement('ins');
+          ins.className = 'adsbygoogle';
+          ins.setAttribute('data-ad-client', cfg.client);
+          ins.setAttribute('data-ad-slot', slot);
+          if (spec.fixed) {
+            /* 고정 단위: data-ad-format 을 주면 안 된다 (크기가 무시된다) */
+            ins.style.display = 'inline-block';
+            ins.style.width = spec.fixed[0] + 'px';
+            ins.style.height = spec.fixed[1] + 'px';
+          } else {
+            ins.style.display = 'block';
+            ins.setAttribute('data-ad-format', spec.fmt);
+            if (spec.layout) ins.setAttribute('data-ad-layout', spec.layout);
+            if (spec.fmt === 'auto') ins.setAttribute('data-full-width-responsive', 'true');
+          }
+          box.appendChild(ins);
+          try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { }
+        }
+
+        function makeSlot(cls, name) {
+          var w = d.createElement('div');
+          w.className = 'ad ' + cls;
+          w.setAttribute('data-ad', name);
+          w.innerHTML = '<span class="ad-label">Advertisement</span>'
+                      + '<div class="ad-box"><span class="ad-ph">' + name + '</span></div>';
+          return w;
+        }
+
+        /* 본문 중간 — 두 번째 h2 앞, 없으면 중간 문단 앞 */
+        (function inArticle() {
+          var av = $('#article-view'); if (!av) return;
+          var hs = $$('h2', av);
+          var anchor = hs.length >= 2 ? hs[1] : null;
+          if (!anchor) {
+            var ps = $$('p', av).filter(function (p) { return p.textContent.trim().length > 40; });
+            if (ps.length >= 6) anchor = ps[Math.floor(ps.length / 2)];
+          }
+          if (!anchor || !anchor.parentNode) return;
+          anchor.parentNode.insertBefore(makeSlot('ad-inarticle', 'inArticle'), anchor);
+        }());
+
+        /* 목록 인피드 — 세 번째 카드 뒤 */
+        (function inFeed() {
+          var wrap = $('.list-wrap'); if (!wrap) return;
+          var cards = $$('article', wrap).filter(function (a) { return a.parentNode === wrap; });
+          if (cards.length < 5) return;
+          wrap.insertBefore(makeSlot('ad-infeed', 'infeed'), cards[3]);
+        }());
+
+        /* 전부(정적 + 방금 만든 것) 장착 */
+        $$('.ad[data-ad]').forEach(function (a) { mount(a, a.getAttribute('data-ad')); });
+      }());
+
+      /* ── 13. 구조화 데이터 (SEO) ──────────────────── */
+      (function jsonld() {
+        var av = $('#article-view'); if (!av) return;
+        var t = $('.article-header .title-article'); if (!t) return;
+        var img = $('#article-view img');
+        var data = {
+          '@context': 'https://schema.org',
+          '@type': 'Article',
+          headline: t.textContent.trim().slice(0, 110),
+          mainEntityOfPage: location.href,
+          datePublished: (($('.article-header .date') || {}).textContent || '').trim(),
+          author: { '@type': 'Person', name: (($('.article-header .writer') || {}).textContent || '').trim() },
+          publisher: { '@type': 'Organization', name: (($('.title-logo') || {}).textContent || '').trim() }
+        };
+        if (img && img.src) data.image = [img.src];
+        var s = d.createElement('script');
+        s.type = 'application/ld+json';
+        s.textContent = JSON.stringify(data);
+        d.head.appendChild(s);
+      }());
+
+      /* 페이지 종류를 body 에 표시 — CSS 분기용 */
+      if (isView) body.classList.add('page-view');
+      if (isHome) body.classList.add('page-home');
+      if ($('.area-cover')) body.classList.add('has-cover');
+    }());
+    </script>
+
+  </s_t3>
+</body>
+
+</html>
