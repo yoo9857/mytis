@@ -1,0 +1,47 @@
+{
+  "note": "렌더 결과를 고정한 것이다. 원저작권은 각 원저작자에게 있다.",
+  "items": [
+    {
+      "file": "00-thumb.png",
+      "source": "source-article",
+      "photographer": "image.yes24.com",
+      "license": "press photo",
+      "permalink": ""
+    },
+    {
+      "file": "01.png",
+      "source": "source-article",
+      "photographer": "image.yes24.com",
+      "license": "press photo",
+      "permalink": ""
+    },
+    {
+      "file": "02.png",
+      "source": "source-article",
+      "photographer": "image.yes24.com",
+      "license": "press photo",
+      "permalink": ""
+    },
+    {
+      "file": "03.png",
+      "source": "pexels",
+      "photographer": "Gül Işık",
+      "license": "",
+      "permalink": "https://www.pexels.com/photo/people-playing-pachinko-in-japanese-arcade-34104302/"
+    },
+    {
+      "file": "04.png",
+      "source": "unsplash",
+      "photographer": "KaLisa Veer",
+      "license": "",
+      "permalink": "https://unsplash.com/photos/bookstore-interior-filled-with-shelves-and-a-ladder-Cvw4fs16tmI"
+    },
+    {
+      "file": "05.png",
+      "source": "unsplash",
+      "photographer": "Julian Rösner",
+      "license": "",
+      "permalink": "https://unsplash.com/photos/a-person-looking-out-a-train-window-at-a-train-sta8C1BZxu8"
+    }
+  ]
+}

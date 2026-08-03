@@ -862,7 +862,72 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
 
   await shot(page, 'naver-before-publish');
 
-  return clickPublish(page, urls);
+  const result = await clickPublish(page, urls);
+
+  /* 발행 후 검증 — **네이버에 더 필요하다.**
+   *
+   * 티스토리에는 `verifyPublished` 가 있는데 네이버에는 없었다. 그런데 네이버는
+   * **발행 후 수정이 불가능하다**(HANDOVER §2 · 편집 진입 URL 이 전부 막혀 있다).
+   * 수정 가능한 쪽에만 검증이 있고 되돌릴 수 없는 쪽에 없었던 셈이다 (2026-08-03).
+   *
+   * 검증 실패가 발행 성공을 뒤집지는 않는다 — 이미 나갔다. 대신 **로그에 남겨서
+   * 사람이 즉시 글을 열어 보게** 한다. 지울지 말지는 사람이 정한다. */
+  if (result?.ok && result.postUrl) {
+    result.verify = await verifyPublished(page, result.postUrl, {
+      // 실제로 확보한 컴포넌트 수를 기준으로 센다 (요청한 장수가 아니라)
+      imageCount: images.length,
+    });
+  }
+  return result;
+}
+
+/**
+ * 발행된 네이버 글을 열어 본문 글자수·이미지 수를 센다.
+ *
+ * 네이버 본문은 iframe(`#mainFrame`) 안에 있고 컴포넌트가 `.se-main-container`
+ * 에 담긴다. 모바일 주소(m.blog)는 iframe 이 없어 더 단순하지만, 발행 직후에는
+ * 반영이 늦을 수 있어 PC 주소를 그대로 연다.
+ */
+export async function verifyPublished(page, postUrl, { minChars = 1000, imageCount = 0 } = {}) {
+  try {
+    await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await sleep(page, 2500);
+
+    /* 본문이 iframe 안이면 그 프레임에서 센다 */
+    const frame =
+      page.frames().find((f) => /PostView|blog\.naver\.com/i.test(f.url()) && f !== page.mainFrame()) ||
+      page.mainFrame();
+
+    const info = await frame.evaluate(() => {
+      const scope =
+        document.querySelector('.se-main-container') ||
+        document.querySelector('#postViewArea, .post_ct, .post-view') ||
+        document.body;
+      return {
+        chars: (scope?.innerText || '').replace(/\s+/g, ' ').trim().length,
+        images: scope ? scope.querySelectorAll('img').length : 0,
+      };
+    });
+
+    const problems = [];
+    if (info.chars < minChars) problems.push(`본문 ${info.chars}자 (기준 ${minChars}자)`);
+    if (imageCount && info.images < imageCount) problems.push(`이미지 ${info.images}/${imageCount}장`);
+
+    if (problems.length) {
+      await shot(page, 'naver-verify-failed');
+      log.warn(
+        `발행 검증 실패: ${problems.join(' · ')} — 네이버는 수정이 안 되니 ` +
+          `글을 열어 보고 필요하면 지우고 다시 내세요: ${postUrl}`
+      );
+    } else {
+      log.ok(`발행 검증: 본문 ${info.chars.toLocaleString()}자 · 이미지 ${info.images}장`);
+    }
+    return { ...info, ok: !problems.length };
+  } catch (err) {
+    // 검증 실패가 발행 성공을 뒤집으면 안 된다 — 네트워크·반영 지연일 수 있다
+    log.warn(`발행 검증을 건너뜁니다 (${err.message.split('\n')[0]})`);
+    return { ok: null };
+  }
 }
 
 /**

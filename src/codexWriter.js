@@ -223,7 +223,7 @@ function guessShow(clip) {
 }
 
 /** 스키마 결과를 안전한 형태로 다듬는다 (누락 필드 보정). */
-function normalizeArticle(raw, { topic, cfg }) {
+function normalizeArticle(raw, { topic, cfg, mode = '' }) {
   const arr = (v) => (Array.isArray(v) ? v : []);
   const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
@@ -241,10 +241,18 @@ function normalizeArticle(raw, { topic, cfg }) {
     }))
     .filter((s) => s.heading && (s.paragraphs.length || s.bullets.length || s.table.rows.length));
 
+  /* 태그 상한은 **모드 규격**을 따른다.
+   *
+   * ⚠️ 예전에는 `cfg.article.tagCount`(=8)로 잘랐다. 그래서 모델이 16개를 만들어도
+   * 8개만 남았고, 규격이 10~16을 요구하는 모드는 **매번 경고가 찍혔다.**
+   * 지시문을 고쳐도 스키마를 고쳐도 8개였던 이유가 여기였다 —
+   * learned.md 가 "태그는 안 붙었다" 며 규격 하한을 올린 것은 증상 대응이었다.
+   * > 2026-08-03 발각: 책·영화 모드 규격 [10,16] · 지시문 "12~16개" · 결과 8개. */
+  const tagMax = MODES[mode]?.contract?.tags?.[1] || Math.max(1, cfg.article.tagCount);
   const tags = arr(raw.tags)
     .map((t) => str(t).replace(/[#,"']/g, '').trim())
     .filter(Boolean)
-    .slice(0, Math.max(1, cfg.article.tagCount));
+    .slice(0, tagMax);
 
   // 유튜브 ID 는 정확히 11자리. 형식이 어긋나면 지어낸 값일 가능성이 높아 버린다.
   const embeds = arr(raw.embeds)
@@ -293,7 +301,15 @@ function normalizeArticle(raw, { topic, cfg }) {
       .slice(0, 70),
     primaryKeyword: str(raw.primaryKeyword) || (fromNews ? title : topic),
     entities: arr(raw.entities)
-      .map((e) => ({ nameKo: str(e?.nameKo), nameEn: str(e?.nameEn), role: str(e?.role) }))
+      .map((e) => ({
+        nameKo: str(e?.nameKo),
+        nameEn: str(e?.nameEn),
+        role: str(e?.role),
+        /* 역사 인물·고인은 공식 SNS 가 존재할 수 없다 — 찾으면 그건 팬 계정이다.
+         * > 2026-08-03: 세네카(기원후 65년 사망) 글에 @seneca_theyounger 가
+         * > '공식 근황' 으로 붙었다. FAN_PATTERN 은 이름 변형이라 못 걸렀다. */
+        historical: e?.historical === true,
+      }))
       .filter((e) => e.nameKo || e.nameEn),
     secondaryKeywords: arr(raw.secondaryKeywords).map(str).filter(Boolean),
     tags,
@@ -455,7 +471,7 @@ export async function writeArticle({ topic, cfg }) {
 
       const last = await runCodexExec({ prompt, schemaFile, cfg });
       const raw = extractJson(last);
-      const article = normalizeArticle(raw, { topic, cfg });
+      const article = normalizeArticle(raw, { topic, cfg, mode });
 
       /* ⚠️ 모드는 **모든 글에** 붙여야 한다.
        *

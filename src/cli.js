@@ -418,6 +418,19 @@ async function cmdPublishFile(cfg, file, flags = {}) {
   } catch { /* 경고 실패로 발행을 막지 않는다 */ }
   log.info(`발행 대상: ${platforms.map((p) => PLATFORM_LABEL[p]).join(' + ')}`);
 
+  /* 사진이 고정되지 않은 글은 **프리뷰와 다른 사진으로 나갈 수 있다.**
+   * 아래 renderImages 가 photoQuery 로 스톡을 **다시 검색**하기 때문이다.
+   * 네이버는 발행 후 수정이 안 되니 미리 알려 준다 (2026-08-03). */
+  if (!article.photoDir) {
+    const searched = (article.imageBriefs || []).filter((b) => b.photoQuery?.trim()).length;
+    if (searched) {
+      log.warn(
+        `사진 ${searched}장이 발행 직전에 **다시 검색**됩니다 — 검토한 사진과 다를 수 있습니다. ` +
+          '고정하려면: npm run repreview -- "<글>.json" --pin'
+      );
+    }
+  }
+
   const rendered = await renderImages(article, cfg);
   const ordered = [rendered.thumbnail, ...rendered.body].filter(Boolean);
   const imageFiles = ordered.map((i) => i.file);

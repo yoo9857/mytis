@@ -595,9 +595,21 @@ export async function fillSocialEmbeds(article, cfg) {
 
   const platforms = sc.platforms || ['x', 'instagram'];
   const maxAge = sc.maxAgeDays ?? 180;
-  const people = (article.entities || []).filter((e) => e.nameKo || e.nameEn);
+  /* 역사 인물·고인은 통째로 뺀다. **공식 계정이 존재할 수 없으므로 검색해서
+   * 나오는 것은 정의상 팬 계정이다.** 이름 패턴(FAN_PATTERN)으로는 못 잡는다 —
+   * 팬 계정이 인물 이름을 그대로 쓰기 때문이다.
+   * > 2026-08-03 실측: 『세네카』 글에 @seneca_theyounger 가 '공식 근황' 으로
+   * > 붙었다. 세네카는 기원후 65년에 죽었다. */
+  const all = (article.entities || []).filter((e) => e.nameKo || e.nameEn);
+  const historical = all.filter((e) => e.historical);
+  if (historical.length) {
+    log.debug(
+      `SNS 임베드: 역사 인물 제외 — ${historical.map((p) => p.nameKo || p.nameEn).join(', ')}`
+    );
+  }
+  const people = all.filter((e) => !e.historical);
   if (!people.length) {
-    log.debug('SNS 임베드: 인물이 없는 글이라 생략합니다.');
+    log.debug('SNS 임베드: 대상 인물이 없는 글이라 생략합니다.');
     return [];
   }
 

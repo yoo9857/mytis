@@ -110,8 +110,41 @@ function stripTags(html) {
  * 커먼즈에 올라온 연예인 사진 상당수는 광고 스틸·포스터·앨범 커버라
  * 광고주 로고와 전화번호가 이미지에 박혀 있다. 썸네일로 쓰면 남의 광고를 실어주는 꼴이라 걸러낸다.
  */
+/* ⚠️ **위키미디어에 있다고 자유 라이선스가 아니다.**
+ * 업로더가 방송 화면·광고 스틸을 "본인 저작물" 로 올려 둔 것이 섞여 있다.
+ * 방송사는 자기 화면을 CC 로 풀지 않으므로, 그런 표시는 거의 허위다.
+ *
+ * > 2026-08-03 실측: `Kim Hee-chul 20150506.png` 는 KBS 로고와 자막 바가 그대로
+ * > 있는 **방송 캡처**인데 CC BY 3.0 으로 올라와 있었다. 기존 패턴의
+ * > `screenshot|스크린샷` 은 파일명·설명에 그 낱말이 없어 못 걸렀다.
+ * > 그래서 **방송사·방송 프로그램 표시**를 직접 건다.
+ *
+ * ⚠️ **방송사 이름만으로 막으면 안 된다.** 방송사가 주최한 **행사**를 관객이 찍은
+ * 사진은 진짜 자유 라이선스다. 실제로 오늘 쓴 `Super Junior performing at
+ * 'MBC Korean Music Wave' concert`(CC BY 2.0) 가 첫 버전에서 오탐으로 막혔다 —
+ * learned.md 의 "검사를 만들었으면 검사부터 검사한다" 가 바로 이것이다.
+ *
+ * 그래서 두 갈래로 나눈다.
+ *   ① 스튜디오 음악·예능 프로그램 이름 → 그 자체로 방송 화면이다
+ *   ② 방송사 이름 + 캡처를 뜻하는 낱말이 **함께** 있을 때
+ */
+const STUDIO_SHOW_PATTERN =
+  /뮤비뱅크|뮤직뱅크|음악중심|인기가요|엠\s*카운트다운|엠카운트다운|쇼\s*챔피언|쇼챔피언|더\s*쇼\b|아는\s*형님|런닝맨|무한도전|\bm\s*countdown\b|\bmusic\s*bank\b|\binkigayo\b/i;
+
+const BROADCASTER_PATTERN =
+  /\b(kbs|mbc|sbs|jtbc|tvn|ocn|ebs|mnet|ena|tv\s*chosun|channel\s*a)\b|케이비에스|엠비씨|에스비에스/i;
+
+const CAPTURE_WORD_PATTERN =
+  /방송\s*화면|방송\s*캡처|캡처|캡쳐|화면\s*갈무리|갈무리|스틸\s*컷|스틸컷|\bscreen\s*cap\w*|\bscreenshot\b|\bstill\b|\bbroadcast\b|\bTV\s*screen\b/i;
+
+/** 방송 화면으로 보이는가 — 스튜디오 프로그램이거나, 방송사 + 캡처 표시가 함께 있거나 */
+function looksLikeBroadcast(text) {
+  if (STUDIO_SHOW_PATTERN.test(text)) return true;
+  return BROADCASTER_PATTERN.test(text) && CAPTURE_WORD_PATTERN.test(text);
+}
+
 const UNUSABLE_PATTERN =
-  /\b(ad|ads|advert\w*|commercial|cf|poster|billboard|banner|logo|screenshot|teaser|album\s*cover|cover\s*art|magazine\s*cover)\b|광고|포스터|배너|로고|스크린샷|티저|앨범\s*커버|자켓/i;
+  /\b(ad|ads|advert\w*|commercial|cf|poster|billboard|banner|logo|screenshot|screen\s*capture|teaser|album\s*cover|cover\s*art|magazine\s*cover)\b|광고|포스터|배너|로고|스크린샷|티저|앨범\s*커버|자켓/i;
 
 /** 행사·공연 현장 사진일수록 좋다 */
 const PREFERRED_PATTERN =
@@ -192,6 +225,13 @@ async function fromWikimedia(query, { allowShareAlike = true, mustMatch = '' } =
 
       if (UNUSABLE_PATTERN.test(haystack)) {
         log.debug(`인물 사진 제외 (광고·포스터류): ${title.slice(0, 60)}`);
+        return null;
+      }
+
+      /* 방송사 표시가 있으면 라이선스가 무엇으로 적혀 있든 버린다.
+       * 방송사는 자기 화면을 CC 로 풀지 않는다 — 표시가 있어도 거의 허위다. */
+      if (looksLikeBroadcast(haystack)) {
+        log.debug(`인물 사진 제외 (방송 화면으로 보임 · 라이선스 표시 신뢰 불가): ${title.slice(0, 60)}`);
         return null;
       }
 
@@ -625,6 +665,23 @@ export async function fetchBackgrounds(article, cfg, slots) {
    * 아티클 JSON 하나만 넘겨도 사진이 따라오게 하려는 것이다 —
    * `node src/cli.js publish out/<글>.json --naver` 로 같은 사진이 다시 실린다. */
   const localDir = article.photoDir || cfg.images.localPhotoDir;
+  /* ⚠️ **아티클이 폴더를 지정했는데 그 폴더가 없으면 멈춘다.**
+   *
+   * 전에는 조용히 다음 경로(원문 사진·스톡)로 넘어갔다. 그래서 다른 기기에서
+   * 같은 JSON 으로 발행하면 **사람이 골라 둔 사진 대신 스톡이 실리는데 아무도
+   * 알아채지 못했다.** 사진을 고정한 이유가 바로 그것을 막으려는 것이었으므로,
+   * 없으면 바꿔치기하지 말고 멈추는 것이 맞다 (2026-08-03).
+   *
+   * cfg 의 기본 폴더(localPhotoDir)가 없는 것은 정상이다 — 아티클이 **명시한**
+   * 폴더만 이 검사를 받는다. */
+  if (article.photoDir && !fs.existsSync(article.photoDir)) {
+    throw new Error(
+      `아티클이 지정한 사진 폴더가 없습니다: ${article.photoDir}\n` +
+        '  이 글은 사람이 고른 사진으로 발행하도록 고정돼 있습니다. 폴더가 없으면\n' +
+        '  스톡이 대신 실리므로 발행을 멈춥니다. 폴더를 복원하거나(out/photos 는 커밋됩니다)\n' +
+        '  아티클의 photoDir 을 지우고 다시 검토하세요.'
+    );
+  }
   if (localDir && fs.existsSync(localDir)) {
     const names = fs
       .readdirSync(localDir)
@@ -650,7 +707,15 @@ export async function fetchBackgrounds(article, cfg, slots) {
       if (want) {
         const hit = names.find((n) => n === want || n === path.basename(want));
         if (hit) return hit;
-        log.warn(`로컬 사진을 찾지 못했습니다: ${want} (슬롯 ${slot})`);
+        /* 이름을 **적어 둔** 사진이 없으면 멈춘다. 예전에는 경고만 찍고 다음 경로로
+         * 넘어갔는데, 그러면 지정한 컷 대신 엉뚱한 사진이 그 자리에 앉는다.
+         * 파일 이름을 적었다는 것은 "이 자리에는 이 사진" 이라는 뜻이다. */
+        throw new Error(
+          `지정한 사진을 폴더에서 찾지 못했습니다: ${want} (슬롯 ${slot})\n` +
+            `  폴더: ${localDir}\n` +
+            `  있는 파일: ${names.join(', ') || '(없음)'}\n` +
+            '  이름이 바뀌었거나 파일이 빠졌습니다. 다른 사진으로 대체하지 않고 멈춥니다.'
+        );
       }
       /* **혼합 모드** — photoQuery 가 있는 슬롯은 검색(원문 사진·스톡)으로 채우려는
        * 슬롯이다. 여기서 로컬 파일을 순차로 먹어 버리면 지정 카드가 자리를 뺏긴다.

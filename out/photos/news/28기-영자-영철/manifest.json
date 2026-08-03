@@ -1,0 +1,35 @@
+{
+  "note": "언론 보도사진·방송 캡처다. 수집은 후보를 눈으로 고르기 위한 것이며 발행 허가가 아니다. 사용 위험은 발행자가 진다(발행자 결정, 2026-08-03). 화면에 '외도 루머'가 박힌 tvN STORY 캡처와 영자 개인 SNS의 드레스 피팅 사진은 검토에서 제외했다.",
+  "items": [
+    {
+      "file": "01-interview.jpg",
+      "photographer": "마이데일리",
+      "license": "보도사진",
+      "permalink": "https://m.entertain.naver.com/relationship/article/117/0004090990"
+    },
+    {
+      "file": "02-couple.jpg",
+      "photographer": "스타뉴스",
+      "license": "보도사진",
+      "permalink": "https://www.starnewskorea.com/star/2025/12/06/2025120610080671859"
+    },
+    {
+      "file": "03-wedding.jpg",
+      "photographer": "스타뉴스",
+      "license": "보도사진",
+      "permalink": "https://www.starnewskorea.com/star/2025/12/06/2025120610080671859"
+    },
+    {
+      "file": "04-invitation.jpg",
+      "photographer": "촌장엔터테인먼트TV",
+      "license": "방송 캡처",
+      "permalink": "https://www.youtube.com/watch?v=idkh_TFyZTc"
+    },
+    {
+      "file": "05-announce.jpg",
+      "photographer": "촌장엔터테인먼트TV",
+      "license": "방송 캡처",
+      "permalink": "https://www.youtube.com/watch?v=idkh_TFyZTc"
+    }
+  ]
+}

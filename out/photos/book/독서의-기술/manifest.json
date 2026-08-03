@@ -1,0 +1,53 @@
+{
+  "note": "수집은 후보를 눈으로 고르기 위한 것이며 발행 허가가 아니다. 게시 위험은 발행자가 진다.",
+  "items": [
+    {
+      "file": "cover.jpg",
+      "photographer": "라곰",
+      "license": "알라딘 상품 이미지",
+      "permalink": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=396563552"
+    },
+    {
+      "file": "back.jpg",
+      "photographer": "라곰",
+      "license": "알라딘 미리보기",
+      "permalink": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=396563552"
+    },
+    {
+      "file": "page4.jpg",
+      "photographer": "라곰",
+      "license": "알라딘 미리보기",
+      "permalink": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=396563552"
+    },
+    {
+      "file": "page5.jpg",
+      "photographer": "라곰",
+      "license": "알라딘 미리보기",
+      "permalink": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=396563552"
+    },
+    {
+      "file": "page6.jpg",
+      "photographer": "라곰",
+      "license": "알라딘 미리보기",
+      "permalink": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=396563552"
+    },
+    {
+      "file": "author-src.jpg",
+      "photographer": "전자신문",
+      "license": "보도사진",
+      "permalink": "https://www.etnews.com/20260602000140"
+    },
+    {
+      "file": "card-author.png",
+      "photographer": "전자신문 보도사진 · 카드 제작",
+      "license": "보도사진 크롭",
+      "permalink": "https://www.etnews.com/20260602000140"
+    },
+    {
+      "file": "card-quote.png",
+      "photographer": "직접 제작",
+      "license": "책 속 문장 인용",
+      "permalink": "https://www.yes24.com/product/goods/192555379"
+    }
+  ]
+}
