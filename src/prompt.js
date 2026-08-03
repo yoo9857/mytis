@@ -773,9 +773,21 @@ ${a.extraInstructions ? `\n# 추가 지시\n${a.extraInstructions}\n` : ''}
 ${mediaRules()}
 
 ${imageBriefRules(a, bodyImages)}
-- 인물 사진은 쓸 수 없습니다(초상권·저작권). photoQuery 는 사안의 분위기를 나타내는
-  일반적인 장면으로 잡으세요. 예: "concert stage lights crowd", "television studio camera",
-  "microphones press conference", "seoul night street".
+- 인물 사진은 photoQuery 로 구하지 마세요(초상권·저작권). 실제 인물 사진이 필요하면
+  코드가 sources 의 기사에서 걷어 옵니다 — 그러므로 **사진이 실린 기사를 sources 에**
+  넣는 것이 photoQuery 를 잘 쓰는 것보다 중요합니다.
+- photoQuery 는 사안의 분위기를 나타내는 일반적인 장면으로. 예: "concert stage lights
+  crowd", "television studio camera", "microphones press conference", "seoul night street".
+
+- ⚠️ **무관한 스톡으로 자릿수를 채우지 마세요.** 사안과 상관없는 스톡은 독자가 즉시
+  알아챕니다. 분위기컷이 사안을 설명하지 못하면 **브리프를 줄이는 것이 맞습니다** —
+  규격은 사진이 없는 글을 막지 않습니다(빈 브리프는 사진 검사를 건너뜁니다).
+  숫자를 맞추려고 넣은 한 장이 글 전체를 싸구려로 만듭니다.
+
+> 실패 실측 (2026-08-03, 나는솔로 28기 결별 기사): 보도사진을 빼고 그 자리를 스톡으로
+> 메웠더니 대표 이미지가 **미국 지역방송 "12 NEWS" 스튜디오**, 본문이 **프랑스어 SNS
+> 피드 · 빈 노트 · 쌓아둔 빈 의자**였습니다. 사용자 지적: *"썸네일이나, 이런거
+> 연관성이 없는데?"* 같은 규칙이 영화 모드에는 있었는데 기사 모드에는 없었습니다.
 
 # 출력
 - 파일을 만들지 말고, 최종 응답으로 지정된 JSON 스키마에 맞는 JSON 객체 하나만 반환하세요.
