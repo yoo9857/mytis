@@ -263,17 +263,39 @@ async function countEditorImages(page) {
 }
 
 /** 위지윅 본문의 실제 텍스트 길이 — 저장될 내용이 들어갔는지 확인용 */
+/**
+ * 위지윅 본문 글자수.
+ *
+ * **두 경로로 잰다.** iframe 을 먼저 보고, 0 이면 TinyMCE API 에 직접 묻는다.
+ *
+ * > 2026-08-03 실측: HTML 모드에서 기본모드로 돌아온 직후 iframe 경로가 **10초를
+ * > 기다려도 0자**를 냈다. 처음엔 타이밍으로 보고 대기를 늘렸는데 그게 아니었다 —
+ * > 그 시점의 `frameLocator` 가 새로 붙은 에디터를 못 잡는다. 정작 폴백으로
+ * > 위지윅에 직접 쓰고 나면 **같은 함수가 6,501자를 정상으로 읽었다.**
+ * > 그래서 매 발행마다 주 경로가 죽고 폴백으로만 나가고 있었다.
+ * TinyMCE 인스턴스는 프레임 밖에서도 잡히므로 이쪽이 더 튼튼하다.
+ */
 async function wysiwygTextLength(page) {
   try {
     const { selector } = await findFirst(page, SEL.editorIframe, {
       timeout: 4000,
       state: 'attached',
     });
-    return await page
+    const n = await page
       .frameLocator(selector)
       .locator('body')
       .first()
       .evaluate((b) => (b.innerText || '').trim().length);
+    if (n > 0) return n;
+  } catch {
+    /* 아래 TinyMCE 경로로 넘어간다 */
+  }
+  try {
+    return await page.evaluate(() => {
+      const ed = window.tinymce?.activeEditor || window.tinyMCE?.activeEditor;
+      if (!ed || typeof ed.getContent !== 'function') return 0;
+      return String(ed.getContent({ format: 'text' }) || '').trim().length;
+    });
   } catch {
     return 0;
   }
@@ -424,7 +446,7 @@ export async function setBody(page, html) {
      *
      * 그래서 **채워질 때까지 폴링**한다. 진짜로 비었으면 그때 폴백으로 간다. */
     let len = 0;
-    const deadline = Date.now() + 10_000;
+    const deadline = Date.now() + 4_000;
     while (Date.now() < deadline) {
       await sleep(page, 700);
       len = await wysiwygTextLength(page);
@@ -434,7 +456,7 @@ export async function setBody(page, html) {
       log.ok(`본문 입력 완료 (${html.length.toLocaleString()}자 → 본문 ${len.toLocaleString()}자)`);
       return true;
     }
-    log.warn(`기본모드 반영이 부족합니다 (10초 대기 뒤 본문 ${len}자). 위지윅 직접 입력으로 재시도합니다.`);
+    log.warn(`기본모드 반영이 부족합니다 (본문 ${len}자). 위지윅 직접 입력으로 재시도합니다.`);
   }
 
   // 폴백: 위지윅에 직접 주입
@@ -656,23 +678,53 @@ export async function setPostUrl(page, slug) {
 }
 
 /** 태그 입력 */
+/** 티스토리 태그 상한. **10개를 넘기면 입력창이 사라진다.**
+ *
+ * > 2026-08-03 실측: 태그 12개를 넣으려다 11번째에서
+ * > `locator.type: Timeout 60000ms exceeded — #tagText` 로 60초를 버리고 죽었다.
+ * > 앞의 10개는 정상으로 붙어 있었으므로 **부분 성공을 전체 실패로 보이게 하는**
+ * > 로그이기도 했다.
+ *
+ * 그동안 안 드러난 이유: codexWriter 가 태그를 8개로 자르고 있어서 상한에 닿은
+ * 적이 없었다. 그 자르기를 모드 규격(기사 12개)으로 푼 날 바로 터졌다.
+ * — 한쪽의 제약을 풀 때는 그 값을 받는 **모든 곳**의 상한을 함께 본다. */
+const TISTORY_MAX_TAGS = 10;
+
 export async function setTags(page, tags) {
   if (!tags?.length) return false;
+  const list = tags
+    .map((t) => String(t).replace(/[,#]/g, '').trim())
+    .filter(Boolean)
+    .slice(0, TISTORY_MAX_TAGS);
+  const dropped = tags.length - list.length;
+  if (dropped > 0) {
+    log.info(`티스토리 태그 상한 ${TISTORY_MAX_TAGS}개 — 뒤의 ${dropped}개는 넣지 않습니다.`);
+  }
   try {
     const { locator } = await findFirst(page, SEL.tagInput, { timeout: 6000 });
     await locator.click();
-    for (const tag of tags) {
-      const clean = tag.replace(/[,#]/g, '').trim();
-      if (!clean) continue;
-      await locator.type(clean, { delay: 25 });
-      await sleep(page, 200);
-      await page.keyboard.press('Enter');
-      await sleep(page, 350);
+    let done = 0;
+    for (const clean of list) {
+      /* 한 개가 실패해도 **앞서 넣은 것은 남는다.** 통째로 실패했다고 적으면
+       * 사람이 글을 열어 보고 헛걸음한다 — 몇 개가 들어갔는지 세어 남긴다. */
+      try {
+        await locator.type(clean, { delay: 25, timeout: 8000 });
+        await sleep(page, 200);
+        await page.keyboard.press('Enter');
+        await sleep(page, 350);
+        done++;
+      } catch (err) {
+        log.warn(
+          `태그 ${done + 1}번째('${clean}')에서 멈췄습니다 — ${done}개는 입력됐습니다. ` +
+            `(${err.message.split('\n')[0]})`
+        );
+        break;
+      }
     }
-    log.ok(`태그 ${tags.length}개 입력: ${tags.join(', ')}`);
-    return true;
+    if (done) log.ok(`태그 ${done}개 입력: ${list.slice(0, done).join(', ')}`);
+    return done > 0;
   } catch (err) {
-    log.warn(`태그 입력 실패: ${err.message}`);
+    log.warn(`태그 입력 실패: ${err.message.split('\n')[0]}`);
     return false;
   }
 }
