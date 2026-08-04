@@ -12,67 +12,98 @@ import { stepFlow, keyFigures } from './diagram.js';
  * 티스토리 스킨 CSS 가 제목 태그의 굵기·크기를 초기화해 버리는 경우가 많아
  * (실제로 h2 가 font-weight:400 으로 렌더링됨) **px 과 font-weight 를 반드시 명시**한다.
  * em 을 쓰면 스킨의 본문 크기에 휘둘려 제목이 본문과 구분되지 않는다.
+ *
+ * ── 색은 `var(--토큰, 옛값)` 으로 쓴다 ────────────────────────────────────
+ * 크기·굵기와 달리 **색은 테마에 따라 뒤집혀야 한다.** 인라인에 #222 를 박아 두면
+ * 다크에서 어두운 배경 위에 어두운 글자가 남아 1.7:1 이 된다 (2026-08-04 실측).
+ * 인라인은 미디어쿼리를 가질 수 없으므로 값 대신 **스킨의 토큰을 참조**한다.
+ *   · 토큰이 있는 스킨(eco-m) → 라이트·다크가 저절로 맞는다
+ *   · 토큰이 없는 스킨        → 쉼표 뒤 옛 값으로 떨어져 **오늘과 똑같이** 나온다
+ * 발행된 글은 고칠 수 없으니(HANDOVER §6) 옛 글은 스킨이 흡수한다 (cs.txt §11.4).
  */
 const S = {
   answer:
-    'margin:0 0 30px;padding:22px 24px;background:#f4f6ff;border-left:5px solid #4c1d95;' +
-    'border-radius:8px;font-size:17px;line-height:1.8;color:#1f2937;',
+    'margin:0 0 30px;padding:22px 24px;background:var(--c-brand-soft, #f4f6ff);' +
+    'border-left:5px solid var(--c-brand, #4c1d95);' +
+    'border-radius:8px;font-size:17px;line-height:1.8;color:var(--c-ink-2, #1f2937);',
   takeaways:
-    'margin:0 0 34px;padding:22px 26px;background:#fafafa;border:1px solid #e5e5e5;border-radius:8px;',
-  boxTitle: 'display:block;margin:0 0 12px;font-size:18px;font-weight:800;color:#111;',
-  toc: 'margin:0 0 36px;padding:20px 24px;background:#fbfbfb;border:1px solid #ececec;border-radius:8px;',
-  tocList: 'margin:0;padding-left:20px;font-size:16px;line-height:2;color:#333;',
+    'margin:0 0 34px;padding:22px 26px;background:var(--c-bg-inset, #fafafa);' +
+    'border:1px solid var(--c-line, #e5e5e5);border-radius:8px;',
+  boxTitle:
+    'display:block;margin:0 0 12px;font-size:18px;font-weight:800;color:var(--c-ink, #111);',
+  toc:
+    'margin:0 0 36px;padding:20px 24px;background:var(--c-bg-inset, #fbfbfb);' +
+    'border:1px solid var(--c-line, #ececec);border-radius:8px;',
+  tocList: 'margin:0;padding-left:20px;font-size:16px;line-height:2;color:var(--c-ink-2, #333);',
   h2:
-    'margin:54px 0 18px;padding-bottom:12px;border-bottom:3px solid #222;' +
-    'font-size:28px;font-weight:800;line-height:1.35;color:#111;letter-spacing:-0.02em;',
-  h3: 'margin:34px 0 12px;font-size:21px;font-weight:700;line-height:1.45;color:#111;',
-  p: 'margin:0 0 18px;font-size:17px;line-height:1.85;color:#222;',
-  ul: 'margin:0 0 22px;padding-left:24px;font-size:17px;line-height:1.9;color:#222;',
+    'margin:54px 0 18px;padding-bottom:12px;border-bottom:3px solid var(--c-ink, #222);' +
+    'font-size:28px;font-weight:800;line-height:1.35;color:var(--c-ink, #111);letter-spacing:-0.02em;',
+  h3:
+    'margin:34px 0 12px;font-size:21px;font-weight:700;line-height:1.45;color:var(--c-ink, #111);',
+  p: 'margin:0 0 18px;font-size:17px;line-height:1.85;color:var(--c-ink-2, #222);',
+  ul: 'margin:0 0 22px;padding-left:24px;font-size:17px;line-height:1.9;color:var(--c-ink-2, #222);',
   table: 'width:100%;border-collapse:collapse;margin:10px 0 26px;font-size:16px;',
   th:
-    'border:1px solid #ddd;background:#f5f5f5;padding:11px 13px;text-align:left;' +
-    'font-weight:700;font-size:16px;color:#111;',
-  td: 'border:1px solid #ddd;padding:11px 13px;vertical-align:top;font-size:16px;color:#222;',
-  caption: 'caption-side:top;text-align:left;padding:0 0 9px;color:#666;font-size:15px;font-weight:600;',
+    'border:1px solid var(--c-line, #ddd);background:var(--c-bg-sub, #f5f5f5);' +
+    'padding:11px 13px;text-align:left;' +
+    'font-weight:700;font-size:16px;color:var(--c-ink, #111);',
+  td:
+    'border:1px solid var(--c-line, #ddd);padding:11px 13px;vertical-align:top;' +
+    'font-size:16px;color:var(--c-ink-2, #222);',
+  caption:
+    'caption-side:top;text-align:left;padding:0 0 9px;color:var(--c-ink-3, #666);' +
+    'font-size:15px;font-weight:600;',
   callout:
-    'margin:0 0 26px;padding:16px 20px;background:#fff8e1;border-left:4px solid #f59e0b;' +
-    'border-radius:6px;font-size:16px;line-height:1.75;color:#3f3f46;',
+    'margin:0 0 26px;padding:16px 20px;background:var(--c-warn-soft, #fff8e1);' +
+    'border-left:4px solid var(--c-warn-line, #f59e0b);' +
+    'border-radius:6px;font-size:16px;line-height:1.75;color:var(--c-ink-2, #3f3f46);',
   figure: 'margin:30px 0;text-align:center;',
-  figcap: 'margin-top:9px;color:#777;font-size:15px;',
-  faqQ: 'margin:28px 0 10px;font-size:19px;font-weight:700;line-height:1.5;color:#111;',
-  faqA: 'margin:0 0 10px;font-size:17px;line-height:1.8;color:#333;',
-  sources: 'margin:0;padding-left:24px;font-size:15px;line-height:1.95;color:#555;',
-  hr: 'margin:44px 0;border:0;border-top:1px solid #e5e5e5;',
+  figcap: 'margin-top:9px;color:var(--c-ink-4, #777);font-size:15px;',
+  faqQ:
+    'margin:28px 0 10px;font-size:19px;font-weight:700;line-height:1.5;color:var(--c-ink, #111);',
+  faqA: 'margin:0 0 10px;font-size:17px;line-height:1.8;color:var(--c-ink-2, #333);',
+  sources: 'margin:0;padding-left:24px;font-size:15px;line-height:1.95;color:var(--c-ink-3, #555);',
+  hr: 'margin:44px 0;border:0;border-top:1px solid var(--c-line, #e5e5e5);',
 
   /* --- 절차형 글(경제·부동산) 전용 --------------------------------------
    * 참고 글 실측(2026-08-03, hye_life 집 구하기): 4,499자에 사진 1장이었고
    * 대신 **구분선 9개**로 단계를 갈랐다. 절차 글에서 독자가 원하는 것은
    * 사진이 아니라 **자기가 몇 단계에 있는지**다 (learned.md 2026-08-03). */
-  stepDiv: 'margin:52px 0 0;border:0;border-top:1px solid #ececec;',
+  stepDiv: 'margin:52px 0 0;border:0;border-top:1px solid var(--c-line, #ececec);',
   /* 색은 eco-m 스킨 토큰 `--c-brand`(#123a6b)에 맞춘다 — diagram.js 의 흐름도 원과
    * **같은 색이어야 한다.** 같은 뜻(단계 번호)이 두 색으로 나오면 독자는 둘을
    * 다른 것으로 읽는다 (2026-08-03 검증에서 보라/네이비로 갈려 있던 것을 발견).
-   * 이 배지는 "N단계" 소제목에만 붙으므로 경제 모드 밖에는 영향이 없다. */
+   * 이 배지는 "N단계" 소제목에만 붙으므로 경제 모드 밖에는 영향이 없다.
+   *
+   * 글자색을 #fff 로 박으면 **다크에서 사라진다** — 판(brand)이 밝은 파랑으로
+   * 뒤집히기 때문이다. 배경이 뒤집히면 글자도 함께 뒤집어야 한다: `--c-on-brand`. */
   stepBadge:
     'display:inline-block;min-width:30px;height:30px;line-height:30px;margin-right:10px;' +
-    'border-radius:15px;background:#123a6b;color:#fff;font-size:16px;font-weight:800;' +
+    'border-radius:15px;background:var(--c-brand, #123a6b);color:var(--c-on-brand, #fff);' +
+    'font-size:16px;font-weight:800;' +
     'text-align:center;vertical-align:2px;padding:0 9px;',
   checkBox:
-    'margin:0 0 26px;padding:18px 22px;background:#f6fbf7;border:1px solid #cfe8d6;' +
+    'margin:0 0 26px;padding:18px 22px;background:var(--c-ok-soft, #f6fbf7);' +
+    'border:1px solid var(--c-ok-line, #cfe8d6);' +
     'border-radius:8px;',
-  checkTitle: 'display:block;margin:0 0 10px;font-size:16px;font-weight:800;color:#14532d;',
-  checkList: 'margin:0;padding-left:22px;font-size:16px;line-height:1.9;color:#1f2937;',
+  checkTitle:
+    'display:block;margin:0 0 10px;font-size:16px;font-weight:800;color:var(--c-ok-ink, #14532d);',
+  checkList:
+    'margin:0;padding-left:22px;font-size:16px;line-height:1.9;color:var(--c-ink-2, #1f2937);',
   siteWrap: 'margin:0 0 34px;',
   siteCard:
-    'display:block;margin:0 0 10px;padding:15px 18px;border:1px solid #e5e7eb;border-radius:9px;' +
-    'background:#fff;text-decoration:none;',
-  siteName: 'display:block;font-size:17px;font-weight:700;color:#1d4ed8;margin:0 0 4px;',
-  siteWhy: 'display:block;font-size:15px;line-height:1.6;color:#4b5563;',
+    'display:block;margin:0 0 10px;padding:15px 18px;border:1px solid var(--c-line, #e5e7eb);' +
+    'border-radius:9px;background:var(--c-bg-elev, #fff);text-decoration:none;',
+  siteName:
+    'display:block;font-size:17px;font-weight:700;color:var(--c-brand-2, #1d4ed8);margin:0 0 4px;',
+  siteWhy: 'display:block;font-size:15px;line-height:1.6;color:var(--c-ink-3, #4b5563);',
   figTable: 'width:100%;border-collapse:collapse;margin:0 0 12px;font-size:15px;',
   figTh:
-    'border-bottom:2px solid #e5e7eb;padding:9px 10px;text-align:left;font-size:14px;' +
-    'font-weight:700;color:#6b7280;',
-  figTd: 'border-bottom:1px solid #f0f0f0;padding:9px 10px;vertical-align:top;color:#222;',
+    'border-bottom:2px solid var(--c-line-2, #e5e7eb);padding:9px 10px;text-align:left;' +
+    'font-size:14px;font-weight:700;color:var(--c-ink-3, #6b7280);',
+  figTd:
+    'border-bottom:1px solid var(--c-line, #f0f0f0);padding:9px 10px;vertical-align:top;' +
+    'color:var(--c-ink-2, #222);',
 };
 
 /** 티스토리 에디터가 쓰는 글자 크기 힌트. 에디터에서 다시 열었을 때도 제목으로 인식된다. */
@@ -204,13 +235,13 @@ function renderEmbed(embed) {
   //   (`#article-view div[style*="padding-bottom:56.25%"] > iframe`)가 담당한다.
   // 장면 설명 + 실제 대사. 캡처 사진 대신 이 조합이 같은 정보를 준다.
   const sceneNote = embed.caption
-    ? `<p style="margin:0 0 10px;font-size:17px;line-height:1.75;color:#222;font-weight:600;">${
-        at ? `<span style="color:#4c1d95;">${at}</span> ` : ''
+    ? `<p style="margin:0 0 10px;font-size:17px;line-height:1.75;color:var(--c-ink-2, #222);font-weight:600;">${
+        at ? `<span style="color:var(--c-brand-2, #4c1d95);">${at}</span> ` : ''
       }${esc(embed.caption)}</p>`
     : '';
   const quote = embed.quote
-    ? `<blockquote style="margin:12px 0 0;padding:14px 18px;background:#f4f6ff;` +
-      `border-left:4px solid #4c1d95;border-radius:6px;font-size:16px;line-height:1.7;color:#1f2937;">` +
+    ? `<blockquote style="margin:12px 0 0;padding:14px 18px;background:var(--c-brand-soft, #f4f6ff);` +
+      `border-left:4px solid var(--c-brand, #4c1d95);border-radius:6px;font-size:16px;line-height:1.7;color:var(--c-ink-2, #1f2937);">` +
       `“${esc(embed.quote)}”</blockquote>`
     : '';
 
@@ -297,10 +328,10 @@ function renderVideoLink(em) {
   if (!/^[A-Za-z0-9_-]{11}$/.test(em?.videoId || '')) return '';
   const url = `https://www.youtube.com/watch?v=${esc(em.videoId)}`;
   const who = em.channel ? `${esc(em.channel)} 공식 영상` : '공식 영상';
-  return `<div style="margin:32px 0;padding:18px 20px;border:1px solid #e5e7eb;border-radius:10px;background:#fafafa;">
-  <p style="margin:0 0 8px;font-size:15px;color:#666;">${who}</p>
+  return `<div style="margin:32px 0;padding:18px 20px;border:1px solid var(--c-line, #e5e7eb);border-radius:10px;background:var(--c-bg-inset, #fafafa);">
+  <p style="margin:0 0 8px;font-size:15px;color:var(--c-ink-3, #666);">${who}</p>
   <p style="margin:0;font-size:17px;line-height:1.6;">
-    <a href="${url}" target="_blank" rel="noopener" style="color:#4c1d95;font-weight:700;text-decoration:none;">▶ ${esc(em.title || '유튜브에서 원본 보기')}</a>
+    <a href="${url}" target="_blank" rel="noopener" style="color:var(--c-brand-2, #4c1d95);font-weight:700;text-decoration:none;">▶ ${esc(em.title || '유튜브에서 원본 보기')}</a>
   </p>
 </div>`;
 }
@@ -446,7 +477,7 @@ function figuresBlock(figures, asOf) {
         `<tr><td style="${S.figTd}">${esc(f.label)}</td>` +
         `<td style="${S.figTd}font-weight:700;">${esc(f.value)}</td>` +
         `<td style="${S.figTd}">${esc(f.source)}</td>` +
-        `<td style="${S.figTd}color:#6b7280;">${esc(f.asOf || '')}</td></tr>`
+        `<td style="${S.figTd}color:var(--c-ink-3, #6b7280);">${esc(f.asOf || '')}</td></tr>`
     )
     .join('\n');
   return (
@@ -508,7 +539,7 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
     const items = article.sections
       .map(
         (s, i) =>
-          `<li><a href="#${anchorId(i)}" style="color:#4c1d95;text-decoration:none;">${esc(
+          `<li><a href="#${anchorId(i)}" style="color:var(--c-brand-2, #4c1d95);text-decoration:none;">${esc(
             s.heading
           )}</a></li>`
       )
@@ -694,7 +725,9 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
         const meta = [s.publisher, s.date].filter(Boolean).join(' · ');
         return `<li><a href="${esc(s.url)}" target="_blank" rel="noopener nofollow">${esc(
           s.title || s.url
-        )}</a>${meta ? ` <span style="color:#999;">(${esc(meta)})</span>` : ''}</li>`;
+        /* #999 는 흰 배경에서도 2.85:1 이었다 — 라이트에서도 미달이던 값이다.
+         * --c-ink-4 는 4.5:1 을 넘도록 계산해 둔 토큰이다 (cs.txt 주석). */
+        )}</a>${meta ? ` <span style="color:var(--c-ink-4, #999);">(${esc(meta)})</span>` : ''}</li>`;
       })
       .join('\n');
     out.push(`<ul style="${S.sources}">\n${items}\n</ul>`);
@@ -711,8 +744,45 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
   return out.filter(Boolean).join('\n');
 }
 
+/* 미리보기에 심는 eco-m 팔레트 (cs.txt 00 DESIGN TOKENS 와 같은 값).
+ *
+ * 미리보기에는 스킨 CSS 가 없다. 본문의 `var(--토큰, 옛값)` 이 전부 옛값으로
+ * 떨어지므로 **다크에서 어떻게 보이는지 볼 방법이 없었다.** 경제 글은 eco-m 에
+ * 실리는 것이 정해져 있으니 그 팔레트를 여기 심어 발행 전에 눈으로 보게 한다.
+ * 다른 모드는 어느 스킨에 실릴지 이 파일이 알 수 없다 — 심지 않는다.
+ * 심지 않으면 옛값으로 떨어져 **오늘까지의 미리보기와 똑같다.** */
+const ECO_TOKENS = `
+  :root{
+    --c-bg:#ffffff; --c-bg-sub:#f5f7f9; --c-bg-elev:#ffffff; --c-bg-inset:#fafbfc;
+    --c-line:#e4e8ed; --c-line-2:#d3dae2;
+    --c-ink:#0f1720; --c-ink-2:#3b4756; --c-ink-3:#586371; --c-ink-4:#646f7c;
+    --c-brand:#123a6b; --c-brand-2:#1d5296; --c-brand-soft:#eaf1f9;
+    --c-accent:#c8322b; --c-on-brand:#ffffff;
+    --c-warn-soft:#fff8e1; --c-warn-line:#f59e0b;
+    --c-ok-soft:#f6fbf7; --c-ok-line:#cfe8d6; --c-ok-ink:#14532d;
+  }
+  :root[data-theme="dark"]{
+    --c-bg:#0e141b; --c-bg-sub:#131b24; --c-bg-elev:#172230; --c-bg-inset:#111922;
+    --c-line:#26323f; --c-line-2:#35434f;
+    --c-ink:#e9eef4; --c-ink-2:#bcc7d3; --c-ink-3:#98a4b2; --c-ink-4:#8e9aa8;
+    --c-brand:#7aa8e3; --c-brand-2:#9dc1ee; --c-brand-soft:#16283e;
+    --c-accent:#ee7d76; --c-on-brand:#0b1219;
+    --c-warn-soft:#382b12; --c-warn-line:#f59e0b;
+    --c-ok-soft:#12291b; --c-ok-line:#2c4a37; --c-ok-ink:#7ee2a4;
+  }
+  body{background:var(--c-bg); color:var(--c-ink-2);}
+  h1{color:var(--c-ink);}
+  /* 참고 자료의 링크는 인라인 색이 없다 — 스킨에서는 .article-view a 가 칠한다 */
+  a{color:var(--c-brand-2);}
+  .meta{color:var(--c-ink-4);}
+  .sk-theme{position:fixed;top:12px;right:12px;padding:7px 13px;border-radius:999px;
+            border:1px solid var(--c-line);background:var(--c-bg-elev);
+            color:var(--c-ink-2);font:600 13px/1 inherit;cursor:pointer;}
+`;
+
 /** 미리보기용 완전한 HTML 문서 */
 export function previewDocument(article, html) {
+  const eco = article.mode === 'econ';
   return `<!doctype html>
 <html lang="ko">
 <head>
@@ -726,9 +796,11 @@ export function previewDocument(article, html) {
   h1{font-size:1.9em;line-height:1.35;margin:0 0 8px;}
   .meta{color:#888;font-size:0.9em;margin-bottom:32px;}
   a{color:#4c1d95;}
+${eco ? ECO_TOKENS : ''}
 </style>
 </head>
 <body>
+${eco ? '<button type="button" class="sk-theme" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme===\'dark\'?\'light\':\'dark\'">라이트 / 다크</button>' : ''}
 <h1>${esc(article.title)}</h1>
 <div class="meta">${esc(article.tags.join(' · '))}</div>
 ${html}

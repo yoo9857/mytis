@@ -16,8 +16,10 @@
  * 업로드가 없으므로 **매번 같은 결과**다 (스톡 검색은 실행마다 달라진다).
  *
  * 색은 eco-m 스킨 토큰을 그대로 쓴다 (`cs.txt` 의 `--c-brand` 계열).
- * 인라인 스타일에 리터럴로 박는다 — 에디터 미리보기에는 스킨 CSS 가 없어서
- * `var()` 가 빈 값이 되고, 그러면 검토 화면과 발행 결과가 달라진다.
+ * 인라인에 리터럴로 박아 두면 **다크에서 판과 글자가 함께 어두워진다** —
+ * 그래서 `var(--토큰, 옛값)` 으로 참조한다. 쉼표 뒤 옛값이 있으므로
+ * 스킨 CSS 가 없는 에디터 미리보기에서도 리터럴을 박았을 때와 똑같이 나온다
+ * (fallback 없는 `var()` 는 빈 값이 되어 검토 화면과 발행 결과가 갈렸었다).
  *
  * flex·grid 를 쓰지 않는다. 티스토리는 기본모드 HTML 입력이 실패하면 위지윅으로
  * 폴백하는데(§7-12), 그 경로가 복잡한 레이아웃을 흘릴 수 있다.
@@ -33,17 +35,20 @@ function esc(text) {
     .replace(/"/g, '&quot;');
 }
 
-/** eco-m 스킨 토큰 (cs.txt) */
+/** eco-m 스킨 토큰 (cs.txt) — 쉼표 뒤는 토큰이 없는 스킨·미리보기에서 쓰이는 옛 값 */
 const C = {
-  brand: '#123a6b',
-  brand2: '#1d5296',
-  brandSoft: '#eaf1f9',
-  accent: '#c8322b',
-  ink: '#0f1720',
-  ink2: '#3b4756',
-  ink3: '#6a7684',
-  line: '#e4e8ed',
-  bgSub: '#f5f7f9',
+  brand: 'var(--c-brand, #123a6b)',
+  brand2: 'var(--c-brand-2, #1d5296)',
+  brandSoft: 'var(--c-brand-soft, #eaf1f9)',
+  accent: 'var(--c-accent, #c8322b)',
+  ink: 'var(--c-ink, #0f1720)',
+  ink2: 'var(--c-ink-2, #3b4756)',
+  ink3: 'var(--c-ink-3, #6a7684)',
+  line: 'var(--c-line, #e4e8ed)',
+  bgSub: 'var(--c-bg-sub, #f5f7f9)',
+  bgElev: 'var(--c-bg-elev, #fff)',
+  /* 판(brand)이 다크에서 밝은 파랑으로 뒤집히므로 그 위 글자도 뒤집는다 */
+  onBrand: 'var(--c-on-brand, #fff)',
 };
 
 /** "3단계 · 계약서와 특약을 문장으로 남기기" → { num: '3', label: '계약서와 특약을…' } */
@@ -80,7 +85,7 @@ export function stepFlow(article, { anchorId = null } = {}) {
       const rail =
         `<td width="46" style="padding:0;vertical-align:top;text-align:center;">` +
         `<div style="display:inline-block;width:30px;height:30px;line-height:30px;` +
-        `border-radius:15px;background:${C.brand};color:#fff;font-size:15px;font-weight:800;">${esc(st.num)}</div>` +
+        `border-radius:15px;background:${C.brand};color:${C.onBrand};font-size:15px;font-weight:800;">${esc(st.num)}</div>` +
         (last
           ? ''
           : `<div style="width:2px;height:26px;margin:2px auto 0;background:${C.line};"></div>`) +
@@ -135,7 +140,7 @@ export function keyFigures(article) {
 
   return (
     `<table style="width:100%;border-collapse:collapse;margin:0 0 34px;` +
-    `border:1px solid ${C.line};border-radius:10px;background:#fff;">` +
+    `border:1px solid ${C.line};border-radius:10px;background:${C.bgElev};">` +
     `<tbody><tr>\n${cells}\n</tr></tbody></table>`
   );
 }
@@ -150,7 +155,7 @@ export function pointOfNoReturn(text) {
   const t = String(text || '').trim();
   if (!t) return '';
   return (
-    `<div style="margin:0 0 34px;padding:18px 22px;background:#fff;` +
+    `<div style="margin:0 0 34px;padding:18px 22px;background:${C.bgElev};` +
     `border:1px solid ${C.line};border-left:4px solid ${C.accent};border-radius:8px;">` +
     `<span style="display:block;margin:0 0 6px;font-size:12px;font-weight:800;` +
     `letter-spacing:.08em;color:${C.accent};">되돌릴 수 없는 지점</span>` +
