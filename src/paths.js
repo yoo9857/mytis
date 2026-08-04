@@ -29,6 +29,9 @@ export const FILES = {
   photosSchema: path.join(ROOT, 'src', 'schema', 'photos.schema.json'),
   newsfeedSchema: path.join(ROOT, 'src', 'schema', 'newsfeed.schema.json'),
   socialSchema: path.join(ROOT, 'src', 'schema', 'social.schema.json'),
+  radarSchema: path.join(ROOT, 'src', 'schema', 'radar.schema.json'),
+  /** 선점 레이더가 뽑은 일정 — 성과를 되먹이는 자리이므로 지우지 않고 누적한다 */
+  radar: path.join(ROOT, 'radar.json'),
 };
 
 export function ensureDirs() {

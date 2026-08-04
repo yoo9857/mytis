@@ -47,10 +47,17 @@ const DEFAULT = {
   tags: [8, 14],
   faq: [3, 6],
   noSpoilerIn: [],
+  /* 0 = 검사하지 않음. 회차물처럼 **방송 뒤 보도가 근거인 모드**만 1 이상으로 둔다. */
+  sourcesAfterAirDate: 0,
 };
 
 /** 이 항목이 어긋나면 발행을 막는다 (나머지는 경고) */
-const BLOCKING = new Set(['sections', 'photos', 'endingMax', 'captions', 'schema']);
+const BLOCKING = new Set([
+  'sections', 'photos', 'endingMax', 'captions', 'schema',
+  /* 회차 리캡을 방영 전 자료로 쓴 글 — **경고로 두면 안 된다.** 형식이 완벽하고
+   * 내용만 다른 회차라서, 경고 한 줄은 사람이 넘겨 읽는다 (§7-17). */
+  'recapSources',
+]);
 
 /**
  * **빈 말 캡션** — 정지 화면이 보여 줄 수 없는 것을 설명하는 캡션.
@@ -91,6 +98,33 @@ const strip = (s) => String(s || '').replace(/[\s:·・,.'"“”‘’!?()[\]<>
  * `workTitle` 은 소제목의 작품명 반복을 세는 데 쓴다 — `topic` 의 접두사("영화: ")와
  * 괄호를 떼어 얻는다. 제목에서 뽑으면 훅이 섞여 못 쓴다.
  */
+/**
+ * 날짜 문자열에서 `YYYY-MM-DD` 를 뽑아 비교 가능한 숫자로 만든다.
+ *
+ * 모델이 쓰는 형태가 흔들린다 — "2026-08-03", "2026.08.03", "2026년 8월 3일".
+ * 세 형태를 모두 받는다. 못 읽으면 `null` 이고, 그때는 **없는 것으로 센다** —
+ * 읽지 못한 날짜를 통과시키면 검사가 무력해진다.
+ */
+function dayNum(text) {
+  const s = String(text || '').trim();
+  let m = s.match(/(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/);
+  if (!m) m = s.match(/(\d{4})(\d{2})(\d{2})/);
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (!(y > 1900 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return null;
+  return y * 10000 + mo * 100 + d;
+}
+
+/** 방송일 당일·이후에 나온 출처의 수 (회차 리캡 보도를 실제로 찾았는가) */
+function countSourcesOnOrAfterAir(article) {
+  const air = dayNum(article.airDate);
+  if (air == null) return 0;
+  return (article.sources || []).filter((s) => {
+    const d = dayNum(s?.date);
+    return d != null && d >= air;
+  }).length;
+}
+
 export function measure(article) {
   const secs = article.sections || [];
   const flowParts = [
@@ -151,6 +185,39 @@ export function measure(article) {
     figures: (article.figures || []).length,
     /** 출처는 있는데 기준일이 빈 수치. "숫자에 기준일을 붙인다" 는 약속이 반만 지켜진 것 */
     figuresMissingAsOf: (article.figures || []).filter((f) => !String(f?.asOf || '').trim()).length,
+    /**
+     * 정보 카드 수 — **실제로 그려질 것만** 센다.
+     *
+     * `infographic.renderCards` 는 `title` 이 있고 `items` 가 2개 이상인 것만 그린다.
+     * 그 조건을 여기서 같이 보지 않으면, 껍데기만 있는 카드로 규격을 통과한 뒤
+     * 렌더 단계에서 조용히 사라진다 — 게이트가 거짓말을 하는 셈이다.
+     */
+    cards: (article.cards || []).filter((c) => String(c?.title || '').trim() && (c?.items || []).length >= 2).length,
+    /**
+     * 드라마 모드 전용 — **그 회차를 실제로 취재했는가** (src/modes/drama.js:
+     * contract.sourcesAfterAirDate). 선언하지 않은 모드는 검사를 건너뛴다.
+     *
+     * ## 왜 필요했나
+     *
+     * 회차 리캡은 방송 다음 날 나오는 리캡 보도가 근거다. 그것을 **못 찾았는데도
+     * 글이 나온다** — 모델은 방영 전 소개 기사·제작발표회 기사·다른 회차 기사로
+     * 그 회차를 구성해 버린다. 형식은 완벽하고 내용만 다른 회차다.
+     *
+     * > 2026-08-04 실측 — 「사랑이 온다」 4회(8/2 방송):
+     * >   실제 4회는 무진의 공사장 사고·한석중의 독촉장·8년 후 8살 아들 한결·
+     * >   경찰서 재회(충격 엔딩)였다. 초안은 "규림의 거짓말 뒤에 무진이 남겠다고
+     * >   말한다" 를 썼고 **한결이 한 번도 나오지 않았다.**
+     * >   sources 6건 중 방송일 이후 기사가 **0건**이었다 — KBS 방영 전 소개,
+     * >   첫 방송 기사, 7/28 제작발표회, 프로그램·VOD 페이지가 전부였다.
+     * >   그리고 **규격은 전부 통과했다.**
+     *
+     * 사람이 읽어야 잡히는 종류가 아니다. **방송일 이후 날짜의 출처가 하나도 없다**
+     * 는 것은 기계가 셀 수 있다. 그래서 센다.
+     *
+     * `airDate` 는 스키마가 따로 받는다. 표 안에만 있으면 코드가 읽을 수 없다.
+     */
+    airDate: String(article.airDate || '').trim(),
+    sourcesOnOrAfterAir: countSourcesOnOrAfterAir(article),
     /** `noSpoilerIn` 이 지정한 자리에서 결말 어휘가 걸린 문장들 */
     spoilerLeaks(fields) {
       leaks.length = 0;
@@ -228,6 +295,24 @@ export function checkContract(article, modeId) {
     if (m.figuresMissingAsOf) {
       add('figures', m.figuresMissingAsOf + '개 기준일 없음', '0개',
         '기준일 없는 숫자는 언제 것인지 알 수 없습니다');
+    }
+  }
+  /* 정보 카드 — 이 항목을 선언한 모드에서만 (지금은 경제 모드).
+   * 본문 시각 자료가 스톡 사진으로만 채워지는 것을 막는 자리다. */
+  if (c.cards && !inRange(m.cards, c.cards)) {
+    add('cards', m.cards + '개', c.cards.join('~') + '개',
+      '숫자 없이 순서·구조·이유만 담은 정보 카드. 스톡 사진이 정보를 대신하지 못합니다');
+  }
+  /* **그 회차를 실제로 취재했는가** — 이 항목을 선언한 모드에서만 (지금은 드라마).
+   * 방송일 이후에 나온 출처가 하나도 없으면 그 글은 방송을 보지 않고 쓴 글이다.
+   * 자세한 실측은 measure 의 sourcesOnOrAfterAir 주석. */
+  if (c.sourcesAfterAirDate) {
+    if (!m.airDate) {
+      add('recapSources', '방송일 없음', 'airDate 필요',
+        '방송일이 없으면 취재 여부를 대조할 수 없습니다');
+    } else if (m.sourcesOnOrAfterAir < c.sourcesAfterAirDate) {
+      add('recapSources', m.sourcesOnOrAfterAir + '건', c.sourcesAfterAirDate + '건 이상',
+        `방송일(${m.airDate}) 당일·이후 출처. 방영 전 자료만으로 쓴 회차 리캡입니다`);
     }
   }
   for (const leak of m.spoilerLeaks(c.noSpoilerIn)) {

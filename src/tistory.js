@@ -767,6 +767,29 @@ export async function setReserve(page, minutesLater) {
   }
 }
 
+/**
+ * 화면에 캡차가 떠 있는가.
+ *
+ * 티스토리는 `DKAPTCHA` 를 쓴다(지도에서 장소를 찾아 글자를 넣는 형태).
+ * 클래스 이름 하나에 걸지 않고 **여러 신호를 함께** 본다 — 마크업이 바뀌어도
+ * 문구는 남고, 문구가 바뀌어도 스크립트 이름은 남는다.
+ */
+async function hasCaptcha(page) {
+  return page
+    .evaluate(() => {
+      const visible = (el) => {
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 40 && r.height > 40;
+      };
+      const byNode = [...document.querySelectorAll('[class*="kaptcha" i],[id*="kaptcha" i],[class*="captcha" i],[id*="captcha" i]')].some(visible);
+      const text = document.body?.innerText || '';
+      const byText = /지도에서 아래 장소를 찾아|정답을 입력해주세요|DKAPTCHA/i.test(text);
+      return byNode || byText;
+    })
+    .catch(() => false);
+}
+
 /** 최종 발행 */
 export async function clickPublish(page, urls) {
   log.step('발행');
@@ -781,9 +804,30 @@ export async function clickPublish(page, urls) {
     const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
       await sleep(page, 1500);
+      /* **캡차를 먼저 본다.** 티스토리는 연속 발행을 스팸으로 보고 지도 캡차를
+       * 띄운다. 그러면 발행 버튼이 "저장중" 에서 멈추고, 코드는 60초를 기다린 뒤
+       * "화면을 벗어나지 않았습니다" 라는 **원인과 무관한 메시지**를 낸다.
+       *
+       * > 2026-08-04 실측: 한 시간 반에 9건을 연달아 올린 뒤 DKAPTCHA 지도 캡차가
+       * >   떴다("지도에서 아래 장소를 찾아 빈칸에 들어갈 글자를 입력해주세요").
+       * >   두 번 시도해 두 번 같았고, 스크린샷을 열어 보기 전까지 원인을 몰랐다.
+       *
+       * 캡차는 사람이 풀어야 한다 — 코드가 할 수 있는 일은 **정확히 알리고 멈추는 것**이다. */
+      const captcha = await hasCaptcha(page);
+      if (captcha) {
+        await shot(page, 'publish-captcha');
+        return {
+          ok: false,
+          url: page.url(),
+          captcha: true,
+          reason:
+            '티스토리가 캡차를 요구합니다 (연속 발행 제한). 사람이 풀어야 합니다 — ' +
+            '브라우저를 띄운 채 `--show` 로 다시 실행해 캡차를 풀거나, 시간을 두고 재시도하세요.',
+        };
+      }
       const url = page.url();
       if (!url.includes('/manage/newpost')) {
-        log.ok(`발행 완료 → ${url}`);
+        log.ok(`글쓰기 화면을 벗어났습니다 → ${url}`);
         return { ok: true, url };
       }
     }
@@ -807,6 +851,54 @@ export async function clickPublish(page, urls) {
  * 보인다. 발행을 되돌릴 수는 없으므로 **경고만 하고 결과에 수치를 남긴다** —
  * 로그에서 `발행 검증` 줄이 WARN 이면 글을 열어 봐야 한다.
  */
+/**
+ * **익명으로** 글이 실제 공개됐는지 확인한다 — 이것이 "발행됐다" 의 유일한 증거다.
+ *
+ * ## 왜 필요했나
+ *
+ * `verifyPublished` 는 **로그인된 브라우저**로 글을 열어 글자 수를 센다. 그런데
+ * 임시저장·비공개 글도 본인에게는 열린다. 그래서 검증이 통과한다.
+ *
+ * > 2026-08-04 실측 — 「내 남은 연애 MC 4인」:
+ * >   로그가 `발행 완료` · `발행 검증: 본문 5,946자 · 이미지 9장` 을 찍었고
+ * >   그걸 근거로 "발행됐다" 고 보고했다. 실제로는 **임시저장**이었고
+ * >   익명 접근은 404, RSS 50건에도 없었다. 사용자가 관리 화면을 열어 알려줬다.
+ * >   같은 시각 티스토리가 연속 발행 캡차를 띄우던 구간이었다.
+ *
+ * 쿠키 없는 `fetch` 로 본다 — 브라우저 컨텍스트를 새로 띄우는 것보다 확실하다.
+ * 로그인 상태가 섞일 여지가 없기 때문이다.
+ *
+ * 비공개로 **의도한** 발행(`--private`)에는 대지 않는다 — 그때 404 는 정상이다.
+ */
+export async function verifyPublicReachable(postUrl, { minChars = 500 } = {}) {
+  try {
+    const res = await fetch(postUrl, { redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0' } });
+    if (!res.ok) return { ok: false, status: res.status, reason: `익명 접근 ${res.status}` };
+    const html = await res.text();
+    /* 로그인·관리 화면으로 **리다이렉트됐는지는 응답 URL로** 본다.
+     *
+     * ⚠️ 본문에서 로그인 주소를 찾으면 안 된다 — 티스토리 페이지 헤더에는
+     * 익명 방문자용 로그인 링크가 **항상** 들어 있다.
+     * > 2026-08-04: `tistory.com/auth/login` 을 본문에서 찾도록 짰더니
+     * >   정상 발행된 글까지 "로그인 화면으로 갔다" 고 막았다 (거짓 음성 4/4). */
+    const landed = res.url || postUrl;
+    if (/\/auth\/login|\/manage(\/|$)/.test(landed)) {
+      return { ok: false, status: res.status, reason: `익명 접근이 ${landed} 로 갔습니다` };
+    }
+    /* 보호글(비밀번호)은 200 으로 오고 비밀번호 입력 폼이 뜬다 */
+    if (/보호되어 있는 글|비밀번호를 입력/.test(html)) {
+      return { ok: false, status: res.status, reason: '보호글로 올라갔습니다 (비밀번호 필요)' };
+    }
+    const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ');
+    const chars = text.replace(/\s+/g, ' ').trim().length;
+    if (chars < minChars) return { ok: false, status: res.status, chars, reason: `익명으로 본 본문 ${chars}자` };
+    return { ok: true, status: res.status, chars };
+  } catch (err) {
+    /* 네트워크 문제로 발행 성공을 뒤집지 않는다 — 판단 불가로 남긴다 */
+    return { ok: null, reason: err.message.split('\n')[0] };
+  }
+}
+
 export async function verifyPublished(page, postUrl, { minChars = 1000, imageCount = 0 } = {}) {
   try {
     await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
@@ -922,6 +1014,30 @@ export async function publishPost(
   // 7) 발행 후 검증 — 빈 글이 조용히 나가는 것을 여기서 잡는다 (함정 ③ 재발 방어)
   if (result.ok && postUrl) {
     result.verify = await verifyPublished(page, postUrl, { imageCount: macros.length });
+
+    /* **익명으로 열리는지가 "발행됐다" 의 증거다.**
+     *
+     * 위 `verifyPublished` 는 로그인된 브라우저로 보므로 임시저장·비공개 글도
+     * 통과한다. 그래서 그것만으로 성공을 선언하면 **조용히 임시저장으로 남는다**
+     * (2026-08-04 실측 — verifyPublicReachable 머리말 참고).
+     *
+     * 공개 발행을 의도한 경우에만 댄다 — `--private` 로 낸 글은 404 가 정상이다.
+     * 판단 불가(네트워크 실패, ok === null)는 성공을 뒤집지 않는다. */
+    if (String(cfg.blog.visibility || 'public') === 'public') {
+      const pub = await verifyPublicReachable(postUrl);
+      result.publicCheck = pub;
+      if (pub.ok === false) {
+        await shot(page, 'not-public');
+        result.ok = false;
+        result.reason =
+          `발행 버튼을 눌렀지만 글이 공개되지 않았습니다 (${pub.reason}). ` +
+          '임시저장으로 남았을 수 있습니다 — 관리 화면에서 확인하세요: ' +
+          `${urls.host}/manage/posts/`;
+        log.error(result.reason);
+      } else if (pub.ok) {
+        log.ok(`공개 확인: 익명 접근 ${pub.status} · 본문 ${pub.chars.toLocaleString()}자`);
+      }
+    }
   }
   return result;
 }

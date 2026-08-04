@@ -12,6 +12,7 @@
     "publish": "node src/cli.js publish",
     "queue": "node src/cli.js queue",
     "news": "node src/cli.js news",
+    "radar": "node src/cli.js radar",
     "probe": "node src/cli.js probe",
     "login:naver": "node src/cli.js login:naver",
     "probe:naver": "node src/cli.js probe:naver",

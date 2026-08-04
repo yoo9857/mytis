@@ -430,6 +430,25 @@ export async function generate(topic, cfg) {
   // 실제 장면은 공식 영상 임베드로 보여준다. 사진은 저작권 때문에 못 가져오지만
   // 임베드는 유튜브가 제공하는 기능이라 문제가 없고, 현장을 그대로 담는다.
   if (!can(mode, 'youtubeEmbeds')) {
+    /* **임베드의 출처가 없는 모드에서는 비운다.**
+     *
+     * 이 분기는 원래 "추가 영상 검색만 건너뛴다" 였다. 그래서 모델이 `embeds` 에
+     * 유튜브를 써넣으면 **그대로 살아서 발행됐다.** 영상 모드는 embeds 가 곧
+     * 장면 목록이라 남겨야 하지만(clipShots), 책·경제 모드는 그 자리에 들어올
+     * 정당한 영상이 없다.
+     *
+     * > 2026-08-04 실측 — 『유럽 도시 기행 1』 책 글에 **YTN 유튜브 임베드**가
+     * >   붙어 있었다. `book.contract.embeds: [0,0]` 이 경고로 가리켰지만 막지는
+     * >   않으므로, 사람이 로그를 넘겨 읽으면 그대로 나간다.
+     *
+     * 판단 기준은 `clipShots` 다 — 캡처를 쓰는 모드만 embeds 를 장면으로 쓴다. */
+    if (!can(mode, 'clipShots') && (article.embeds || []).length) {
+      log.info(
+        `${MODE_LABEL[mode]} 모드는 영상 임베드를 쓰지 않습니다 — ` +
+          `모델이 넣은 ${article.embeds.length}개를 비웁니다.`
+      );
+      article.embeds = [];
+    }
     log.debug(
       `${MODE_LABEL[mode]} 모드 — 같은 영상의 장면 ${(article.embeds || []).length}개를 씁니다 (추가 영상 검색 생략)`
     );

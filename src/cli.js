@@ -20,6 +20,7 @@ import { renderImages } from './images.js';
 import { buildHtml } from './html.js';
 import { resolveCodex, isUrl } from './codexWriter.js';
 import { discoverNews } from './newsFeed.js';
+import { discoverRadar, saveRadar } from './radar.js';
 import * as queue from './queue.js';
 
 const HELP = `
@@ -59,6 +60,13 @@ const HELP = `
   npm run news -- --add --now          찾은 기사 중 1위를 바로 발행
   npm run news -- "아이돌 컴백" --count 8   분야와 개수 지정
 
+  선점 레이더 — 터진 것을 쫓지 않고 터질 것을 먼저 잡는다
+  npm run radar                        앞으로 공표된 일정을 훑어 발행 시점을 계산
+  npm run radar -- --days 14           탐색 창을 14일로
+  npm run radar -- "넷플릭스 공개" --count 8
+                                       ● 지금 / ◐ 임박 / ○ 대기·아직 로 표시된다
+                                       결과는 radar.json 에 누적된다 (성과 되먹임 자리)
+
   기타
   node src/cli.js topics add "주제1" "https://기사url"    큐에 추가
   node src/cli.js topics list                            큐 상태 보기
@@ -96,6 +104,13 @@ function parseArgs(argv) {
     else if (a.startsWith('--count=')) flags.count = Number(a.split('=')[1]) || 1;
     else if (a === '--hours') flags.hours = Number(argv[++i]) || 24;
     else if (a.startsWith('--hours=')) flags.hours = Number(a.split('=')[1]) || 24;
+    /* 선점 레이더의 탐색 창(일). **값을 받는 플래그는 반드시 여기 등록해야 한다** —
+     * 맨 아래 `startsWith('--')` 폴백이 미등록 플래그를 `true` 로 삼키고, 뒤따르는
+     * 숫자는 positional 로 새어 질의에 붙는다.
+     * > 2026-08-04 실측: `--days 21` 이 `days=true` 가 되고 로그가 "앞으로 true일" 로
+     * >   찍혔다. 질의는 "…아이돌 컴백 21" 이 됐다. 조용히 틀리는 종류다. */
+    else if (a === '--days') flags.days = Number(argv[++i]) || 21;
+    else if (a.startsWith('--days=')) flags.days = Number(a.split('=')[1]) || 21;
     else if (a === '--private') flags.visibility = 'private';
     else if (a === '--public') flags.visibility = 'public';
     else if (a === '--visibility') flags.visibility = argv[++i];
@@ -297,6 +312,40 @@ async function cmdPost(cfg, topic, flags) {
   const platforms = resolvePlatforms(flags);
   if (!flags.noPublish) log.info(`발행 대상: ${platforms.map((p) => PLATFORM_LABEL[p]).join(' + ')}`);
   await runTopic(topic, cfg, { publish: !flags.noPublish, platforms });
+}
+
+/**
+ * 선점 레이더 — 앞으로 공표된 일정을 잡아 **발행 시점을 계산**한다 (src/radar.js).
+ *
+ * `news` 와 무엇이 다른가: `news` 는 이미 보도된 것을 훑고, 이쪽은 **아직 일어나지
+ * 않은 것**을 훑는다. 실측이 그쪽을 가리켰다 — 재혼 황후는 공개 전에 올린 글이 떴다.
+ *
+ * 큐(`topics.txt`)에 자동으로 넣지 않는다. 큐는 URL 을 받아 기사 모드로 돌리는
+ * 물건이고, 레이더 결과는 모드가 섞여 있다(영화·주제·기사). 그래서 실행 문자열을
+ * 찍어 주고 사람이 고른다 — 오늘 드라마 글에서 본 대로 **잘못된 모드로 자동 발행되면
+ * 형식은 완벽하고 내용만 틀린 글**이 나온다.
+ */
+async function cmdRadar(cfg, args, flags) {
+  const query = args.filter((a) => !isUrl(a)).join(' ') || cfg.radar?.query || '';
+  const days = flags.days || cfg.radar?.days || 21;
+  const count = flags.count || cfg.radar?.count || 12;
+
+  const events = await discoverRadar({ cfg, query, days, count });
+  if (!events.length) {
+    process.exitCode = 1;
+    return;
+  }
+
+  saveRadar(events);
+
+  const now = events.filter((e) => e.verdict === '지금' || e.verdict === '임박');
+  log.info('');
+  if (now.length) {
+    log.ok(`지금 써야 하는 것 ${now.length}건 — 위 목록의 ● ◐ 표시`);
+  } else {
+    log.info('오늘 당장 써야 하는 일정은 없습니다. 발행 권장일이 오면 다시 올라옵니다.');
+  }
+  log.info('radar.json 의 outcome 을 채우면 리드타임을 실측으로 교정할 수 있습니다.');
 }
 
 async function cmdNews(cfg, args, flags) {
@@ -789,6 +838,8 @@ async function main() {
       return cmdPublishFile(cfg, rest[0], flags);
     case 'news':
       return cmdNews(cfg, rest, flags);
+    case 'radar':
+      return cmdRadar(cfg, rest, flags);
     case 'queue':
       return cmdQueue(cfg, { count: flags.count || 1, noPublish: flags.noPublish });
     case 'probe':

@@ -1,0 +1,91 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["events"],
+  "properties": {
+    "events": {
+      "type": "array",
+      "description": "앞으로 일어날 것이 이미 공표된 이벤트 목록. 점수를 매겨 정렬하지 말 것 — 우선순위는 코드가 계산한다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "kind",
+          "date",
+          "dateConfirmed",
+          "platform",
+          "people",
+          "source",
+          "demand",
+          "saturation",
+          "evidence",
+          "angle",
+          "mode"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "작품명 또는 아티스트명. 사람들이 검색창에 치는 이름 그대로. 부제·수식어를 붙이지 않는다."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "drama_premiere",
+              "drama_finale",
+              "ott_release",
+              "movie_release",
+              "comeback",
+              "award",
+              "concert",
+              "other"
+            ],
+            "description": "이벤트 종류. 종류마다 검색 수요가 올라오는 시점이 다르므로 코드가 이 값으로 발행 시점을 계산한다. 애매하면 other."
+          },
+          "date": {
+            "type": "string",
+            "description": "이벤트 날짜. YYYY-MM-DD 형식만. 기간이면 시작일. 날짜를 모르면 그 항목을 빼라 — 날짜 없는 항목은 이 도구에서 쓸모가 없다."
+          },
+          "dateConfirmed": {
+            "type": "boolean",
+            "description": "공식 발표(방송사·배급사·소속사·플랫폼)로 확정된 날짜인가. 보도에서 '예정'·'전망'으로만 언급되면 false."
+          },
+          "platform": {
+            "type": "string",
+            "description": "방송사·OTT·배급사·음반사. 예: tvN, 디즈니+, 넷플릭스, CJ ENM. 모르면 빈 문자열."
+          },
+          "people": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "검색 수요를 만드는 인물 2~5명. 배우·아티스트의 실제 활동명. 극중 인물 이름을 넣지 않는다."
+          },
+          "source": {
+            "type": "string",
+            "description": "이 일정을 확인한 근거 URL. 공식 발표나 보도 기사. 검색으로 실제 확인한 주소만 — 지어내면 이 항목 전체가 쓸모없어진다."
+          },
+          "demand": {
+            "type": "integer",
+            "description": "검색 수요의 크기 1~5. 무엇을 보고 매기는가: 주연의 인지도, 원작의 규모(누적 조회·판매), 플랫폼의 크기, 앞선 시즌·전작의 화제성. 추측이 아니라 확인한 근거가 있어야 한다(evidence 에 쓴다). 5 는 '전국민이 아는 이름'이다 — 아껴 쓴다."
+          },
+          "saturation": {
+            "type": "integer",
+            "description": "이미 쓰인 글의 양 1~5. 검색해 보고 매긴다. 1 은 '블로그 글이 거의 없다', 5 는 '수백 개가 쏟아졌다'. 5 면 늦었다는 뜻이다. 이 값이 낮은 것이 이 도구가 찾는 것이다."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "demand 와 saturation 을 그렇게 본 근거 한 문장. 확인한 사실을 쓴다. 예: '원작 웹툰 누적 26억 조회, 블로그 글은 편성 기사 재작성 몇 건뿐'."
+          },
+          "angle": {
+            "type": "string",
+            "description": "원 기사에 없는데 우리가 더할 수 있는 것 한 문장. 인물 관계 정리, 원작과의 차이, 편성·회차 정리, 비교표처럼 구체적으로. 이것이 없으면 쓸 이유가 없는 소재다."
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["news", "drama", "movie", "clip", "topic"],
+            "description": "이 소재를 쓸 모드. news=발표 기사를 해설, drama=회차 리캡(방송 뒤에만), movie=영화 정보·결말, clip=유튜브 영상 기반, topic=취재해서 정리하는 글. 방영·공개 전이라면 drama 를 고르지 말 것 — 회차가 아직 없다."
+          }
+        }
+      }
+    }
+  }
+}

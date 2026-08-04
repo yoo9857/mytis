@@ -352,6 +352,11 @@ function normalizeArticle(raw, { topic, cfg, mode = '' }) {
      *
      * 다른 모드에서는 빈 값으로 남는다 — 스키마에 없으니 모델이 채우지 않는다. */
     asOf: str(raw.asOf),
+    /* `airDate` — 드라마 모드의 방송일. `contract.sourcesAfterAirDate` 가 이 날짜를
+     * `sources[].date` 와 대조해 **그 회차를 실제로 취재했는지** 막는다.
+     * 표 안에만 있으면 코드가 읽을 수 없어서 따로 받는다. 이 한 줄이 없으면
+     * 모델이 채운 값이 조용히 버려지고 검사가 "방송일 없음" 으로 전부 막는다. */
+    airDate: str(raw.airDate),
     figures: arr(raw.figures)
       .map((f) => ({
         label: str(f?.label),

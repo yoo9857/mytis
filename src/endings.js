@@ -96,6 +96,9 @@ export function endingStats(article) {
     top: top?.[0] || '',
     topCount: top?.[1] || 0,
     ratio: tails.length ? (top?.[1] || 0) / tails.length : 0,
+    /** 종결별 개수. `varyEndings` 가 **이미 있는 `죠`** 를 세는 데 쓴다.
+     *  `tailOf` 는 끝 두 글자라 `죠` 종결이 한 토큰이 아니다("렇죠"·"이죠"·"가죠"). */
+    count,
   };
 }
 
@@ -149,8 +152,28 @@ export function varyEndings(article, { max = 0.6 } = {}) {
   }
   if (!cands.length) return { changed: 0, before, after: before };
 
-  /* ② 고르게 흩어 고른다. 이웃한 후보를 연달아 고르면 `죠` 가 새 연타가 된다. */
-  const want = Math.min(budget, Math.ceil(cands.length / 2));
+  /* ② 고르게 흩어 고른다. 이웃한 후보를 연달아 고르면 `죠` 가 새 연타가 된다.
+   *
+   * 상한을 **후보의 절반**으로 뒀던 것이 목표를 못 맞추는 원인이 됐다.
+   *
+   * > 2026-08-04 실측 — 「사랑이 온다」 4회, 두 번 연속 같은 자리에서 멈췄다:
+   * >   전체 64문장 · "…니다." 61개(95%) · 목표 60% → **23개**를 바꿔야 한다.
+   * >   그런데 후보가 44개였고 절반 상한이 22개라 **1개가 모자랐다.**
+   * >   결과 39/64 = 61% 로 남아 `endingMax` **막음**에 걸렸다. 발행 불가다.
+   *
+   * 진짜 제약은 절반이 아니다 — **`죠` 가 새 최다가 되지 않는 선**이다.
+   * n 개를 바꾸면 `…니다` 는 (top - n), `죠` 는 (있던 죠 + n) 이 된다.
+   * 둘 다 목표 이하여야 하므로 n 의 상한은 `floor(max × total) - 있던 죠` 다.
+   * 위 실측에서 그 값은 38 - 3 = 35 로, 필요한 23 을 넉넉히 담는다.
+   *
+   * 절반을 넘으면 한 곳에서 `죠` 가 이웃할 수 있다. 그것이 **발행 불가보다 낫다** —
+   * 아래 step 배분이 여전히 최대한 흩어 고른다. */
+  const jyoNow = Object.entries(before.count || {})
+    .filter(([t]) => t.endsWith('죠'))
+    .reduce((n, [, c]) => n + c, 0);
+  const jyoRoom = Math.floor(max * before.total) - jyoNow;
+  const want = Math.max(0, Math.min(budget, cands.length, jyoRoom));
+  if (!want) return { changed: 0, before, after: before };
   const step = cands.length / want;
   const picked = new Set();
   for (let k = 0; k < want; k++) {

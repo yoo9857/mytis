@@ -132,13 +132,13 @@ const SHAPES = {
 };
 
 /** 문자열 하나로 끝나는 속성 (설명만 모드가 준다) */
-const PLAIN = ['title', 'seoTitle', 'metaDescription', 'primaryKeyword', 'urlSlug', 'directAnswer', 'conclusion'];
+const PLAIN = ['title', 'seoTitle', 'metaDescription', 'primaryKeyword', 'urlSlug', 'airDate', 'directAnswer', 'conclusion'];
 /** 문자열 배열 속성 */
 const PLAIN_ARR = ['secondaryKeywords', 'tags', 'keyTakeaways'];
 
 /** 아티클 스키마의 속성 순서 — article.schema.json 실측 순서를 따른다 */
 const ORDER = [
-  'title', 'seoTitle', 'metaDescription', 'primaryKeyword', 'urlSlug', 'entities',
+  'title', 'seoTitle', 'metaDescription', 'primaryKeyword', 'urlSlug', 'airDate', 'entities',
   'secondaryKeywords', 'tags', 'directAnswer', 'keyTakeaways', 'sections', 'faq',
   'conclusion', 'sources', 'embeds', 'imageBriefs',
 ];
@@ -199,6 +199,12 @@ const DRAMA = {
     urlSlug:
       "글 주소에 쓸 영문 슬러그. 소문자 영문·숫자·하이픈만. 3~6단어, 60자 이내. " +
       "작품 로마자 표기 + 회차 + ep 를 넣는다. 예: 'love-comes-episode-12-recap'",
+    airDate:
+      '이 회차가 방송된 날짜. **YYYY-MM-DD 형식으로만** 쓴다. 예: "2026-08-02". ' +
+      '검색으로 확인한 날짜여야 한다. ' +
+      '⚠️ 코드가 이 날짜를 sources 의 date 와 대조해 **그 회차를 실제로 취재했는지** ' +
+      '검사한다. 방송일 당일·이후 날짜의 출처가 하나도 없으면 발행이 막힌다 — ' +
+      '방영 전 소개 기사나 제작발표회 기사만으로 회차 리캡을 쓸 수 없다.',
     entities:
       '이 회차에 나온 **극중 인물**과 그 배우. nameKo 에는 **극중 이름**을 쓰고, role 에 ' +
       '"극중 인물 (배우 <배우명>)" 형태로 배우를 밝힌다. ' +
@@ -233,7 +239,11 @@ const DRAMA = {
     sources:
       '웹 검색으로 실제 확인한 출처만 넣는다. **출연진 표와 편성은 반드시 확인**한다 — ' +
       '방송사 공식 페이지, 위키백과, 리캡 보도를 쓴다. ' +
-      '극중 이름과 배우 이름의 짝은 여기서 확인한 것만 본문에 쓴다. URL을 지어내지 않는다.',
+      '극중 이름과 배우 이름의 짝은 여기서 확인한 것만 본문에 쓴다. URL을 지어내지 않는다. ' +
+      '⚠️ **그 회차의 리캡 보도를 반드시 하나 이상 넣는다** — 방송일 당일 또는 다음 날 ' +
+      '나온 기사다. date 는 그 기사의 발행일을 YYYY-MM-DD 로 정확히 쓴다(추측 금지). ' +
+      '코드가 airDate 와 대조해 방송일 이후 출처가 없으면 발행을 막는다. ' +
+      '방영 전 소개 기사·제작발표회 기사·프로그램 안내 페이지는 회차 근거가 아니다.',
     embeds:
       '방송사 **공식** 예고·하이라이트 영상 1~3개. 채널이 그 방송사 공식 채널인 것만 넣는다. ' +
       '제목에 작품명이 없으면 넣지 않는다. speaker·isStudio·isHook 은 이 모드에서 쓰지 않으므로 ' +
