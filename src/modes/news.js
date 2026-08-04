@@ -12,6 +12,21 @@ export default {
     allowTables: true,
   },
   schemaFile: 'article.schema.json',
+  /**
+   * 본문 사진 +3 (대표 1 + 본문 8 = 9장). **2026-08-04 에 0 에서 올렸다 (§8-9).**
+   *
+   * 왜: `photoDensity` 규격은 [300,500] 인데 그 실측 주석이 스스로 473·559 라고
+   * 적어 뒤 있었다 — 559 는 선언한 범위 밖이다. 사진 6장으로는 3,000자대 기사 글이
+   * 거의 매번 경고를 냈다 (2026-08-04 발행 2편 중 1편이 598자/장).
+   * **게이트가 매번 우는 상태는 진짜 이상 신호를 덮는다.**
+   *
+   * 9장이면 2800~3600자가 311~400자/장으로 규격 안에 들어온다. 참고 글 실측(249)
+   * 쪽으로 가는 방향이기도 하다. 범위를 넓히는 것은 증상 대응이었다.
+   *
+   * 공급: 원문 기사 사진 4~5장 + 위키미디어 인물 사진 5장이 후보다. 모자란 자리는
+   * 그라디언트가 되므로, 이 값을 더 올리기 전에 공급을 먼저 봐야 한다.
+   */
+  bodyImageDelta: 3,
   rules: ['engagementRules', 'readabilityRules', 'calloutRules', 'legalDisputeRules', 'imageBriefRules'],
   voices: [], voicePin: '',
   sections: ['자유'],

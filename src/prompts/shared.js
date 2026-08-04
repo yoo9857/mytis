@@ -189,11 +189,19 @@ export function legalDisputeRules() {
  *   그 상한을 넘겨야 한다. 안 그러면 8·9번째 섹션에는 사진을 못 붙인다
  *   (2026-08-03: 책 모드를 6~9 로 풀었는데 이 값이 7 로 고정돼 있었다).
  */
-export function imageBriefRules(a, bodyImages, { mode = '', maxSection = 0 } = {}) {
+export function imageBriefRules(a, bodyImages, { mode = '', maxSection = 0, noStatCard = null } = {}) {
   const lastSection = maxSection || a.sectionCount;
   const quiet = mode === 'book' || mode === 'movie';
   const printedArt = mode === 'movie' ? '포스터' : '표지';
-  const statRules = quiet
+  /* 수치 카드 금지와 **조용한 헤드라인은 다른 규칙**이다.
+   *
+   * 예전에는 `quiet` 하나가 둘을 같이 결정했다. 책·영화는 마침 둘 다여서 티가 안 났다.
+   * 드라마 회차 리캡은 **수치 카드는 금지지만 헤드라인은 조용할 이유가 없다** —
+   * 연예 블로그(classic-m) 글이고 클릭이 목록에서 갈린다.
+   * 묶어 두면 새 모드가 둘 중 하나만 원할 때 반대쪽을 끌고 온다.
+   * 기본값은 `quiet` 이라 기존 세 모드의 출력은 한 글자도 바뀌지 않는다. */
+  const hideStatCard = noStatCard === null ? quiet : noStatCard === true;
+  const statRules = hideStatCard
     ? `- **statValue / statLabel 은 항상 빈 문자열로 두세요.** 이 모드에는 수치 카드를 쓰지 않습니다.
   독자 피드백(2026-07-29): "배경이나 관련 이미지가 아니니 보기 좋지 않음". 순위·퍼센트를
   그라디언트 카드로 만들면 광고처럼 보입니다. 수치는 본문과 표가 이미 말합니다.`

@@ -1,5 +1,5 @@
 import { todayStr } from './paths.js';
-import { MODE, pickVoice } from './mode.js';
+import { MODE, pickVoice, bodyImageCount } from './mode.js';
 /* 모드를 가리지 않는 규칙은 src/prompts/shared.js 한 곳에만 둔다.
  * 복사해 두면 다른 모드에서 같은 실패가 반드시 재발한다. */
 import {
@@ -28,7 +28,7 @@ export function buildClipPrompt({ clip, cfg, today = new Date(), buzz = '' }) {
   const clipVoice = pickVoice(MODE.CLIP, String(clip?.videoId || clip?.title || ''), cfg);
   const a = cfg.article;
   const dateStr = todayStr(today);
-  const bodyImages = cfg.images.enabled ? cfg.images.bodyImages : 0;
+  const bodyImages = bodyImageCount(MODE.CLIP, cfg);
   const upload = clip.uploadDate
     ? `${clip.uploadDate.slice(0, 4)}-${clip.uploadDate.slice(4, 6)}-${clip.uploadDate.slice(6, 8)}`
     : '(미상)';
@@ -408,7 +408,7 @@ ${imageBriefRules(a, bodyImages)}
 export function buildNewsPrompt({ url, cfg, today = new Date(), source = null }) {
   const a = cfg.article;
   const dateStr = todayStr(today);
-  const bodyImages = cfg.images.enabled ? cfg.images.bodyImages : 0;
+  const bodyImages = bodyImageCount(MODE.NEWS, cfg);
 
   // 본문을 미리 뽑아 왔으면 프롬프트에 실어 보낸다 (codex 는 샌드박스라 URL 을 직접 못 받는다)
   const sourceBlock = source?.text
@@ -616,11 +616,12 @@ ${imageBriefRules(a, bodyImages)}
  * 규칙이 가장 자주 바뀌는 모드라 모드 선언과 나란히 두는 편이 낫다. */
 export { buildBookPrompt } from './prompts/book.js';
 export { buildEconPrompt } from './prompts/econ.js';
+export { buildDramaPrompt } from './prompts/drama.js';
 
 export function buildMoviePrompt({ topic, cfg, today = new Date(), spoiler = true }) {
   const a = cfg.article;
   const dateStr = todayStr(today);
-  const bodyImages = cfg.images.enabled ? cfg.images.bodyImages : 0;
+  const bodyImages = bodyImageCount(MODE.MOVIE, cfg);
   const movie = String(topic).replace(/^영화\s*:\s*/, '').trim();
   /* 목소리는 작품이 정한다. 고정은 config.json 의 article.movieVoice. */
   const voice = pickVoice(MODE.MOVIE, movie, cfg);
@@ -908,7 +909,7 @@ export function buildArticlePrompt({ topic, cfg, today = new Date() }) {
   const a = cfg.article;
   const dateStr = todayStr(today);
   const year = today.getFullYear();
-  const bodyImages = cfg.images.enabled ? cfg.images.bodyImages : 0;
+  const bodyImages = bodyImageCount(MODE.TOPIC, cfg);
 
   return `당신은 한국어 블로그 콘텐츠 전략가이자 전문 작가입니다.
 아래 주제로 티스토리 블로그에 바로 발행할 글 한 편을 완성하세요.

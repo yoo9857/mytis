@@ -49,6 +49,8 @@ export default {
     allowTables: false,           // 이야기 흐름을 끊는다
   },
   schemaFile: 'article.schema.json',
+  /* 사진 수는 장면 캡처가 정한다 — movie.js 와 같은 이유로 여기 값은 쓰이지 않는다. */
+  bodyImageDelta: 0,
   rules: ['readabilityRules', 'calloutRules', 'legalDisputeRules', 'imageBriefRules'],
   voices: VOICES,
   voicePin: 'clipVoice',

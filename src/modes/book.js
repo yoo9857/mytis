@@ -49,6 +49,11 @@ export default {
     allowTables: true,            // 서지 정보가 표의 정석
   },
   schemaFile: 'book.schema.json',
+  /* 지시문은 +4(9개)를 요청하는데 codexWriter 가 심는 값은 **+2** 였다 — 주석까지
+   * "프롬프트(bodyImages+2)" 라고 적혀 있었다. 지시문이 나중에 +4 로 바뀌었고
+   * 그 줄은 따라가지 않았다. 브리프 2개가 잘려 뒤쪽 절의 사진이 사라졌다.
+   * 10장이면 2850~3600자가 285~360자/장으로 규격 [260,420] 안이다. */
+  bodyImageDelta: 4,
   rules: ['readabilityRules', 'calloutRules', 'imageBriefRules'],
   voices: VOICES,
   voicePin: 'bookVoice',

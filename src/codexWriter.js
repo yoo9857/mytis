@@ -10,8 +10,9 @@ import {
   buildBookPrompt,
   buildMoviePrompt,
   buildEconPrompt,
+  buildDramaPrompt,
 } from './prompt.js';
-import { MODE, MODE_LABEL, MODES, detectMode, resolveMode, can } from './mode.js';
+import { MODE, MODE_LABEL, MODES, detectMode, resolveMode, can, bodyImageCount } from './mode.js';
 
 /** 주제 문자열이 기사 URL 인지 판별한다. */
 export function isUrl(text) {
@@ -532,6 +533,7 @@ export async function writeArticle({ topic, cfg }) {
       else if (mode === MODE.ECON) prompt = buildEconPrompt({ topic, cfg });
       else if (mode === MODE.BOOK) prompt = buildBookPrompt({ topic, cfg });
       else if (mode === MODE.MOVIE) prompt = buildMoviePrompt({ topic, cfg, spoiler: cfg.movie?.spoiler !== false });
+      else if (mode === MODE.DRAMA) prompt = buildDramaPrompt({ topic, cfg });
       else if (mode === MODE.NEWS) prompt = buildNewsPrompt({ url: topic, cfg, source });
       else prompt = buildArticlePrompt({ topic, cfg });
       if (attempt > 1 && lastErr) {
@@ -556,8 +558,18 @@ export async function writeArticle({ topic, cfg }) {
        * mode.js 로 판단을 한곳에 모은 뒤에도 **값을 심는 것을 빼먹으면** 같은
        * 사고가 난다. 새 모드를 추가할 때 이 줄을 잊지 마세요. */
       article.mode = mode;
-      // 책 글은 사진이 많아야 한다 — 프롬프트(bodyImages+2)와 렌더 수를 맞춘다
-      if (mode === MODE.BOOK) article.bodyImageCount = cfg.images.bodyImages + 2;
+      /* 렌더할 본문 사진 수를 심는다 — **지시문이 요청한 수와 같은 값**이다.
+       *
+       * 예전에는 이 줄이 **책 모드에만** 있었고 값도 `+2` 였다. 지시문은 그 사이
+       * `+4` 로 바뀌었고(주석은 "+2" 로 남아 있었다) 경제 모드는 `+2` 를 요청하는데
+       * 심는 줄이 아예 없었다. 그래서 `images.js` 가 앞에서부터 slice 하며
+       * **뒤쪽 브리프를 버렸다** — 사라지는 것은 마지막 절의 사진이다.
+       * 게이트는 사진 총수만 세므로 이것을 보지 못했다 (2026-08-04 발각).
+       *
+       * 이제 값은 모드 선언(`bodyImageDelta`) 한 곳에 있다.
+       * 영상·영화 모드는 뒤이어 `run.js: applyClipShotLayout` 이 실제 캡처 수로
+       * 덮어쓴다 — 그 모드의 사진 수는 장면이 정한다. */
+      article.bodyImageCount = bodyImageCount(mode, cfg);
 
       // 영상 소재 글: 지어낸 타임스탬프를 실제 자막 시각으로 스냅하고,
       // 자막에 없는 지점은 0(처음부터)으로 되돌린다.

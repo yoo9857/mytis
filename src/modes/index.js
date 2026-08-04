@@ -59,6 +59,39 @@ export function ruleOn(modeId, rule) {
   return (MODES[modeId]?.rules || []).includes(rule);
 }
 
+/**
+ * 이 모드가 쓸 **본문 사진 수** — 지시문과 렌더가 같은 값을 본다.
+ *
+ * ## 왜 필요했나
+ *
+ * 숫자가 두 곳에 따로 적혀 있었다. 지시문은 모드마다 `cfg.images.bodyImages + N`
+ * 을 손으로 더했고(책 +4 · 경제 +2), 실제로 그리는 쪽(`images.js`)은
+ * `article.bodyImageCount ?? cfg.images.bodyImages` 를 봤다. 그 값을 심는 곳은
+ * `codexWriter.js` 의 **책 모드 한 줄**뿐이었고, 그것도 `+2` 였다.
+ *
+ * > 2026-08-04 실측 — 브리프가 조용히 잘려 나가고 있었다:
+ * >   책  지시문 9개 요청 → 7개 렌더 (2개 버림, 주석은 아직 "+2" 라고 적혀 있었다)
+ * >   경제 지시문 7개 요청 → 5개 렌더 (2개 버림)
+ * > 잘리는 것은 **뒤쪽 브리프**다. `images.js` 가 앞에서부터 slice 하므로
+ * > afterSection 이 큰 브리프가 사라진다 — **뒤쪽 절의 사진이 통째로 없어진다.**
+ * > 게이트는 사진 **총수**만 세므로 이것을 보지 못했다.
+ *
+ * 그래서 델타를 모드 선언으로 옮겼다. 모드에 관한 사실은 모드 파일에 있어야 한다.
+ *
+ * ⚠️ 이 값을 올리면 **사진 공급도 그만큼 필요하다.** 못 채운 자리는 빈 그라디언트
+ * 카드가 되고, 그건 브리프 수만 채운 채 게이트를 통과하는 더 나쁜 상태다
+ * (movie.js 의 photos 주석과 같은 경고). 올린 뒤에는 실제 초안으로 확인한다.
+ *
+ * 영상·영화 모드는 장면 캡처 수가 사진 수를 정하므로 여기 값을 쓰지 않는다 —
+ * `run.js: applyClipShotLayout` 이 나중에 `article.bodyImageCount` 를 덮어쓴다.
+ */
+export function bodyImageCount(modeId, cfg) {
+  if (!cfg?.images?.enabled) return 0;
+  const base = Number(cfg.images.bodyImages) || 0;
+  const delta = Number(MODES[modeId]?.bodyImageDelta) || 0;
+  return Math.max(0, base + delta);
+}
+
 /** 이 모드에서 해당 단계를 해도 되는가. 모르는 모드는 가장 보수적으로 본다. */
 export function can(modeId, capability) {
   const caps = CAPABILITIES[modeId] || CAPABILITIES[MODE.TOPIC];
@@ -145,7 +178,10 @@ export function lintModes({ buildPrompt, cfg, articleKeys }) {
     if (c.titleInHeading === 'forbid' && !/소제목마다 반복하지 마세요|소제목에 .*반복하지/.test(prompt)) {
       problems.push(`${m.label}: conflicts.titleInHeading=forbid 인데 "소제목에 제목 반복 금지" 지시가 없습니다`);
     }
-    if (c.titleInHeading === 'require' && !/소제목에 \*\*영화 제목을 넣으세요\*\*|소제목에 .*제목을 넣/.test(prompt)) {
+    /* "소제목에" 로만 찾으면 **조사 하나에 걸린다.** 드라마 모드는 "소제목마다 …
+     * 넣으세요" 로 썼고(더 자연스럽다) 검사는 지시가 있는데도 없다고 말했다.
+     * 산문 규칙의 존재를 세는 검사이므로 표현의 폭을 조금 허용한다. */
+    if (c.titleInHeading === 'require' && !/소제목(에|마다)\s*.*제목을 넣|소제목(에|마다)\s*.*(작품명|제목)[^.]*넣으세요/.test(prompt)) {
       problems.push(`${m.label}: conflicts.titleInHeading=require 인데 "소제목에 제목을 넣으라" 지시가 없습니다`);
     }
     if (c.statCard === 'forbid' && !/statValue \/ statLabel 은 항상 빈 문자열/.test(prompt)) {

@@ -65,6 +65,10 @@ export default {
     allowTables: true,
   },
   schemaFile: 'econ.schema.json',
+  /* 지시문이 이미 +2 를 요청하고 있었는데 렌더는 5장이라 **뒤쪽 브리프 2개가 조용히
+   * 잘려 나갔다** (2026-08-04 발각 — 뒤쪽 절의 사진이 사라진다). 선언으로 맞춘다.
+   * 8장이면 2600~4000자가 325~500자/장으로 규격 [320,1000] 안이다. */
+  bodyImageDelta: 2,
   rules: ['readabilityRules', 'calloutRules', 'imageBriefRules'],
   voices: VOICES,
   voicePin: 'econVoice',

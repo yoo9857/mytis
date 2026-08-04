@@ -15,15 +15,16 @@
  * ⚠️ 이 파일은 템플릿 리터럴이다. 본문에 백틱을 쓰면 파일이 깨진다.
  */
 import { todayStr } from '../paths.js';
-import { MODE, pickVoice } from '../mode.js';
+import { MODE, pickVoice, bodyImageCount } from '../mode.js';
 import { readabilityRules, calloutRules, imageBriefRules } from './shared.js';
 
 export function buildEconPrompt({ topic, cfg, today = new Date() }) {
   const a = cfg.article;
   const dateStr = todayStr(today);
-  /* 경제 글의 사진은 주인공이 아니다. 연예 글(+2)·책 글(+4)과 달리 기본값을 쓴다.
-   * 사진을 늘리면 표와 수치 사이에 장식이 끼어 읽는 흐름이 끊긴다. */
-  const bodyImages = cfg.images.enabled ? cfg.images.bodyImages + 2 : 0;
+  /* 사진 수는 **모드 선언(modes/econ.js: bodyImageDelta)** 이 갖는다.
+   * 여기서 손으로 더하던 +2 가 렌더 쪽(images.js)에는 심어지지 않아 브리프 2개가
+   * 조용히 잘려 나갔다 — 잘리는 것은 뒤쪽이라 마지막 절의 사진이 사라졌다. */
+  const bodyImages = bodyImageCount(MODE.ECON, cfg);
   // "경제: 연금저축 세액공제 한도" → 주제 부분만
   const subject = String(topic).replace(/^경제\s*:\s*/, '').trim();
   /* 목소리는 **주제가** 정한다 — 같은 주제는 재생성해도 같은 목소리라야 검토를 반복할 수 있다.

@@ -77,6 +77,9 @@ export default {
     allowTables: true,            // 개요·감독·출연·상영시간
   },
   schemaFile: 'movie.schema.json',
+  /* 사진 수는 예고편 캡처가 정한다 — run.js 의 applyClipShotLayout 이
+   * article.bodyImageCount 를 실제 캡처 수로 덮어쓴다. 여기 값은 쓰이지 않는다. */
+  bodyImageDelta: 0,
   rules: ['readabilityRules', 'calloutRules', 'legalDisputeRules', 'imageBriefRules'],
   voices: VOICES,
   voicePin: 'movieVoice',

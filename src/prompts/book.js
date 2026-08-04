@@ -16,7 +16,7 @@
  * > 모델이 8개에서 멈추고 매번 경고가 찍혔다.
  */
 import { todayStr } from '../paths.js';
-import { MODE, pickVoice } from '../mode.js';
+import { MODE, pickVoice, bodyImageCount } from '../mode.js';
 import { readabilityRules, calloutRules, imageBriefRules } from './shared.js';
 
 export function buildBookPrompt({ topic, cfg, today = new Date() }) {
@@ -29,7 +29,11 @@ export function buildBookPrompt({ topic, cfg, today = new Date() }) {
    * 2,850~3,600자 전 구간이 285~360자/장으로 들어온다 (참고 글 실측 249~330).
    * 공급도 된다: 서점 미리보기가 한 책에 수십 쪽씩 있다 (2026-08-03, 세네카 37쪽).
    * 채울 것이 없으면 브리프를 줄이라고 아래에 적어 두었다 — 규격 하한은 6장이다. */
-  const bodyImages = cfg.images.enabled ? cfg.images.bodyImages + 4 : 0;
+  /* 값은 **모드 선언(modes/book.js: bodyImageDelta)** 이 갖는다.
+   * 여기서 손으로 더한 +4 는 렌더 쪽에 심어지지 않았다 — codexWriter 가 심는 값은
+   * +2 였고 주석도 "+2" 라고 적혀 있었다. 위 계산("+4 면 최대 10장")이 의도였는데
+   * 실제로는 8장이 실렸고, 잘린 브리프 2개는 뒤쪽 절의 사진이었다 (2026-08-04). */
+  const bodyImages = bodyImageCount(MODE.BOOK, cfg);
   // "책: 투명한 나선 — 히가시노 게이고 (북다)" → 제목 부분만
   const book = String(topic).replace(/^책\s*:\s*/, '').trim();
   /* 목소리는 **책이** 정한다 — 같은 책은 재생성해도 같은 목소리라야 검토를 반복할 수 있다.

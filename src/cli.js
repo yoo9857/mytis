@@ -640,6 +640,7 @@ async function cmdDoctor(cfg) {
       buildBookPrompt,
       buildMoviePrompt,
       buildEconPrompt,
+      buildDramaPrompt,
     } = await import('./prompt.js');
     /* ⚠️ 여기와 codexWriter.js 의 라우팅은 **한 쌍이다.** 한쪽만 고치면 doctor 가
      * 엉뚱한 지시문으로 대조해서, 규칙이 다 들어 있는 모드를 틀렸다고 말한다.
@@ -651,6 +652,7 @@ async function cmdDoctor(cfg) {
       if (id === MODE.BOOK) return buildBookPrompt({ topic: '책: 제목 — 저자', cfg });
       if (id === MODE.MOVIE) return buildMoviePrompt({ topic: '영화: 제목 (감독)', cfg });
       if (id === MODE.ECON) return buildEconPrompt({ topic: '경제: 주제', cfg });
+      if (id === MODE.DRAMA) return buildDramaPrompt({ topic: '드라마: 제목 4회', cfg });
       return buildArticlePrompt({ topic: '주제', cfg });
     };
     /* 스키마 required 와 아티클 실제 모양을 함께 대조한다 — codexWriter 를
@@ -702,10 +704,24 @@ async function cmdDoctor(cfg) {
 
   log.info(
     `설정: 공개=${cfg.blog.visibility} · 카테고리=${cfg.blog.category || '(미지정)'} · ` +
-      `이미지=${cfg.images.enabled ? `대표+본문${cfg.images.bodyImages}` : '없음'} · ` +
+      `이미지=${cfg.images.enabled ? `기본 대표+본문${cfg.images.bodyImages}` : '없음'} · ` +
       `배경=${cfg.images.background === 'photo' ? '실사 사진' : '그라디언트'} · ` +
       `검색=${cfg.codex.search ? 'ON' : 'OFF'}`
   );
+  /* 사진 수는 **모드마다 다르다.** 위 줄만 찍으면 "본문 5" 로 읽히는데 기사 글은
+   * 8장을 쓴다. 값이 한 곳(모드 선언의 bodyImageDelta)에서 나오게 만든 뒤에도
+   * 화면이 옛 숫자를 말하면 다음 사람이 그 숫자를 믿는다. */
+  if (cfg.images.enabled) {
+    const { ACTIVE, bodyImageCount } = await import('./mode.js');
+    log.info(
+      '모드별 사진: ' +
+        ACTIVE.map((m) => {
+          const n = bodyImageCount(m.id, cfg);
+          const byShots = m.capabilities?.clipShots ? '(장면 캡처가 정한다)' : `${n + 1}장`;
+          return `${m.label} ${byShots}`;
+        }).join(' · ')
+    );
+  }
   if (cfg.images.enabled && cfg.images.background === 'photo') {
     if (cfg.secrets.pexelsApiKey) log.ok('배경 사진: Pexels API 사용 (빠름·정확)');
     else log.info('배경 사진: codex 웹 검색 사용 — PEXELS_API_KEY 를 넣으면 더 빠르고 정확합니다.');

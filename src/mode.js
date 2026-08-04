@@ -29,6 +29,7 @@ export {
   resolveMode,
   can,
   ruleOn,
+  bodyImageCount,
   pickVoice,
   lintModes,
   platformOk,
