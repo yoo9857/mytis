@@ -256,19 +256,35 @@ function applyClipShotLayout(article, cfg, scenes, shots) {
    * 사진을 많이 쓰는 글에서 한 장씩 세우면 글이 끝없이 길어진다 —
    * 리듬으로 묶으면 같은 장수로도 글이 짧고 보기 좋아진다 (사용자 요구 2026-08-01). */
   const RHYTHM = [1, 2, 2, 1];
-  const placed = [];
+  const groups = [];
   {
     let i = 0;
-    let sec = 1;
     let r = 0;
     while (i < body.length) {
       const take = Math.min(RHYTHM[r % RHYTHM.length], body.length - i);
-      for (let k = 0; k < take; k++) placed.push({ ...body[i + k], at: Math.min(sectionCount, sec) });
+      groups.push(body.slice(i, i + take));
       i += take;
-      sec++;
       r++;
     }
   }
+
+  /* 묶음을 섹션에 **고르게** 나눈다.
+   *
+   * 예전에는 묶음 하나에 섹션 하나를 썼다(묶음마다 sec++). 묶음이 섹션보다 많으면
+   * `Math.min(sectionCount, sec)` 이 남은 묶음을 전부 **마지막 섹션에 쏟았다.**
+   *
+   * > 2026-08-04 실측 — 사랑이 온다 4화: 캡처 18장(본문 17)에 섹션 7개.
+   * >   묶음 11개 중 5개가 7번으로 몰려 마지막 절 하나에 사진 8장이 붙었고,
+   * >   6:45~10:14 장면이 전혀 다른 대목("뒤따른 사람의 오해") 아래로 들어갔다.
+   *
+   * `photoDensity` 는 글 전체 평균이라 이 몰림을 잡지 못한다 — 그 글은 규격을
+   * 통과했다. 묶음 수를 섹션 수로 나눠 배분하면 장면이 섹션보다 훨씬 많아도
+   * 고르게 퍼지고, body 가 시간순이므로 순서도 그대로 유지된다. */
+  const placed = [];
+  groups.forEach((g, gi) => {
+    const at = Math.min(sectionCount, 1 + Math.floor((gi * sectionCount) / groups.length));
+    for (const s of g) placed.push({ ...s, at });
+  });
 
   /* 대표 이미지 헤드라인은 codex 가 쓴 것을 그대로 쓴다.
    *

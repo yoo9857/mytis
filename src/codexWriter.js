@@ -266,6 +266,22 @@ function normalizeArticle(raw, { topic, cfg, mode = '' }) {
       startSeconds: Number.isFinite(e?.startSeconds) ? Math.max(0, Number(e.startSeconds)) : 0,
       quote: str(e?.quote),
       caption: str(e?.caption),
+      /* 영상 모드의 **장면 판정 세 필드.** 스키마가 required 로 요구하고 지시문이
+       * 요청하는데 여기 한 줄이 없어 **조용히 버려지고 있었다** — CLAUDE.md 가
+       * 경고한 그 고장이다. `doctor` 는 아티클 **최상위** 키만 대조하므로
+       * embeds 안쪽은 보지 못했다 (§7-15).
+       *
+       * > 2026-08-04 발각 — 이 셋이 비어서 죽어 있던 경로 3개:
+       * >  ① speaker  → `pickScenes` 의 대표 장면 승격이 **한 번도 작동하지 않았다.**
+       * >     "…말하는 장면이 없어 대표 사진에 주인공이 안 나올 수 있습니다" 경고가
+       * >     주인공이 실제로 말하는 글에서도 **매번** 찍혔다.
+       * >  ② isStudio → 스튜디오 컷 제외 필터가 아무것도 걸러내지 못했다.
+       * >  ③ isHook   → 대표 후보 pool 이 늘 전체가 되어, "의미 판단은 AI(isHook),
+       * >     화면 검증은 코드(얼굴 크기)" 설계가 **얼굴 크기 하나로** 주그러졌다.
+       * >     지시문은 isHook 설명에 16줄을 쓰고 있었다. */
+      speaker: str(e?.speaker),
+      isStudio: e?.isStudio === true,
+      isHook: e?.isHook === true,
     }))
     .filter((e) => /^[A-Za-z0-9_-]{11}$/.test(e.videoId));
 
