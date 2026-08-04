@@ -801,7 +801,7 @@ export async function clickPublish(page, urls) {
     log.info(`"${label}" 클릭. 결과를 확인합니다...`);
 
     // 발행되면 글쓰기 화면을 벗어난다
-    const deadline = Date.now() + 60_000;
+    let deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
       await sleep(page, 1500);
       /* **캡차를 먼저 본다.** 티스토리는 연속 발행을 스팸으로 보고 지도 캡차를
@@ -812,17 +812,53 @@ export async function clickPublish(page, urls) {
        * >   떴다("지도에서 아래 장소를 찾아 빈칸에 들어갈 글자를 입력해주세요").
        * >   두 번 시도해 두 번 같았고, 스크린샷을 열어 보기 전까지 원인을 몰랐다.
        *
-       * 캡차는 사람이 풀어야 한다 — 코드가 할 수 있는 일은 **정확히 알리고 멈추는 것**이다. */
+       * 캡차는 사람이 풀어야 한다 — 코드가 할 수 있는 일은 **정확히 알리고 멈추는 것**이다.
+       *
+       * ⚠️ 다만 `--show` 로 창이 떠 있으면 사람이 **그 자리에서 풀 수 있다.** 예전에는
+       * 캡차를 보자마자 종료해서 창이 2초 만에 닫혔고, 그래서 `--show` 안내가 사실상
+       * 쓸모가 없었다 (2026-08-05 실측 — 같은 글을 두 번 시도해 두 번 다 그렇게 끝났다).
+       * `MONEYTI_CAPTCHA_WAIT=<초>` 를 주면 그만큼 기다린다. 기본은 0 — **무인 실행에서
+       * 창 없이 기다리면 아무도 풀지 못하고 시간만 태우므로** 옵트인으로 둔다. */
       const captcha = await hasCaptcha(page);
       if (captcha) {
         await shot(page, 'publish-captcha');
+        const waitSec = Math.min(900, Number(process.env.MONEYTI_CAPTCHA_WAIT) || 0);
+        if (waitSec > 0) {
+          log.warn(
+            `캡차가 떴습니다 (연속 발행 제한). **브라우저 창에서 직접 풀어 주세요** — ` +
+              `최대 ${waitSec}초 기다립니다. 풀면 발행이 이어집니다.`
+          );
+          const until = Date.now() + waitSec * 1000;
+          let solved = false;
+          while (Date.now() < until) {
+            await sleep(page, 2000);
+            /* 사람이 풀고 발행까지 완료되면 화면이 먼저 바뀔 수 있다 — 그걸 먼저 본다. */
+            const u = page.url();
+            if (!u.includes('/manage/newpost')) {
+              log.ok(`글쓰기 화면을 벗어났습니다 → ${u}`);
+              return { ok: true, url: u };
+            }
+            if (!(await hasCaptcha(page))) {
+              solved = true;
+              break;
+            }
+          }
+          if (solved) {
+            /* 사람이 쓴 시간만큼 발행 대기를 다시 준다. 안 늘리면 바깥 루프가
+             * 이미 만료돼 "화면을 벗어나지 않았습니다" 로 잘못 끝난다. */
+            deadline = Date.now() + 60_000;
+            log.ok('캡차가 사라졌습니다 — 발행 결과를 다시 확인합니다.');
+            continue;
+          }
+        }
         return {
           ok: false,
           url: page.url(),
           captcha: true,
           reason:
             '티스토리가 캡차를 요구합니다 (연속 발행 제한). 사람이 풀어야 합니다 — ' +
-            '브라우저를 띄운 채 `--show` 로 다시 실행해 캡차를 풀거나, 시간을 두고 재시도하세요.',
+            '`--show` 와 함께 `MONEYTI_CAPTCHA_WAIT=180` 을 주면 그 시간 안에 직접 풀 수 있습니다. ' +
+            '무인 실행이라면 시간을 두고 재시도하세요.',
         };
       }
       const url = page.url();
