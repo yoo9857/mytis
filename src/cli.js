@@ -99,6 +99,8 @@ function parseArgs(argv) {
     if (a === '--headless') flags.headless = true;
     else if (a === '--show') flags.headless = false;
     else if (a === '--no-publish') flags.noPublish = true;
+    // 발행 간격을 무시하고 즉시 발행 (캡차가 뜰 수 있다 — pace.js 참고)
+    else if (a === '--now') flags.now = true;
     else if (a === '--verbose' || a === '-v') flags.verbose = true;
     else if (a === '--count') flags.count = Number(argv[++i]) || 1;
     else if (a.startsWith('--count=')) flags.count = Number(a.split('=')[1]) || 1;
@@ -493,6 +495,26 @@ async function cmdPublishFile(cfg, file, flags = {}) {
   }));
   const credits = ordered.map((i) => i.background).filter((b) => b && (b.photographer || b.credit));
 
+  /* 연속 발행 캡차를 **만나지 않게** 간격을 지킨다.
+   *
+   * 티스토리는 짧은 간격의 발행을 스팸으로 보고 지도 캡차를 띄운다. 캡차는 사람이
+   * 풀어야 하므로 무인 실행이 그 자리에서 끊긴다 (2026-08-05: 4연속 시도 4번 발생).
+   * 간격이 모자라면 즉시 발행을 포기하고 **예약 발행**으로 돌린다 — 티스토리 기능이라
+   * 캡차와 무관하다. `--now` 로 강제할 수 있다. */
+  const { applyPacing, recordPublish } = await import('./pace.js');
+  /* ⚠️ 간격은 **플랫폼별로** 본다.
+   *
+   * 처음에는 티스토리 기록 하나로 판단했다. 그래서 티스토리에 올린 직후 네이버에
+   * 올리려 하면 네이버 발행이 예약으로 밀렸다 — 두 곳은 캡차 정책이 다르고 기록도
+   * 따로여야 한다 (2026-08-05 실측: 명상록 네이버 발행이 티스토리 기록 35분 때문에
+   * 11분 예약으로 바뀌었다).
+   *
+   * 캡차가 실제로 확인된 곳은 티스토리뿐이므로, 네이버에는 간격을 걸지 않는다.
+   * 네이버에서도 같은 현상이 실측되면 그때 `minPublishGapMinutes` 를 플랫폼별로 나눈다. */
+  if (platforms.includes('tistory')) {
+    applyPacing(cfg, 'tistory', cfg.blog.name, { force: flags.now === true });
+  }
+
   const results = {};
   for (const platform of platforms) {
     if (platform === 'tistory') {
@@ -509,6 +531,8 @@ async function cmdPublishFile(cfg, file, flags = {}) {
 
   for (const [platform, r] of Object.entries(results)) {
     log.ok(`${PLATFORM_LABEL[platform]} 발행 완료: ${r.postUrl || r.url}`);
+    // 다음 발행의 간격 계산 근거 — 성공한 것만 기록한다
+    if (platform === 'tistory') recordPublish('tistory', cfg.blog.name);
   }
 
   /* 책 발행 성공 → books.done.txt 의 해당 줄에 주소를 기록한다.

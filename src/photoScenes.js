@@ -148,3 +148,45 @@ export function isHousingArticle(article) {
     .join(' ');
   return /전세|월세|전월세|임대차|청약|아파트|주택|매매|이사|입주|분양|주담대|주택담보/.test(hay);
 }
+
+/**
+ * 자녀·육아를 다루는 글의 장면.
+ *
+ * 왜 따로 두는가: 경제 글의 사진 자리는 모델의 `photoQuery` 를 뼈대로 쓰는데,
+ * 한도·요건·신청처럼 추상적인 주제에서는 그 값이 **늘 같은 사물**로 수렴한다 —
+ * 계산기, 노트와 펜, 노트북, 책상 플랫레이. 글과 아무 상관이 없다.
+ *
+ * > 2026-08-05 실측 — 보육수당 비과세 글: 스톡 4장이 노트·펜·안경, 계산기
+ * >   플랫레이, 미국 변호사 사무실이었다. 이미지 생성 프롬프트를 뽑아 보니
+ * >   `calculator notebook desk` · `blank paper pen desk` 로 **같은 그림**을
+ * >   다시 만들게 되어 있었다 (생성 소스만 바뀌고 결과는 그대로).
+ *
+ * 자녀 혜택 글에서 독자가 자기 삶을 얹는 그림은 사물이 아니라 **아이의 흔적**이다.
+ * 사람·얼굴은 넣지 않는다 (초상권·광고 느낌 — interiorScene 과 같은 이유).
+ */
+const CHILD_SCENES = [
+  'a pair of very small child shoes placed neatly by the entrance of a Korean home',
+  'two pairs of small child shoes side by side on a wooden floor',
+  'pencil height marks on a door frame in a family home',
+  'a small wooden high chair beside a sunlit window',
+  'a child drawing held on a refrigerator door by a magnet',
+  'a small backpack and a water bottle waiting by the front door',
+  'folded tiny laundry stacked on a bed in soft daylight',
+  'a low table with crayons scattered beside a half-finished drawing',
+];
+
+/** 이 글이 **자녀·육아를 다루는 글**인가 (판정 근거는 제목·키워드·태그로 좁힌다) */
+export function isChildArticle(article) {
+  const hay = [article?.title, article?.primaryKeyword, ...(article?.tags || [])]
+    .filter(Boolean)
+    .join(' ');
+  return /자녀|아이|육아|보육|출산|양육|어린이|유아|아동|다자녀|임신/.test(hay);
+}
+
+/** 자녀 글의 장면 하나 — 같은 해시 방식이라 글마다 다른 컷이 나온다 */
+export function childScene(seed) {
+  const h = hash(seed);
+  return [pick(CHILD_SCENES, h, 6), pick(LIGHT, h, 4), pick(MOOD, h, 5), 'no people, real photograph'].join(
+    ', '
+  );
+}

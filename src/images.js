@@ -376,6 +376,34 @@ export async function renderImages(article, cfg) {
     log.warn(`배경 사진 확보 실패: ${err.message} — 그라디언트로 진행합니다.`);
   }
 
+  /* **그라디언트 카드를 만들지 않는다 (사용자 지시 2026-08-05).**
+   *
+   * 사진을 못 구한 슬롯은 예전에 그라디언트 배경 카드로 렌더했다. 그런데 그것은
+   * 글에 아무것도 보태지 않으면서 업로드·렌더 자원을 쓰고, 독자에게는 빈 색면이다.
+   * 무관한 스톡으로 채우는 것도 금지다(그쪽은 흥미를 죽인다).
+   *
+   * → 남는 답은 **사진이 있는 만큼만 카드를 만드는 것**이다. 슬롯을 지우고
+   *   `targets` 를 실제 사진 수에 맞춘다. 사진이 4장이면 카드도 4장이다.
+   *
+   * 대표 이미지(슬롯 0)는 예외다 — 제목이 얹히는 카드라 없으면 글의 얼굴이 사라진다.
+   * 대표에 쓸 사진이 없으면 그 자리만 그라디언트를 허용한다.
+   */
+  if (cfg.images.gradientFill !== true) {
+    const keep = targets
+      .map((t, i) => ({ t, bg: backgrounds[i], i }))
+      .filter((x) => x.bg || x.t.placement === 'thumbnail');
+    const dropped = targets.length - keep.length;
+    if (dropped > 0) {
+      log.info(
+        `사진을 못 구한 ${dropped}칸은 카드를 만들지 않습니다 (그라디언트 대신 생략) — ` +
+          `카드 ${targets.length} → ${keep.length}장.`
+      );
+      targets.length = 0;
+      targets.push(...keep.map((x) => x.t));
+      backgrounds = keep.map((x) => x.bg);
+    }
+  }
+
   fs.mkdirSync(DIRS.images, { recursive: true });
   const palettes = cfg.images.palettes?.length
     ? cfg.images.palettes
@@ -485,9 +513,31 @@ export async function renderImages(article, cfg) {
       // 강조 수치: codex 가 준 값 우선, 없으면 본문에서 찾아본다
       let statValue = brief.statValue || '';
       let statLabel = brief.statLabel || '';
-      if (!statValue && !isThumb && cfg.images.useStats !== false) {
-        statValue = guessStat(article, brief.afterSection || i);
-        if (statValue && !statLabel) statLabel = '';
+      /* 대표 카드에는 원래 수치를 얹지 않는다 — 사진 위에 제목까지 있으면 복잡해진다.
+       *
+       * 예외: **사진이 없는 대표 카드.** 그때는 제목만 남아 색면 카드가 되고,
+       * 그건 자원만 쓰고 독자에게 아무것도 주지 않는다(사용자 지적 2026-08-05).
+       * 경제 글처럼 관련 사진 공급이 없는 모드가 여기 해당한다 — 핵심 수치를
+       * 얹으면 같은 카드가 정보를 담은 카드가 된다.
+       * 수치는 `figures`(라벨·값·출처)에서 오므로 글 내용과 어긋날 수 없다. */
+      const statAllowed = !isThumb || !bg;
+      if (!statValue && statAllowed && cfg.images.useStats !== false) {
+        /* 대표 카드에는 **`figures` 를 먼저** 쓴다.
+         *
+         * `guessStat` 은 본문에서 숫자를 주워 오므로 대표에 올릴 값이 아닌 것이
+         * 걸린다 — 실측: 보육수당 글에서 "1명" 이 뽑혔다(월 20만원이 맞는 값이다).
+         * `figures` 는 모델이 라벨·값·출처를 붙여 고른 값이라 글의 핵심 수치다. */
+        if (isThumb) {
+          const fig = (article.figures || []).find((f) => f?.value);
+          if (fig) {
+            statValue = String(fig.value);
+            if (!statLabel) statLabel = String(fig.label || '');
+          }
+        }
+        if (!statValue) {
+          statValue = guessStat(article, brief.afterSection || i);
+          if (statValue && !statLabel) statLabel = '';
+        }
       }
 
       const isPerson = !!bg?.isPerson;
@@ -510,7 +560,15 @@ export async function renderImages(article, cfg) {
         (printedOn
           ? cfg.images.thumbLayout || 'clean'
           : isThumb
-            ? cfg.images.thumbLayout || 'clean'
+            /* 사진이 없는 대표는 `clean` 을 쓰지 않는다.
+             *
+             * `clean` 은 **사진 전용 연출**이다 — 제목만 얹고 수치·라벨을 일부러
+             * 뺐다(사진 위 요소를 줄이려고). 그래서 사진이 없으면 색면에 제목
+             * 한 줄만 남아 아무 정보도 주지 않는다.
+             * 수치를 표시하는 `editorial` 로 바꿔 핵심 숫자를 얹는다. */
+            ? bg
+              ? cfg.images.thumbLayout || 'clean'
+              : 'editorial'
             : pickLayout({
                 title: article.title,
                 slot: i,

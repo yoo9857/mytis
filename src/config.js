@@ -50,6 +50,14 @@ const DEFAULTS = {
     acceptComment: true,
     publishMode: 'now',
     reserveAfterMinutes: 10,
+    /* 발행 후 이 시간을 두고 **한 번 더** 공개 여부를 본다 (0 이면 끔).
+     * 티스토리는 연속 발행을 스팸으로 보면 이미 올라간 글을 뒤에 내린다 —
+     * 직후 200 만 보고 성공을 선언하면 "발행 완료" 가 거짓이 된다 (§ tistory.js). */
+    verifySettleMs: 25_000,
+    /* 직전 발행에서 이 시간이 지나지 않으면 **예약 발행로 돌린다** (pace.js).
+     * 티스토리 연속 발행 캡차를 만나지 않기 위한 값이다 — 0 이면 끔.
+     * 2026-08-05 실측: 한 시간 안 4연속 시도에서 4번 모두 캡차가 떴다. */
+    minPublishGapMinutes: 45,
   },
   article: {
     language: 'ko',

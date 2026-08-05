@@ -341,6 +341,113 @@ async function fromOpenverse(query) {
     }));
 }
 
+/**
+ * 이미지 검색 스크랩 — **소재 자체**로 검색해 실제 그 사진을 가져온다.
+ *
+ * 왜 필요한가: 스톡 티어(Pexels·Unsplash·codex)는 슬롯 설명을 사물로 번역한다.
+ * '3주간 총 3편 순차 공개 일정' → 달력, '세금 관련 방송 발언' → 스튜디오 마이크.
+ * 글과 아무 상관이 없어서 독자가 흥미를 잃는다 (사용자 지적 2026-08-05).
+ * 빈 슬롯을 그라디언트로 두는 것도 자원 낭비라, 실제 소재 사진으로 채운다.
+ *
+ * ⚠️ **저작권**: 결과는 대개 언론사·블로그 사진이다. HANDOVER §6 의 허용 소스가
+ * 아니다. 발행자가 위험을 알고 택한 경로다 (`images.scrapeSearch: false` 로 끈다).
+ *
+ * 검색어는 **추상적 슬롯 설명을 쓰지 않는다** — 그러면 스톡과 같은 실패를 반복한다.
+ * `subjectQueries` 가 만든 제목·핵심 키워드·인물명만 쓴다.
+ *
+ * 구글이 헤드리스를 막거나 동의 화면을 띄우는 경우가 있어 빙을 폴백으로 둔다.
+ */
+async function fromSearchScrape(query, cfg) {
+  const { launchBrowser } = await import('./browser.js');
+  const ctx = await launchBrowser(cfg, { headless: true });
+  const page = await ctx.newPage();
+  const out = [];
+  try {
+    const engines = [
+      {
+        name: 'google',
+        url: 'https://www.google.com/search?udm=2&q=' + encodeURIComponent(query),
+        // 구글은 원본 주소를 스크립트 데이터의 ["url",높이,너비] 배열에 담는다.
+        pick: (html) =>
+          [...html.matchAll(/\["(https?:\/\/[^"]+?\.(?:jpe?g|png|webp))",(\d+),(\d+)\]/gi)].map(
+            (m) => ({ url: m[1].replace(/\\u003d/g, '='), h: +m[2], w: +m[3] })
+          ),
+      },
+      {
+        name: 'bing',
+        url: 'https://www.bing.com/images/search?q=' + encodeURIComponent(query),
+        // 빙은 결과마다 m 속성에 JSON 을 넣고 murl 이 원본이다.
+        pick: (html) =>
+          [...html.matchAll(/&quot;murl&quot;:&quot;(https?:\/\/[^&]+?)&quot;/gi)].map((m) => ({
+            url: m[1].replace(/\\\//g, '/'),
+            w: 1200,
+            h: 800,
+          })),
+      },
+    ];
+
+    for (const eng of engines) {
+      try {
+        await page.goto(eng.url, { waitUntil: 'domcontentloaded', timeout: 25_000 });
+        await page.waitForTimeout(1800);
+        const html = await page.content();
+        const hits = eng
+          .pick(html)
+          // 검색엔진 자체 썸네일은 저해상도라 카드 배경으로 못 쓴다.
+          .filter((x) => !/gstatic\.com|google\.com|bing\.(net|com)|windows\.net\/th\?/i.test(x.url))
+          .filter((x) => x.w >= 800 || x.h >= 800);
+        for (const x of hits.slice(0, 14)) {
+          let host = '';
+          try {
+            host = new URL(x.url).hostname.replace(/^www\./, '');
+          } catch {
+            continue;
+          }
+          out.push({
+            url: x.url,
+            source: `search/${eng.name}`,
+            pageUrl: '',
+            photographer: host, // 카드 표기는 ASCII 여야 한다
+            description: query,
+            license: 'web image',
+            trusted: true, // 도메인 화이트리스트를 우회한다 (검색 결과라 호스트가 제각각)
+          });
+        }
+        if (out.length) {
+          log.debug(`${eng.name} 이미지 후보 ${out.length}건: ${query}`);
+          break;
+        }
+      } catch (err) {
+        log.debug(`${eng.name} 이미지 검색 실패 (${query}): ${err.message.slice(0, 60)}`);
+      }
+    }
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+  return out;
+}
+
+/**
+ * 스크랩 검색에 넣을 **소재 검색어**를 만든다.
+ *
+ * 슬롯 설명(`queries[slot]`)은 쓰지 않는다 — 추상적이라 사물 사진을 부른다.
+ * 대신 글이 실제로 다루는 것만 넣는다: 핵심 키워드, 제목, 등장 인물 이름.
+ */
+function subjectQueries(article) {
+  const people = (article.entities || [])
+    .filter((e) => e && (e.type === 'person' || e.nameKo))
+    .map((e) => e.nameKo || e.nameEn)
+    .filter(Boolean);
+  const key = article.primaryKeyword || article.title || '';
+  const base = [
+    key,
+    ...people.map((p) => `${p} ${key}`.trim()),
+    ...people,
+    String(article.title || '').replace(/[,·|].*$/, '').trim(),
+  ];
+  return [...new Set(base.map((s) => s.trim()).filter((s) => s.length > 1))];
+}
+
 /** 3순위: codex 웹 검색 */
 async function fromCodex(article, queries, count, cfg) {
   const prompt = `당신은 블로그 글에 쓸 실사 사진을 찾는 이미지 리서처입니다.
@@ -370,6 +477,15 @@ ${queries.map((q, i) => `${i}. ${q}`).join('\n')}
 4. 가로가 긴 사진(landscape), 폭 1200px 이상.
 5. 사진 위에 흰 글씨를 얹습니다. 전체가 하얗게 밝은 사진보다 중간~어두운 톤이 좋습니다.
 6. forSlot 은 위 슬롯 번호에 맞추세요.
+7. **소재와 무관한 사물 클로즈업을 넣지 마세요.** 슬롯 설명이 추상적일 때
+   (일정·수치·발언·기획 배경 같은 것) 그 말을 사물로 번역하면 글과 따로 노는 사진이 됩니다.
+   금지 예: 일정/날짜 → 달력, 발언/방송 → 마이크, 조회수/분석 → 그래프·노트북 화면,
+   회의/기획 → 책상 위 문구류, 돈/세금 → 동전 더미·계산기.
+   독자는 글과 무관한 사진이 갑자기 나오면 글에 대한 흥미를 잃습니다 (사용자 지적 2026-08-05).
+8. 넣을 수 있는 것은 **글의 실제 소재와 이어지는 장면**뿐입니다 — 그 장소, 그 지역,
+   그 활동, 그 사물 자체. 예: 국도 여행 글이면 국도·시골 풍경·차창 밖.
+   해당하는 사진을 못 찾았으면 **그 슬롯은 빼세요.** 빈 자리는 그라디언트로 채워지고,
+   그것이 무관한 사진보다 낫습니다. 개수를 채우려고 아무 사물 사진을 넣지 마세요.
 
 # 출력
 파일을 만들지 말고 지정된 JSON 스키마에 맞는 JSON 객체 하나만 최종 응답으로 반환하세요.`;
@@ -834,6 +950,9 @@ export async function fetchBackgrounds(article, cfg, slots) {
   }
 
   const sourcePool = [article.sourceImage, ...(article.sourceImages || [])].filter(Boolean);
+  /* 중복 제거로 빈 자리가 생기면 아래에서 다시 부른다 (기사 사진 재충전).
+   * 원문 사진 단계가 실행되지 않는 모드에서는 그대로 null 이다. */
+  let fillFromSourceArticles = null;
   if (can(mode, 'sourcePhoto') && cfg.images.useSourcePhoto === true && sourcePool.length) {
     const publisher = article.sourcePublisher || '원문 기사';
     log.warn(
@@ -843,12 +962,27 @@ export async function fetchBackgrounds(article, cfg, slots) {
     // 사진 위 크레딧은 한글을 쓰지 않는다(카드 위 한글 표기 금지).
     // 매체 도메인은 항상 ASCII 라 그대로 쓸 수 있고, 한글 매체명은
     // 본문 하단 '이미지 출처' 목록에만 남는다.
-    let host = '';
-    try {
-      host = new URL(article.sourceUrl || sourcePool[0]).hostname.replace(/^www\.|^m\./, '');
-    } catch {
-      host = publisher;
-    }
+    const hostOf = (u) => {
+      try {
+        return new URL(u).hostname.replace(/^www\.|^m\./, '');
+      } catch {
+        return '';
+      }
+    };
+    let host = hostOf(article.sourceUrl || sourcePool[0]) || publisher;
+    /* 사진마다 실린 기사가 다르다 — 소재 기사 매체로 뭉개면 출처가 틀린다.
+     * codexWriter 가 남긴 sourceImageOrigins 로 사진별 매체를 찾고,
+     * 없으면(옛 아티클 JSON) 종전처럼 소재 기사 매체로 떨어진다. */
+    const origins = article.sourceImageOrigins || {};
+    const originOf = (url) => {
+      const o = origins[url];
+      if (!o) return { host, publisher, pageUrl: article.sourceUrl || '' };
+      return {
+        host: hostOf(o.pageUrl) || host,
+        publisher: o.publisher || publisher,
+        pageUrl: o.pageUrl || article.sourceUrl || '',
+      };
+    };
     /**
      * 더 크고 덜 압축된 원본을 먼저 시도한다.
      *
@@ -875,26 +1009,41 @@ export async function fetchBackgrounds(article, cfg, slots) {
      * 9장 중 6장이 컬처패스·신간알림 광고 배너였다. 서점 상품 페이지를 sources 에
      * 넣기 시작하면서 생긴 새 노이즈라 경로로 거른다. */
     const looksTiny = (u) => /(logo|icon|profile|badge|btn_|sprite|blank|\/img\/bn\/|banner)/i.test(u);
-    const asCandidate = (url) => ({
+    const asCandidate = (url, origin) => ({
       url,
       trusted: true, // 도메인 화이트리스트를 우회한다(원문 기사 한 곳뿐)
       source: 'source-article',
-      photographer: host, // 카드에 얹히는 표기 — ASCII
+      photographer: origin.host, // 카드에 얹히는 표기 — ASCII
       license: 'press photo',
-      pageUrl: article.sourceUrl || '',
-      description: `${publisher} 기사 사진`,
+      pageUrl: origin.pageUrl,
+      description: `${origin.publisher} 기사 사진`,
     });
 
     /* 인물 기사는 같은 사진을 반복하지 않고 **서로 다른 컷**을 쓴다.
      * tryFill 이 이미 쓴 URL 을 used 로 걸러 주므로, 슬롯마다 앞에서부터
      * 남은 후보를 넘기면 자연히 다른 사진이 들어간다. */
-    for (let slot = 0; slot < slots; slot++) {
-      if (result[slot]) continue;
-      await tryFill(
-        slot,
-        sourcePool.filter((u) => !looksTiny(u)).flatMap((u) => upgrade(u).map(asCandidate))
-      );
-    }
+    /* 나중에 **다시 부를 수 있게** 함수로 둔다.
+     *
+     * 왜: `dropVisualDupes` 는 모든 티어가 끝난 뒤 같은 사진을 지우는데, 지운 자리를
+     * 아무도 다시 채우지 않아 **그라디언트가 된다.** 후보가 남아 있는데도 그렇다.
+     *
+     * > 2026-08-05 실측 — 김우빈 '기프트' 글: 후보 16장 중 9장을 쓰고 4장이 시각
+     * > 중복으로 빠져 5/9 가 됐다. 쓰이지 않은 후보 7장은 기회를 얻지 못했다.
+     *
+     * 관련 있는 사진이 남아 있으면 그라디언트보다 그 사진이 낫다. */
+    fillFromSourceArticles = async () => {
+      for (let slot = 0; slot < slots; slot++) {
+        if (result[slot]) continue;
+        await tryFill(
+          slot,
+          sourcePool
+            .filter((u) => !looksTiny(u))
+            // 출처는 **원본 URL** 로 찾는다 — upgrade 가 만든 변형에는 기록이 없다.
+            .flatMap((u) => upgrade(u).map((v) => asCandidate(v, originOf(u))))
+        );
+      }
+    };
+    await fillFromSourceArticles();
 
     /* 대표 이미지(슬롯 0)만 다시 고른다.
      *
@@ -983,8 +1132,10 @@ export async function fetchBackgrounds(article, cfg, slots) {
       }
     }
 
-    const got = result.filter((r) => r?.source === 'source-article').length;
-    log.ok(`원문 기사 사진 ${got}장 사용 (${host})`);
+    const used = result.filter((r) => r?.source === 'source-article');
+    // 매체가 섞이므로 실제로 쓴 곳을 모두 적는다 — 한 곳만 적으면 로그가 거짓이 된다.
+    const hosts = [...new Set(used.map((r) => r.photographer).filter(Boolean))];
+    log.ok(`원문 기사 사진 ${used.length}장 사용 (${hosts.join(' · ') || host})`);
   }
 
   // --- 0순위: 인물 사진 (위키미디어 공용) ---------------------------------
@@ -1018,23 +1169,67 @@ export async function fetchBackgrounds(article, cfg, slots) {
      * images.personPhotoOnThumb: true 로 두면 예전처럼 대표에도 쓴다.
      */
     const startSlot = cfg.images.personPhotoOnThumb === true ? 0 : 1;
-    for (let slot = startSlot; slot < Math.min(slots, startSlot + people.length); slot++) {
-      const person = people[Math.min(slot - startSlot, people.length - 1)];
-      const name = person.nameEn || person.nameKo;
-      /* mustMatch — 검색 결과가 실제로 이 사람 사진인지 검사한다 (nameMatches 주석 참고) */
-      const opts = { allowShareAlike: cfg.images.allowShareAlike !== false, mustMatch: name };
-      // 공연 현장 사진이 잘 걸리도록 검색어를 넓혀가며 시도한다
-      for (const q of [`${name} concert`, `${name} performance`, name]) {
-        try {
-          if (await tryFill(slot, await fromWikimedia(q, opts))) break;
-        } catch (err) {
-          log.debug(`위키미디어 실패 (${q}): ${err.message}`);
+    /* **빈 슬롯**을 대상으로 한다.
+     *
+     * 예전에는 슬롯 번호를 startSlot 부터 people.length 만큼 훑었다. 그런데 원문
+     * 기사 사진이 앞 슬롯을 이미 채우면 `tryFill` 이 그 슬롯을 건너뛰므로,
+     * **인물 사진이 한 장도 안 들어간다.** 그 자리는 뒤따르는 스톡·검색 티어가
+     * 무관한 사진으로 채웠다.
+     *
+     * > 2026-08-05 실측 — 풍향중 글: 원문 사진 4장이 슬롯 0~3 을 채우자 인물
+     * > 사진(유재석·이성민·지석진·양세찬) 4장이 전부 버려지고, 그 자리에
+     * > Dreamstime 워터마크 사진과 'ARIF' 타이포 로고가 들어갔다.
+     *
+     * 실제 인물 사진은 이 글에서 가장 관련도가 높은 사진이다 — 먼저 쓴다. */
+    const freeSlots = result
+      .map((r, i) => (r || i < startSlot ? -1 : i))
+      .filter((i) => i >= 0)
+      .slice(0, people.length);
+    let placed = 0;
+    /* 슬롯 하나에 **사람 한 명만** 시도하지 않는다.
+     *
+     * 예전에는 슬롯 순서대로 people[i] 를 하나씩 짝지었다. 위키미디어에 사진이 없는
+     * 사람에 걸리면 그 슬롯을 포기하고, **뒤에 사진이 있는 사람은 시도조차 안 했다.**
+     * 그 자리는 무관한 스톡이 채웠다.
+     *
+     * > 2026-08-05 실측 — 풍향중 글: 슬롯5 가 이성민(위키미디어에 없음)에 배정돼
+     * > 비었고, 사진이 있는 지석진은 시도되지 않았다. 그 자리에 가로등 실루엣
+     * > 스톡이 들어갔다.
+     *
+     * 이제 남은 사람을 차례로 시도하고, 쓴 사람은 빼 둔다. */
+    const untried = [...people];
+    for (const slot of freeSlots) {
+      if (!untried.length) break;
+      for (let pi = 0; pi < untried.length; pi++) {
+        const name = untried[pi].nameEn || untried[pi].nameKo;
+        /* mustMatch — 검색 결과가 실제로 이 사람 사진인지 검사한다 (nameMatches 주석 참고) */
+        const opts = { allowShareAlike: cfg.images.allowShareAlike !== false, mustMatch: name };
+        let filled = false;
+        // 공연 현장 사진이 잘 걸리도록 검색어를 넓혀가며 시도한다
+        for (const q of [`${name} concert`, `${name} performance`, name]) {
+          try {
+            if (await tryFill(slot, await fromWikimedia(q, opts))) {
+              filled = true;
+              break;
+            }
+          } catch (err) {
+            log.debug(`위키미디어 실패 (${q}): ${err.message}`);
+          }
         }
+        if (filled) {
+          placed += 1;
+          untried.splice(pi, 1); // 같은 사람을 두 슬롯에 넣지 않는다
+          break;
+        }
+        // 이 사람은 위키미디어에 쓸 만한 사진이 없다 — 다음 사람으로 넘어간다
+        untried.splice(pi, 1);
+        pi -= 1;
       }
     }
-    const got = result.filter(Boolean).length;
-    if (got) log.ok(`인물 사진 ${got}장 확보 (위키미디어 공용 · 상업 이용 가능 라이선스)`);
-    else log.info('라이선스가 열린 인물 사진을 찾지 못해 스톡 사진으로 진행합니다.');
+    /* **이 단계가 넣은 장수**를 센다. 예전에는 result 전체를 세서, 원문 사진이
+     * 채운 슬롯까지 인물 사진으로 보고했다 — 0장인데 "4장 확보" 로 찍혔다. */
+    if (placed) log.ok(`인물 사진 ${placed}장 확보 (위키미디어 공용 · 상업 이용 가능 라이선스)`);
+    else log.info('라이선스가 열린 인물 사진을 찾지 못해 다음 티어로 진행합니다.');
   }
 
   /* 합성본을 피해 비워 둔 대표 자리를 인물 사진이 채웠는지 확인한다.
@@ -1044,6 +1239,49 @@ export async function fetchBackgrounds(article, cfg, slots) {
     if (result[0]) log.debug('대표 이미지를 단독 컷 인물 사진으로 채웠습니다.');
     restoreThumb();
     restoreThumb = null;
+  }
+
+  /* --- 0.5순위: 이미지 검색 스크랩 (소재 자체를 찾는다) -------------------
+   *
+   * 스톡보다 **먼저** 시도한다. 스톡은 슬롯 설명을 사물로 번역해 글과 무관한
+   * 사진을 내놓기 때문이다(달력·마이크·그래프). 소재를 직접 검색한 사진이
+   * 언제나 글에 더 가깝다.
+   *
+   * 빈 슬롯을 그라디언트로 남기는 것은 자원 낭비다 — 여기서 채운다
+   * (사용자 지시 2026-08-05). `images.scrapeSearch: false` 로 끈다. */
+  /* ⚠️ **기본값은 꺼 둔다 (2026-08-05 실측).**
+   *
+   * 관련성을 검증할 방법이 없어서 검색엔진이 아무 사진이나 돌려준다. 풍향중 글에서
+   * '풍향중 국세청 댓글' 로 검색해 들어온 것: **제니퍼 로렌스**(Red Sparrow 시사회),
+   * **주윤발**(중국어 워터마크 영화 스틸), Dreamstime 워터마크 스톡, 'ARIF' 타이포 로고.
+   * 스톡 티어보다 나쁘다 — 무관한 데다 **다른 실존 인물 사진**이 실린다.
+   *
+   * 켜려면 `images.scrapeSearch: true`. 켤 때는 발행 전에 사진을 눈으로 봐야 한다.
+   * 자동으로 쓰려면 얼굴 대조(위키미디어 인물 사진을 기준으로) 같은 관련성 검사가
+   * 먼저 있어야 한다. */
+  if (cfg.images.scrapeSearch === true) {
+    let need = result.map((r, i) => (r ? -1 : i)).filter((i) => i >= 0);
+    if (need.length) {
+      const subjects = subjectQueries(article);
+      log.info(`이미지 검색 스크랩으로 ${need.length}장 — 소재: ${subjects.slice(0, 3).join(' / ')}`);
+      let si = 0;
+      for (const slot of need) {
+        // 소재 검색어를 돌려 쓰되, 후보가 마르면 다음 검색어로 넘어간다.
+        for (let tried = 0; tried < subjects.length; tried++) {
+          const q = subjects[(si + tried) % subjects.length];
+          try {
+            if (await tryFill(slot, await fromSearchScrape(q, cfg))) {
+              si = (si + tried + 1) % subjects.length;
+              break;
+            }
+          } catch (err) {
+            log.debug(`검색 스크랩 실패 (${q}): ${err.message.slice(0, 60)}`);
+          }
+        }
+      }
+      const got = result.filter(Boolean).length;
+      log.ok(`검색 스크랩 뒤 ${got}/${slots}장 확보 (언론사·블로그 사진일 수 있습니다 — 위험은 발행자가 집니다)`);
+    }
   }
 
   /* --- 스톡 사진을 쓸지 결정한다 -----------------------------------------
@@ -1066,12 +1304,17 @@ export async function fetchBackgrounds(article, cfg, slots) {
    *
    * `images.stockPhotos: false` 로 끈다. 주제 글(재테크·생활정보)처럼 특정 장소가
    * 없는 글에서는 스톡이 여전히 맞으므로 기본값은 켜 둔다. */
-  const useStock = cfg.images.stockPhotos !== false;
+  /* 모드가 스톡을 거부할 수도 있다 (`noStockPhotos`) — 경제 글처럼 슬롯 설명이
+   * 추상적이어서 키워드 검색이 늘 무관한 사물 사진을 내놓는 모드다. 모드에 관한
+   * 사실은 `src/modes/<id>.js` 에만 둔다 (CLAUDE.md) — 여기서 모드 이름을 쓰지 않는다. */
+  const modeRefusesStock = can(mode, 'noStockPhotos');
+  const useStock = cfg.images.stockPhotos !== false && !modeRefusesStock;
   if (!useStock) {
     const got = result.filter(Boolean).length;
     log.info(
-      `스톡 사진을 쓰지 않습니다 (images.stockPhotos: false). 확보 ${got}/${slots}장 — ` +
-        '특정 장소 글에서는 무관한 스톡 사진보다 비우는 편이 낫습니다.'
+      `스톡 사진을 쓰지 않습니다 (${modeRefusesStock ? '이 모드가 거부' : 'images.stockPhotos: false'}). ` +
+        `확보 ${got}/${slots}장 — 무관한 스톡 사진보다 비우는 편이 낫습니다 ` +
+        '(빈 자리는 카드를 만들지 않으므로 표·정보 카드가 시각 자료를 맡습니다).'
     );
     return result;
   }
@@ -1141,6 +1384,30 @@ export async function fetchBackgrounds(article, cfg, slots) {
    * 파이썬/OpenCV 가 없으면 조용히 넘어간다 — 중복이 남는 편이 글이 안 나오는
    * 것보다 낫다. */
   await dropVisualDupes(result);
+
+  /* 중복으로 빈 자리를 **관련 있는 사진으로 다시 채운다.**
+   *
+   * 여기까지 오면 빈 슬롯은 그라디언트가 된다. 그런데 기사 후보가 아직 남아 있는
+   * 경우가 많다 — 중복 제거는 쓴 사진만 지우고 후보를 소진하지 않기 때문이다.
+   * 무관한 스톡을 부르는 것이 아니라 **같은 사안의 기사 사진**을 더 쓰는 것이므로
+   * 관련성은 그대로다.
+   *
+   * 새로 넣은 사진이 또 중복일 수 있으니 채우고 → 걸러내기를 두 번까지만 돈다
+   * (무한 반복 방지 · 매 회 로그를 남겨 조용히 줄지 않게 한다).
+   */
+  /* ⚠️ **하지 않는다 (2026-08-05 실측으로 철회).**
+   *
+   * 처음에는 남은 기사 후보로 다시 채웠다. 그런데 `fetchArticle` 이 주는 images 는
+   * **기사 사진만이 아니다** — 페이지의 광고·관련기사 썸네일이 섞여 있다.
+   * 후보를 더 깊이 파면 그 쓰레기가 올라온다.
+   *
+   * > 김우빈 '기프트' 글: 5 → 9장으로 채웠더니 mk.co.kr 후보에서 **속옷 광고 사진**과
+   * > 사안과 무관한 다른 배우 사진이 본문 카드로 들어왔다.
+   *
+   * 빈 자리는 그라디언트로 둔다 — 무관한 사진보다 낫다. 대신 공급을 늘리려면
+   * `codexWriter` 에서 **기사당 장수를 좁게** 받는 쪽을 고친다 (아래 참고).
+   */
+  void fillFromSourceArticles;
 
   const ok = result.filter(Boolean).length;
   if (ok === slots) log.ok(`실사 배경 ${ok}장 확보`);

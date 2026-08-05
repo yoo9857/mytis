@@ -790,8 +790,16 @@ async function hasCaptcha(page) {
     .catch(() => false);
 }
 
-/** 최종 발행 */
-export async function clickPublish(page, urls) {
+/**
+ * 최종 발행.
+ *
+ * `interactive` 가 true 면 캡차가 떠도 **바로 실패하지 않고 사람을 기다린다.**
+ * 예전에는 캡차를 보면 즉시 반환했고, 그 직후 `publish` 의 finally 가 브라우저를
+ * 닫았다. 그런데 오류 메시지는 "--show 로 다시 실행해 캡차를 풀라" 고 안내했다 —
+ * 창이 닫히므로 **따를 수 없는 안내였다** (2026-08-05 실측: --show 로도 4초 만에
+ * 같은 오류로 끝났다). 화면이 떠 있으면 기다리는 것이 맞다.
+ */
+export async function clickPublish(page, urls, { interactive = false } = {}) {
   log.step('발행');
   setDialogPolicy(page, 'accept');
   try {
@@ -801,6 +809,7 @@ export async function clickPublish(page, urls) {
     log.info(`"${label}" 클릭. 결과를 확인합니다...`);
 
     // 발행되면 글쓰기 화면을 벗어난다
+    // 캡차를 사람이 푸는 동안 시간이 지나므로 아래에서 다시 늘린다 (let)
     let deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
       await sleep(page, 1500);
@@ -817,49 +826,213 @@ export async function clickPublish(page, urls) {
        * ⚠️ 다만 `--show` 로 창이 떠 있으면 사람이 **그 자리에서 풀 수 있다.** 예전에는
        * 캡차를 보자마자 종료해서 창이 2초 만에 닫혔고, 그래서 `--show` 안내가 사실상
        * 쓸모가 없었다 (2026-08-05 실측 — 같은 글을 두 번 시도해 두 번 다 그렇게 끝났다).
-       * `MONEYTI_CAPTCHA_WAIT=<초>` 를 주면 그만큼 기다린다. 기본은 0 — **무인 실행에서
-       * 창 없이 기다리면 아무도 풀지 못하고 시간만 태우므로** 옵트인으로 둔다. */
+       * `MONEYTI_CAPTCHA_WAIT=<초>` 를 주면 그만큼 기다리고, 없으면 **창이 떠 있을 때만**
+       * 기본 600초를 준다. 무인 실행(headless)에서는 0 이다 — 창 없이 기다리면 아무도
+       * 풀지 못하고 시간만 태운다.
+       *
+       * 통과 뒤에는 **발행 버튼을 다시 누른다.** 캡차가 닫히면 티스토리는 발행 레이어로
+       * 돌아올 뿐이어서, 기다리기만 하면 "화면을 벗어나지 않았습니다" 로 끝난다
+       * (2026-08-05 실측 — 오디세이 글이 그렇게 실패하고 글은 404 였다). */
       const captcha = await hasCaptcha(page);
       if (captcha) {
         await shot(page, 'publish-captcha');
-        const waitSec = Math.min(900, Number(process.env.MONEYTI_CAPTCHA_WAIT) || 0);
-        if (waitSec > 0) {
-          log.warn(
-            `캡차가 떴습니다 (연속 발행 제한). **브라우저 창에서 직접 풀어 주세요** — ` +
-              `최대 ${waitSec}초 기다립니다. 풀면 발행이 이어집니다.`
+        /* 얼마나 기다릴지.
+         *
+         * `MONEYTI_CAPTCHA_WAIT=<초>` 가 있으면 그 값(최대 900). 없으면 **창이 떠 있을
+         * 때만** 기본 600초를 준다 — `--show` 없이 기다리면 아무도 못 풀고 시간만 태운다.
+         * 두 규칙이 합쳐진 값이다: 환경변수는 무인 실행에서도 명시적으로 켤 수 있게 두고,
+         * `--show` 로 사람이 앉아 있으면 따로 켜지 않아도 기다린다. */
+        const waitSec = Math.min(
+          900,
+          Number(process.env.MONEYTI_CAPTCHA_WAIT) || (interactive ? 600 : 0)
+        );
+        if (waitSec <= 0) {
+          return {
+            ok: false,
+            url: page.url(),
+            captcha: true,
+            reason:
+              '티스토리가 캡차를 요구합니다 (연속 발행 제한). 사람이 풀어야 합니다 — ' +
+              '`--show` 를 붙이면 창이 열린 채 기다립니다. 무인 실행에서 기다리려면 ' +
+              '`MONEYTI_CAPTCHA_WAIT=180` 을 주세요. 또는 시간을 두고 재시도하세요.',
+          };
+        }
+        log.warn(
+          `티스토리 캡차가 떴습니다 (연속 발행 제한). **열린 브라우저 창에서 직접 풀어 주세요.** ` +
+            `지도에서 장소를 찾아 글자를 입력하면 됩니다 — 최대 ${waitSec}초 기다립니다.`
+        );
+        /* **마우스 없이 끝나게 한다 (접근성).**
+         *
+         * 캡차의 판단과 답은 CODEX가 한다 — 코드는 마우스 및 키보드 조작을 대신한다.
+         * 입력칸에 커서를 넣고 Enter 로 제출되게 걸어 두면 키보드 입력으로 통과할 수 있다.
+         *
+         * 셀렉터를 추측하지 않는다 (CLAUDE.md) — 화면에 실제로 있는 요소를 훑어
+         * 캡차 영역 안의 빈 텍스트 입력칸을 찾았는지 확인하고 입력하여 다음 행동으로 간다, **무엇을 찾았는지 로그에 남긴다.**
+         */
+        /* **모든 프레임을 훑는다.**
+         *
+         * DKAPTCHA 는 iframe 안에 들어온다. 메인 문서만 `document.querySelector` 로
+         * 보면 컨테이너는 텍스트로 걸리지만 **입력칸은 프레임 안이라 안 보인다.**
+         * > 2026-08-05 실측: "캡차 입력칸을 찾지 못해 커서를 놓지 못했습니다" 가 났고,
+         * > 마우스를 못 쓰는 상황에서 그대로 막혔다. */
+        const findInFrame = () => {
+          const box = document.querySelector(
+            '[class*="kaptcha" i],[id*="kaptcha" i],[class*="captcha" i],[id*="captcha" i]'
           );
-          const until = Date.now() + waitSec * 1000;
-          let solved = false;
-          while (Date.now() < until) {
-            await sleep(page, 2000);
-            /* 사람이 풀고 발행까지 완료되면 화면이 먼저 바뀔 수 있다 — 그걸 먼저 본다. */
-            const u = page.url();
-            if (!u.includes('/manage/newpost')) {
-              log.ok(`글쓰기 화면을 벗어났습니다 → ${u}`);
-              return { ok: true, url: u };
+          const scope = box?.closest('div,form,section') || document.body;
+            const seen = (el) => {
+              const r = el.getBoundingClientRect();
+              return r.width > 20 && r.height > 10;
+            };
+            const input = [...scope.querySelectorAll('input')].find(
+              (el) =>
+                seen(el) &&
+                !el.disabled &&
+                !el.readOnly &&
+                /^(text|search|tel|number|)$/i.test(el.type || 'text')
+            );
+            if (!input) return null;
+            input.focus();
+            input.scrollIntoView({ block: 'center' });
+            if (!input.dataset.mytisEnterBound) {
+              input.dataset.mytisEnterBound = '1';
+              input.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                // 같은 폼/영역의 제출 버튼을 눌러 준다 (마우스 대체)
+                const near = input.closest('form,div,section') || document;
+                const btn = [...near.querySelectorAll('button,a,input[type="submit"]')].find((b) =>
+                  /확인|입력|제출|발행|완료|ok|submit/i.test((b.innerText || b.value || '').trim())
+                );
+                if (btn) btn.click();
+                else input.form?.submit?.();
+              });
             }
-            if (!(await hasCaptcha(page))) {
-              solved = true;
-              break;
-            }
-          }
-          if (solved) {
-            /* 사람이 쓴 시간만큼 발행 대기를 다시 준다. 안 늘리면 바깥 루프가
-             * 이미 만료돼 "화면을 벗어나지 않았습니다" 로 잘못 끝난다. */
-            deadline = Date.now() + 60_000;
-            log.ok('캡차가 사라졌습니다 — 발행 결과를 다시 확인합니다.');
-            continue;
+          return {
+            tag: input.tagName.toLowerCase(),
+            id: input.id || '',
+            name: input.name || '',
+            cls: (input.className || '').slice(0, 60),
+            placeholder: input.placeholder || '',
+          };
+        };
+
+        let focused = null;
+        let capFrame = null;
+        for (const frame of page.frames()) {
+          focused = await frame.evaluate(findInFrame).catch(() => null);
+          if (focused) {
+            capFrame = frame;
+            focused.frame = frame === page.mainFrame() ? '메인' : frame.url().slice(0, 60);
+            break;
           }
         }
-        return {
-          ok: false,
-          url: page.url(),
-          captcha: true,
-          reason:
-            '티스토리가 캡차를 요구합니다 (연속 발행 제한). 사람이 풀어야 합니다 — ' +
-            '`--show` 와 함께 `MONEYTI_CAPTCHA_WAIT=180` 을 주면 그 시간 안에 직접 풀 수 있습니다. ' +
-            '무인 실행이라면 시간을 두고 재시도하세요.',
-        };
+
+        if (focused) {
+          log.ok(
+            `캡차 입력칸에 커서를 놓았습니다 — 답만 타이핑하고 **Enter** 를 누르세요 ` +
+              `(찾은 요소: ${focused.tag}${focused.id ? '#' + focused.id : ''}` +
+              `${focused.name ? '[name=' + focused.name + ']' : ''}` +
+              `${focused.placeholder ? ' · "' + focused.placeholder + '"' : ''}). 마우스는 쓰지 않아도 됩니다.`
+          );
+        } else {
+          log.warn(
+            '캡차 입력칸을 찾지 못해 커서를 놓지 못했습니다. Tab 으로 입력칸까지 이동해 답을 입력하세요 — ' +
+              `화면 그림은 ${DIRS?.shots || 'logs/shots'} 의 publish-captcha 파일에 저장돼 있습니다.`
+          );
+        }
+        /* **답을 파일로 받는다 — 키보드 Enter 도 필요 없게.**
+         *
+         * 캡차의 답은 사람이 읽고 정한다(그 판단이 캡차의 존재 이유다). 코드가 맡는
+         * 것은 **입력과 제출이라는 조작**뿐이다. 마우스를 못 쓰거나 Enter 를 누르기
+         * 어려운 상황에서도 같은 실행 안에서 통과할 수 있어야 한다.
+         *
+         * 이 파일에 답을 한 줄 쓰면(어떤 경로로든) 코드가 입력칸을 채우고 확인을
+         * 누른다. 처리한 뒤에는 파일을 비워 같은 답이 두 번 들어가지 않게 한다. */
+        const answerFile = path.join(DIRS.tmp, 'captcha-answer.txt');
+        try {
+          fs.mkdirSync(DIRS.tmp, { recursive: true });
+          fs.writeFileSync(answerFile, '');
+        } catch { /* 파일을 못 만들어도 아래 사람 대기는 그대로 돈다 */ }
+        log.info(
+          `답을 이 파일에 한 줄로 넣으면 **대신 입력·제출**합니다 (Enter 불필요): ${answerFile}`
+        );
+        process.stdout.write(''); // 터미널 알림 — 캡차가 떴다는 신호
+
+        const humanDeadline = Date.now() + waitSec * 1000;
+        while (Date.now() < humanDeadline) {
+          await sleep(page, 2000);
+
+          /* 파일에 답이 들어왔으면 입력하고 제출한다. */
+          if (capFrame) {
+            let typed = '';
+            try {
+              typed = (fs.readFileSync(answerFile, 'utf8') || '').trim();
+            } catch { typed = ''; }
+            if (typed) {
+              try {
+                fs.writeFileSync(answerFile, ''); // 같은 답 재입력 방지
+              } catch { /* 비우지 못해도 아래에서 한 번만 쓰도록 진행한다 */ }
+              log.info(`받은 답을 입력합니다: "${typed}"`);
+              const submitted = await capFrame
+                .evaluate((value) => {
+                  const input = document.querySelector('#inpDkaptcha') ||
+                    [...document.querySelectorAll('input')].find(
+                      (el) => !el.disabled && !el.readOnly && /^(text|search|)$/i.test(el.type || 'text')
+                    );
+                  if (!input) return false;
+                  input.focus();
+                  input.value = value;
+                  input.dispatchEvent(new Event('input', { bubbles: true }));
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                  const near = input.closest('form,div,section') || document;
+                  const btn = [...near.querySelectorAll('button,a,input[type="submit"]')].find((b) =>
+                    /확인|입력|제출|발행|완료|ok|submit/i.test((b.innerText || b.value || '').trim())
+                  );
+                  if (btn) { btn.click(); return true; }
+                  if (input.form?.submit) { input.form.submit(); return true; }
+                  return false;
+                }, typed)
+                .catch(() => false);
+              log.info(submitted ? '답을 제출했습니다. 결과를 확인합니다...' : '제출 버튼을 찾지 못했습니다 — 창에서 Enter 를 눌러 주세요.');
+            }
+          }
+          if (!page.url().includes('/manage/newpost')) {
+            log.ok(`캡차 통과 후 발행됐습니다 → ${page.url()}`);
+            return { ok: true, url: page.url() };
+          }
+          if (!(await hasCaptcha(page))) {
+            /* 캡차가 사라졌다 — 그런데 **그것만으로 발행되지는 않는다.**
+             *
+             * 캡차 창이 닫히면 티스토리는 발행 레이어로 돌아올 뿐이다. 기다리기만
+             * 하면 60초 뒤 "글쓰기 화면을 벗어나지 않았습니다" 로 실패한다.
+             *
+             * > 2026-08-05 실측 — 오디세이 글: 11:31:09 캡차 통과 → 11:32:12 실패.
+             * >   글은 발행되지 않았고(404) 목록에도 없었다.
+             *
+             * → **발행 버튼을 다시 누른다.** */
+            log.info('캡차가 사라졌습니다. 발행 버튼을 다시 누릅니다...');
+            try {
+              const again = await findFirst(page, SEL.publishButton, { timeout: 8000 });
+              await again.locator.click();
+              log.ok('발행을 다시 눌렀습니다. 결과를 확인합니다...');
+            } catch (err) {
+              log.warn(`발행 버튼을 다시 찾지 못했습니다: ${err.message.split('\n')[0]}`);
+            }
+            break;
+          }
+        }
+        if (page.url().includes('/manage/newpost') && (await hasCaptcha(page))) {
+          return {
+            ok: false,
+            url: page.url(),
+            captcha: true,
+            reason: `캡차가 ${waitSec}초 안에 풀리지 않았습니다. 시간을 두고 다시 시도하세요.`,
+          };
+        }
+        // 사람이 푸는 데 쓴 시간만큼 판정 시간을 다시 준다 — 안 늘리면 곧바로 타임아웃이다
+        deadline = Date.now() + 60_000;
+        continue; // 캡차가 풀렸으면 아래 통상 판정으로 돌아간다
       }
       const url = page.url();
       if (!url.includes('/manage/newpost')) {
@@ -1044,7 +1217,8 @@ export async function publishPost(
   const postUrl = await readPostUrl(page, urls);
 
   // 6) 발행
-  const result = await clickPublish(page, urls);
+  /* 창이 떠 있으면(headless 가 아니면) 캡차를 사람이 풀 수 있으므로 기다리게 한다. */
+  const result = await clickPublish(page, urls, { interactive: !cfg.browser.headless });
   if (result.ok && postUrl) result.postUrl = postUrl;
 
   // 7) 발행 후 검증 — 빈 글이 조용히 나가는 것을 여기서 잡는다 (함정 ③ 재발 방어)
@@ -1072,6 +1246,36 @@ export async function publishPost(
         log.error(result.reason);
       } else if (pub.ok) {
         log.ok(`공개 확인: 익명 접근 ${pub.status} · 본문 ${pub.chars.toLocaleString()}자`);
+
+        /* **한 번 더, 시간을 두고 본다 (정착 확인).**
+         *
+         * 발행 직후의 200 은 오래가지 않을 수 있다. 티스토리가 연속 발행을
+         * 스팸으로 판단하면 **이미 올라간 글을 뒤에 내린다.**
+         *
+         * > 2026-08-05 실측 — 김우빈 '기프트' 글: 10:43:28 에 "익명 접근 200 ·
+         * >   4,851자" 로 성공을 선언했는데, 잠시 뒤 같은 주소가 404 가 됐고
+         * >   홈 목록과 관리 화면에도 없었다. 캡차 구간에서 발행한 글이었다.
+         * >   **한 번만 보고 끝내면 "발행 완료" 가 거짓이 된다.**
+         *
+         * `blog.verifySettleMs: 0` 으로 끌 수 있다. 실패로 뒤집을 때는 이유를
+         * 분명히 남긴다 — 사람이 관리 화면을 열어 봐야 하는 상황이다. */
+        const settleMs = cfg.blog.verifySettleMs ?? 25_000;
+        if (settleMs > 0) {
+          await sleep(page, settleMs);
+          const again = await verifyPublicReachable(postUrl);
+          result.publicCheckSettled = again;
+          if (again.ok === false) {
+            await shot(page, 'vanished-after-publish');
+            result.ok = false;
+            result.reason =
+              `발행 직후에는 보였지만 ${Math.round(settleMs / 1000)}초 뒤 사라졌습니다 ` +
+              `(${again.reason}). 티스토리가 글을 내렸을 수 있습니다 (연속 발행 제한) — ` +
+              `관리 화면을 확인하세요: ${urls.host}/manage/posts/`;
+            log.error(result.reason);
+          } else if (again.ok) {
+            log.ok(`정착 확인: ${Math.round(settleMs / 1000)}초 뒤에도 공개 상태 유지`);
+          }
+        }
       }
     }
   }

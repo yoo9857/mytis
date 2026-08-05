@@ -5,6 +5,7 @@
 /* 시각 자료(절차 흐름도·핵심 숫자 카드)는 diagram.js 가 그린다.
  * 그쪽은 esc 를 자체로 갖고 있다 — 여기서 가져가면 순환 참조가 된다. */
 import { stepFlow, keyFigures } from './diagram.js';
+import { todayStr } from './paths.js';
 
 /**
  * 본문 인라인 스타일.
@@ -379,7 +380,11 @@ function jsonLd(article, cfg) {
     headline: article.seoTitle || article.title,
     description: article.metaDescription,
     keywords: [article.primaryKeyword, ...article.secondaryKeywords].filter(Boolean).join(', '),
-    datePublished: (article.generatedAt || new Date().toISOString()).slice(0, 10),
+    /* generatedAt 은 UTC(ISO)다 — 잘라 쓰면 KST 오전 9시 이전 생성분이
+     * 하루 전으로 찍힌다. 스케줄러가 07:30·09:00 에 돌므로 대부분이 걸린다.
+     * (2026-08-05 08:46 KST 실측 — 1주기 글의 datePublished 가 08-04)
+     * '오늘' 을 뜻하는 자리에는 todayStr 을 쓴다 (paths.js 주석 참고). */
+    datePublished: todayStr(article.generatedAt ? new Date(article.generatedAt) : new Date()),
     inLanguage: cfg.article.language === 'ko' ? 'ko-KR' : cfg.article.language,
   };
   if (article.sources.length) {

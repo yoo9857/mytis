@@ -626,6 +626,18 @@ export async function writeArticle({ topic, cfg }) {
         article.sourceImages = (source.images || []).map((i) => i.url);
         article.sourcePublisher = source.publisher || '';
         article.sourceUrl = topic;
+        /* 사진마다 **그 사진이 실린 기사**를 기록한다.
+         *
+         * 아래에서 관련 기사 사진을 같은 배열에 이어 붙이므로, URL 만 남기면
+         * 어느 매체 것인지가 사라진다. 그러면 photo.js 가 전부 소재 기사의
+         * 매체로 표기해 **OSEN 사진이 entertain.naver.com 으로 찍힌다.**
+         * 보도사진은 출처 표기가 유일한 완화책인데, 틀린 매체를 적는 것은
+         * 안 적는 것보다 나쁘다 (2026-08-05 실측 — 이민 1주기 글). */
+        article.sourceImageOrigins = Object.fromEntries(
+          [source.image, ...(source.images || []).map((i) => i.url)]
+            .filter(Boolean)
+            .map((u) => [u, { publisher: source.publisher || '', pageUrl: topic }])
+        );
         log.debug(
           `원문 사진 확보: 대표 ${source.image ? 1 : 0}장 · 본문 ${(source.images || []).length}장`
         );
@@ -654,22 +666,44 @@ export async function writeArticle({ topic, cfg }) {
       if (
         can(mode, 'relatedArticlePhotos') &&
         cfg.images?.useSourcePhoto === true &&
-        (article.sourceImages?.length || 0) < 6 &&
+        (article.sourceImages?.length || 0) < 10 &&
         article.sources?.length > 1
       ) {
         const { fetchArticle } = await import('./fetchArticle.js');
+        /* 사안을 다룬 기사 사진은 **구조적으로 글과 관련이 있다.** 여기서 넉넉히
+         * 모아 두면 뒤의 스톡·검색 티어를 부를 일이 줄어든다 — 그 티어들이
+         * 무관한 사진을 넣는 지점이다 (2026-08-05 실측: 제니퍼 로렌스·주윤발).
+         * 기사 한 곳당 브라우저를 한 번 띄우므로 개수는 계속 제한한다. */
         const extra = article.sources
           .map((s) => s.url)
           .filter((u) => u && u !== topic && /^https?:\/\//.test(u))
-          .slice(0, 3);
+          .slice(0, 5);
 
         for (const url of extra) {
-          if ((article.sourceImages?.length || 0) >= 8) break;
+          if ((article.sourceImages?.length || 0) >= 12) break;
           try {
             const s = await fetchArticle(url, cfg, 300);
-            const got = [s?.image, ...(s?.images || []).map((i) => i.url)].filter(Boolean);
+            /* **기사당 3장까지만** 받는다.
+             *
+             * `fetchArticle` 의 images 는 기사 사진만이 아니다 — 페이지의 광고와
+             * 관련기사 썸네일이 섞여 있다. 앞쪽(og:image + 본문 첫 사진)이 실제
+             * 기사 사진일 확률이 높고, 뒤로 갈수록 페이지 장식물이다.
+             *
+             * > 2026-08-05 실측 — 김우빈 '기프트' 글: 기사 4곳에서 15장을 받았더니
+             * > mk.co.kr 후보에 **속옷 광고 사진**과 사안과 무관한 배우 사진이 있었고,
+             * > 그게 본문 카드로 들어갔다. 많이 받는 것이 손해였다. */
+            const got = [s?.image, ...(s?.images || []).map((i) => i.url)]
+              .filter(Boolean)
+              .slice(0, 3);
             if (got.length) {
               article.sourceImages = [...(article.sourceImages || []), ...got];
+              // 이 사진들의 출처는 소재 기사가 아니라 이 기사다 — 사진별로 남긴다.
+              article.sourceImageOrigins = {
+                ...(article.sourceImageOrigins || {}),
+                ...Object.fromEntries(
+                  got.map((u) => [u, { publisher: s?.publisher || '', pageUrl: url }])
+                ),
+              };
               log.debug(`추가 출처 사진 ${got.length}장: ${new URL(url).hostname}`);
             }
           } catch (err) {
@@ -783,12 +817,33 @@ export async function writeArticle({ topic, cfg }) {
          * 재시도는 전체 도배일 때만 — 문단 하나의 연타로 4분을 다시 쓰는 것은 과하다. */
         const whole = mono.find((m) => m.section === 0);
         if (whole && attempt < maxAttempts) {
-          lastErr =
-            '글 전체가 한 종결로 끝납니다(단조로워 AI 가 쓴 것처럼 읽힙니다). ' +
-            '경어체 안에서 ~입니다 / ~이죠 / ~합니다 / 명사 종결을 섞고, ' +
-            '한 종결이 전체의 60% 를 넘지 않게 하세요';
-          log.warn(`${lastErr} — 다시 시도합니다.`);
-          continue;
+          /* **먼저 코드로 고쳐 본다. 그래도 안 되면 재시도한다.**
+           *
+           * `~습니다` → `~죠` 는 뜻이 바뀌지 않는 기계적 변환이라 `endings.js` 가
+           * 이미 한다(아래 `autoFix`). 그런데 순서가 거꾸로여서, 고칠 수 있는 문제로
+           * codex 를 한 번 더 불렀다 — 아래 주석도 "재시도는 4분을 더 태우고 결과도
+           * 나아지지 않았다" 고 적어 두었다.
+           *
+           * > 2026-08-05 실측 — 근로장려금 글: 시도 1 이 종결 검사로 버려지고,
+           * >   시도 2 에서 **codex 사용량 한도**에 걸려 글이 아예 나오지 않았다.
+           * >   고칠 수 있는 문제 때문에 쓸 수 있는 초안을 잃었다.
+           *
+           * 그래서 여기서 교정을 먼저 돌린다. 기준 밑으로 내려가면 그대로 쓰고,
+           * 못 내려가면 그때 재시도한다 (호출 한 번을 아낀다). */
+          const { autoFix: fixNow } = await import('./contract.js');
+          const fixed = fixNow(article, mode);
+          const still = findMonotoneEndings(article).find((m) => m.section === 0);
+          if (!still) {
+            for (const line of fixed) log.info(`자동 교정 — ${line}`);
+            log.ok('종결 단조를 코드로 고쳤습니다 — 재시도하지 않습니다 (codex 호출 1회 절약).');
+          } else {
+            lastErr =
+              '글 전체가 한 종결로 끝납니다(단조로워 AI 가 쓴 것처럼 읽힙니다). ' +
+              '경어체 안에서 ~입니다 / ~이죠 / ~합니다 / 명사 종결을 섞고, ' +
+              '한 종결이 전체의 60% 를 넘지 않게 하세요';
+            log.warn(`${lastErr} — 코드 교정으로도 기준 밑으로 내려가지 않아 다시 시도합니다.`);
+            continue;
+          }
         }
       }
 

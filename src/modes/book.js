@@ -47,6 +47,22 @@ export default {
     youtubeEmbeds: false,
     socialEmbeds: true,           // 저자·출판사 공식 게시물 임베드
     allowTables: true,            // 서지 정보가 표의 정석
+    /* **스톡 사진을 쓰지 않는다.**
+     *
+     * 책 글의 사진은 표지·저자 사진·행사 사진처럼 **그 책에 붙은 것**이어야 한다.
+     * 그런데 스톡 검색어가 추상적일 수밖에 없어서("책장", "읽는 사람") 결과가
+     * 늘 다른 책, 다른 사람이 된다. 캡션은 이 책을 설명하고 있으니 곧 오귀속이다.
+     *
+     * > 실측 — 2026-08-03 『독서의 기술』: 본문 6장 중 3장을 버렸다. "book pages
+     * >   window light" 와 "reading nook warm light" 가 둘 다 **꾸란** 사진이었고,
+     * >   "author speaking audience" 는 **처음 보는 외국인 남성**의 강연 스톡이었는데
+     * >   캡션은 "고명환의 이력을 함께 본다" 였다.
+     * > 실측 — 2026-08-05 『명상록』: 위키미디어에서 1장만 걸리고 나머지 5칸을
+     * >   Openverse 무관 사진(jenny downing·moriza)이 채웠다.
+     *
+     * 사진이 모자라면 스톡으로 채우는 대신 **표지·저자·유물 사진을 더 구한다.**
+     * 저자가 역사 인물이면 위키미디어의 PD 유물 사진이 가장 정확한 공급이다. */
+    noStockPhotos: true,
   },
   schemaFile: 'book.schema.json',
   /* 지시문은 +4(9개)를 요청하는데 codexWriter 가 심는 값은 **+2** 였다 — 주석까지

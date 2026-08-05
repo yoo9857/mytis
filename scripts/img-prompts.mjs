@@ -19,7 +19,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { interiorScene, isHousingArticle } from '../src/photoScenes.js';
+import { interiorScene, isHousingArticle, isChildArticle, childScene } from '../src/photoScenes.js';
 import { steps } from '../src/infographic.js';
 
 const file = process.argv[2];
@@ -127,8 +127,26 @@ briefs.forEach((b, i) => {
  * 섞여 있으면 여기서 걸러야 한다 (실측 3건 — HANDOVER ⑦).
  */
 function sceneFor(brief, art) {
+  /* 자녀·육아 글은 `photoQuery` 를 쓰지 않는다.
+   *
+   * 추상적인 주제(한도·요건·신청)에서 그 값은 늘 같은 사물로 수렴한다 —
+   * 계산기·노트·책상. 글과 상관이 없고, 스톡에서 걷어낸 것과 같은 그림을
+   * 생성으로 다시 만들게 된다 (2026-08-05 실측 · photoScenes.js 머리말).
+   * 아이의 흔적을 담은 장면 목록으로 대체한다. */
+  if (isChildArticle(art)) {
+    /* ⚠️ 시드는 **한 줄**이어야 한다 — `hash()` 는 첫 줄만 읽는다(취재 재료가 바뀌어도
+     * 사진이 흔들리지 않게 하려는 설계). 줄바꿈으로 이으면 제목만 해시되어
+     * **다섯 장이 전부 같은 장면**이 된다 (2026-08-05 실측). 자리마다 다른 값을 앞에 둔다. */
+    const seed = `${brief.headline || ''} ${brief.afterSection ?? ''} ${art?.title || ''}`;
+    return `A still, ordinary Korean domestic scene: ${childScene(seed)}.
+Shot from a natural seated eye level, slightly off-center, with generous empty space on one side.
+Muted warm palette, soft daylight from a window just out of frame.`;
+  }
+
   const q = String(brief.photoQuery || '').trim();
-  const BAD = /money|cash|banknote|dollar|coin|contract|lease|form|invoice|tax return|people|person|man|woman|couple|businessman|smiling|hand/i;
+  /* 사물 클로즈업을 부르는 낱말도 함께 걸러낸다 — 위와 같은 이유로 글과 겉돈다. */
+  const BAD =
+    /money|cash|banknote|dollar|coin|contract|lease|form|invoice|tax return|people|person|man|woman|couple|businessman|smiling|hand|calculator|calendar|microphone|laptop|payslip|payroll|graph|chart|spreadsheet/i;
   const cleaned = q
     .split(/\s+/)
     .filter((w) => !BAD.test(w))
