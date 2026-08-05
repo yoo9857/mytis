@@ -232,6 +232,10 @@ function normalizeArticle(raw, { topic, cfg, mode = '' }) {
   const sections = arr(raw.sections)
     .map((s) => ({
       heading: str(s?.heading),
+      /* `answer` — 소제목 바로 아래 **한 줄 답**. html.js 가 굵은 한 줄로 그린다.
+       * 목차로 건너온 독자가 문단을 읽지 않고도 자기 자리인지 알게 하는 장치다
+       * (사용자 지적 2026-08-06 · 검사는 contract.js 의 sectionsMissingAnswer). */
+      answer: str(s?.answer),
       paragraphs: arr(s?.paragraphs).map(str).filter(Boolean),
       bullets: arr(s?.bullets).map(str).filter(Boolean),
       table: {
@@ -410,6 +414,19 @@ function normalizeArticle(raw, { topic, cfg, mode = '' }) {
       .map((s) => ({ name: str(s?.name), url: str(s?.url), why: str(s?.why) }))
       // 주소가 없거나 형식이 아니면 버린다 — 막힌 링크는 없는 것보다 나쁘다
       .filter((s) => s.name && /^https?:\/\//i.test(s.url)),
+    /* `relatedPosts` — **이 블로그의 이전 글**로 가는 링크. html.js 가 '이어 읽기' 로 그린다.
+     *
+     * 왜 필드인가: 같은 주제를 여러 편으로 나눠 쓰면 검색에서 서로를 끌어올리는데,
+     * 그 연결이 산문 안에 있으면 렌더가 없어서 **주소가 화면에 남거나 사라진다**
+     * (rich() 는 굵게만 태그로 바꾼다 — 링크는 일부러 열지 않았다).
+     *
+     * 앞 글에서 뒤 글로는 걸 수 없다 — **발행된 글은 수정할 수 없다.**
+     * 그래서 연결은 늘 새 글 → 옛 글 한 방향이고, 이 필드는 그 방향만 담는다. */
+    relatedPosts: arr(raw.relatedPosts)
+      .map((p) => ({ title: str(p?.title), url: str(p?.url), why: str(p?.why) }))
+      .filter((p) => p.title && /^https?:\/\//i.test(p.url))
+      // 셋을 넘기면 글 끝이 링크 목록이 된다 — 이어 읽기는 다음 한두 편이면 된다
+      .slice(0, 3),
     directAnswer: str(raw.directAnswer),
     keyTakeaways: arr(raw.keyTakeaways).map(str).filter(Boolean),
     sections,

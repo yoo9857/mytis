@@ -192,6 +192,19 @@ export function measure(article) {
     /** 출처는 있는데 기준일이 빈 수치. "숫자에 기준일을 붙인다" 는 약속이 반만 지켜진 것 */
     figuresMissingAsOf: (article.figures || []).filter((f) => !String(f?.asOf || '').trim()).length,
     /**
+     * **한 줄 답이 없는 섹션 수** (경제 모드: `contract.sectionAnswers`).
+     *
+     * > 사용자 지적 (2026-08-06): "글이 많고 어렵다. 독자가 봤을 때 필요한 부분만
+     * > 서치할 수 있겠어?"
+     *
+     * 목차는 이미 있었다. 그런데 목차로 건너간 자리에 **문단 3~5문장**이 있어서,
+     * 독자는 자기에게 필요한 줄인지 알려면 그 문단을 다 읽어야 했다. 훑어읽기가
+     * 되는 글은 소제목 **바로 아래에 답이 한 줄** 있는 글이다.
+     *
+     * 산문 규칙으로 두면 어겨져도 소리가 안 난다 → 센다.
+     */
+    sectionsMissingAnswer: secs.filter((s) => !String(s?.answer || '').trim()).length,
+    /**
      * 정보 카드 수 — **실제로 그려질 것만** 센다.
      *
      * `infographic.renderCards` 는 `title` 이 있고 `items` 가 2개 이상인 것만 그린다.
@@ -302,6 +315,13 @@ export function checkContract(article, modeId) {
       add('figures', m.figuresMissingAsOf + '개 기준일 없음', '0개',
         '기준일 없는 숫자는 언제 것인지 알 수 없습니다');
     }
+  }
+  /* 한 줄 답 — 이 항목을 선언한 모드에서만 (지금은 경제 모드).
+   * `all` 이면 **모든 섹션**이 한 줄 답을 가져야 한다. 하나라도 비면 그 섹션은
+   * 독자가 문단을 다 읽어야 자기 자리인지 알 수 있다 (measure 주석의 사용자 지적). */
+  if (c.sectionAnswers === 'all' && m.sectionsMissingAnswer) {
+    add('sectionAnswers', m.sectionsMissingAnswer + '개 섹션에 없음', '모든 섹션',
+      '소제목 아래 한 줄 답이 없으면 독자가 필요한 부분만 골라 읽을 수 없습니다');
   }
   /* 정보 카드 — 이 항목을 선언한 모드에서만 (지금은 경제 모드).
    * 본문 시각 자료가 스톡 사진으로만 채워지는 것을 막는 자리다. */

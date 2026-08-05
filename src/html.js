@@ -98,6 +98,28 @@ const S = {
   siteName:
     'display:block;font-size:17px;font-weight:700;color:var(--c-brand-2, #1d4ed8);margin:0 0 4px;',
   siteWhy: 'display:block;font-size:15px;line-height:1.6;color:var(--c-ink-3, #4b5563);',
+  /* 소제목 아래 한 줄 답 — 본문보다 진하고 왼쪽 띠로 구분한다. 배경을 깔지 않는 것은
+   * callout(💡 강조 박스)과 구별하기 위해서다. 이건 강조가 아니라 **답**이다. */
+  secAnswer:
+    'margin:-6px 0 18px;padding:2px 0 2px 14px;border-left:3px solid var(--c-brand, #1d4ed8);' +
+    'font-size:17px;line-height:1.75;font-weight:700;color:var(--c-ink, #111);',
+  /* 이어 읽기 — 링크 카드와 같은 틀에 왼쪽 띠만 더한다. 기관 조회 링크(파랑 카드)와
+   * 같은 모양이면 독자가 밖으로 나가는 링크로 읽는다. 이건 이 블로그 안이다.
+   *
+   * ⚠️ 배경은 **스킨에 실제로 있는 토큰**으로만 쓴다(`--c-bg-inset`). 없는 이름을
+   * 쓰면 다크모드에서 폴백 밝은 색이 그대로 살아 본문만 흰 상자가 된다 (§7-14). */
+  nextWrap:
+    'margin:0 0 32px;padding:16px 18px;border-radius:10px;' +
+    'border:1px solid var(--c-line, #e5e7eb);border-left:4px solid var(--c-brand, #1d4ed8);' +
+    'background:var(--c-bg-inset, #f8fafc);',
+  nextTitle:
+    'display:block;margin:0 0 10px;font-size:15px;font-weight:800;letter-spacing:.02em;' +
+    'color:var(--c-ink-3, #6b7280);',
+  nextLink:
+    'display:block;margin:0 0 3px;font-size:17px;font-weight:700;' +
+    'color:var(--c-brand-2, #1d4ed8);text-decoration:none;',
+  nextWhy:
+    'display:block;margin:0 0 12px;font-size:15px;line-height:1.6;color:var(--c-ink-3, #4b5563);',
   figTable: 'width:100%;border-collapse:collapse;margin:0 0 12px;font-size:15px;',
   figTh:
     'border-bottom:2px solid var(--c-line-2, #e5e7eb);padding:9px 10px;text-align:left;' +
@@ -467,6 +489,33 @@ function checkSitesBlock(sites) {
 }
 
 /**
+ * '이어 읽기' — **같은 블로그의 이전 글**로 가는 링크.
+ *
+ * 왜 필요했나: 한 주제를 여러 편으로 나눠 쓰면 검색에서 서로를 끌어올린다. 그런데
+ * 산문에 주소를 적으면 `rich()` 가 링크를 열지 않아 **주소가 글자로 남는다.**
+ * 그래서 자리를 만들었다. 방향은 늘 새 글 → 옛 글 한 방향이다 —
+ * 발행된 글은 수정할 수 없어서 옛 글에서 새 글로는 걸 수 없다.
+ *
+ * 기관 조회 카드(`checkSitesBlock`)와 모양을 일부러 다르게 뒀다. 같으면 독자가
+ * 블로그 밖으로 나가는 링크로 읽는다. `target` 을 주지 않는 것도 그 이유다.
+ */
+function relatedPostsBlock(posts) {
+  const rows = (posts || []).filter((p) => p?.title && /^https?:\/\//i.test(p.url || ''));
+  if (!rows.length) return '';
+  const items = rows
+    .map(
+      (p) =>
+        `<a href="${esc(p.url)}" rel="noopener" style="${S.nextLink}">${esc(p.title)}</a>` +
+        (p.why ? `<span style="${S.nextWhy}">${esc(p.why)}</span>` : '')
+    )
+    .join('\n');
+  return (
+    `<div style="${S.nextWrap}">` +
+    `<span style="${S.nextTitle}">이어 읽기</span>\n${items}\n</div>`
+  );
+}
+
+/**
  * `figures` — 본문 수치와 출처·기준일의 짝을 **표로 보여준다.**
  *
  * 필드만 만들어 두고 그리지 않으면 약속이 지켜진 것이 아니다. 소개글에서
@@ -569,6 +618,18 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
   // 본문 섹션
   article.sections.forEach((sec, i) => {
     out.push(renderHeading(sec.heading, anchorId(i)));
+
+    /* 소제목 **바로 아래 한 줄 답.**
+     *
+     * > 사용자 지적 (2026-08-06): "글이 많고 어렵다. 독자가 봤을 때 필요한 부분만
+     * > 서치할 수 있겠어?"
+     *
+     * 목차는 이미 있었지만, 건너간 자리에 문단 3~5문장이 있어서 자기에게 필요한
+     * 줄인지 알려면 다 읽어야 했다. 답을 한 줄로 먼저 주면 독자는 **거기서 멈추거나
+     * 이어 읽을지**를 고를 수 있다. 문단은 그 한 줄의 근거가 된다. */
+    if (sec.answer) {
+      out.push(`<p data-ke-size="${KE.p}" style="${S.secAnswer}">${rich(sec.answer)}</p>`);
+    }
 
     /* 사진을 **문단 사이에 끼워 넣는다.**
      *
@@ -717,6 +778,10 @@ export function buildHtml(article, { cfg, images = {}, imageCredits = [] }) {
     out.push(`<h2 data-ke-size="${KE.h2}" style="${S.h2}">마치며</h2>`);
     out.push(`<p data-ke-size="${KE.p}" style="${S.p}">${rich(article.conclusion)}</p>`);
   }
+
+  /* 이어 읽기는 마무리 **뒤**, 참고 자료 **앞**이다. 다 읽은 독자에게 다음 한 편을
+   * 주는 자리이고, 참고 자료(밖으로 나가는 링크)보다 앞이어야 눌린다. */
+  out.push(relatedPostsBlock(article.relatedPosts));
 
   // 출처 · 이미지 저작자 표기
   const credits = imageCredits.filter((c) => c && (c.photographer || c.credit));
