@@ -14,7 +14,7 @@ export default {
   /* 기사 모드와 규격이 같으므로 같이 올린다 (§8-9). 사진 6장으로는 photoDensity
    * [300,500] 을 3,000자대에서 넘긴다 — 9장이면 311~444자/장으로 들어온다. */
   bodyImageDelta: 3,
-  rules: ['engagementRules', 'readabilityRules', 'imageBriefRules'],
+  rules: ['engagementRules', 'axisRules', 'readabilityRules', 'imageBriefRules'],
   voices: [], voicePin: '',
   sections: ['자유'], // 주제에 따라 codex 가 정한다
   /** 출력 규격 — 오늘 발행 이력이 없어 기사 모드에 맞춰 둔다. 실측이 쌓이면 조인다. */

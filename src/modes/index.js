@@ -48,6 +48,7 @@ export const CAPABILITIES = Object.fromEntries(ALL.map((m) => [m.id, m.capabilit
 /** 공용 규칙 이름 → 생성된 지시문에서 그 규칙을 찾아낼 표식 */
 export const RULE_MARKERS = {
   engagementRules: '# 독자를 끌어당기는 편집',
+  axisRules: '# 축은 글 끝까지 하나로',
   readabilityRules: '# 문단은 반드시 짧게',
   calloutRules: '# 강조박스(callout)',
   legalDisputeRules: '# 의혹·고소·재판이 걸린 사안이라면',

@@ -4,6 +4,7 @@ import { MODE, pickVoice, bodyImageCount } from './mode.js';
  * 복사해 두면 다른 모드에서 같은 실패가 반드시 재발한다. */
 import {
   engagementRules,
+  axisRules,
   mediaRules,
   readabilityRules,
   calloutRules,
@@ -537,6 +538,8 @@ ${legalDisputeRules()}
 
 ${engagementRules()}
 
+${axisRules()}
+
 ${readabilityRules()}
 
 # 분량과 구조
@@ -981,6 +984,8 @@ ${dateStr} (${year}년)
 - 고유명사·기관명·제품명은 정식 명칭을 정확히 쓰세요(엔티티 명확성).
 
 ${engagementRules()}
+
+${axisRules()}
 
 ${readabilityRules()}
 

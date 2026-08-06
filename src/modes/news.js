@@ -27,7 +27,7 @@ export default {
    * 그라디언트가 되므로, 이 값을 더 올리기 전에 공급을 먼저 봐야 한다.
    */
   bodyImageDelta: 3,
-  rules: ['engagementRules', 'readabilityRules', 'calloutRules', 'legalDisputeRules', 'imageBriefRules'],
+  rules: ['engagementRules', 'axisRules', 'readabilityRules', 'calloutRules', 'legalDisputeRules', 'imageBriefRules'],
   voices: [], voicePin: '',
   sections: ['자유'],
   /** 출력 규격 — 실측(2026-08-01, 발행 2편) */
