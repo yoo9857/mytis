@@ -87,7 +87,15 @@ const SEL = {
     protected: ['#open15', 'label[for="open15"]', 'input[value="15"]'],
     private: ['#open0', 'label[for="open0"]', 'input[value="0"]'],
   },
-  reserveRadio: ['#radio_reserve', 'label:has-text("예약")', 'input[value="reserve"]'],
+  reserveRadio: [
+    '#radio_reserve',
+    'label:has-text("예약")',
+    'button:has-text("예약")',
+    '[role="radio"]:has-text("예약")',
+    'input[type="radio"][value*="reserve" i]',
+    'input[type="radio"][id*="reserve" i]',
+    'label[for*="reserve" i]',
+  ],
   nowRadio: ['#radio_now', 'label:has-text("현재")', 'input[value="now"]'],
 };
 
@@ -742,9 +750,25 @@ export async function setVisibility(page, visibility) {
 /** 예약 발행 시각 설정 (best-effort) */
 export async function setReserve(page, minutesLater) {
   try {
-    const clicked = await clickIfPresent(page, SEL.reserveRadio, { timeout: 4000 });
+    let clicked = await clickIfPresent(page, SEL.reserveRadio, { timeout: 4000 });
     if (!clicked) {
-      log.warn('예약 발행 옵션을 찾지 못했습니다. 즉시 발행으로 진행합니다.');
+      // Tistory occasionally renders the reservation control without a stable id/class.
+      clicked = await page.evaluate(() => {
+        const visible = (el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        };
+        const nodes = [...document.querySelectorAll('label,button,a,li,span,div')]
+          .filter((el) => visible(el) && /예약/.test((el.textContent || '').trim()))
+          .sort((a, b) => (a.textContent || '').trim().length - (b.textContent || '').trim().length);
+        const target = nodes.find((el) => /예약(?:\s*발행)?/.test((el.textContent || '').trim()));
+        if (!target) return false;
+        target.click();
+        return true;
+      }).catch(() => false);
+    }
+    if (!clicked) {
+      log.error('예약 발행 옵션을 찾지 못했습니다. 즉시 발행으로 폴백하지 않습니다.');
       return false;
     }
     await sleep(page, 800);
@@ -754,9 +778,13 @@ export async function setReserve(page, minutesLater) {
     const dateStr = `${when.getFullYear()}-${p(when.getMonth() + 1)}-${p(when.getDate())}`;
     const timeStr = `${p(when.getHours())}:${p(when.getMinutes())}`;
 
-    const dateInput = page.locator('input[type="date"], #publish-date, .inp_date').first();
+    const dateInput = page
+      .locator('input[type="date"], #publish-date, .inp_date, input[name*="date" i], input[id*="date" i]')
+      .first();
     if ((await dateInput.count()) > 0) await dateInput.fill(dateStr).catch(() => {});
-    const timeInput = page.locator('input[type="time"], #publish-time, .inp_time').first();
+    const timeInput = page
+      .locator('input[type="time"], #publish-time, .inp_time, input[name*="time" i], input[id*="time" i]')
+      .first();
     if ((await timeInput.count()) > 0) await timeInput.fill(timeStr).catch(() => {});
 
     log.ok(`예약 발행: ${dateStr} ${timeStr}`);
@@ -1208,7 +1236,10 @@ export async function publishPost(
   await setPostUrl(page, urlSlug);
   await setVisibility(page, cfg.blog.visibility);
   if (cfg.blog.publishMode === 'reserve') {
-    await setReserve(page, cfg.blog.reserveAfterMinutes);
+    const reserved = await setReserve(page, cfg.blog.reserveAfterMinutes);
+    if (!reserved) {
+      throw new Error('예약 발행 설정에 실패해 발행을 중단했습니다. 즉시 발행으로 진행하지 않습니다.');
+    }
   }
 
   await shot(page, 'before-publish');
