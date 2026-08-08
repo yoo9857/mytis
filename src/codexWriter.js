@@ -691,7 +691,21 @@ export async function writeArticle({ topic, cfg }) {
          * 모아 두면 뒤의 스톡·검색 티어를 부를 일이 줄어든다 — 그 티어들이
          * 무관한 사진을 넣는 지점이다 (2026-08-05 실측: 제니퍼 로렌스·주윤발).
          * 기사 한 곳당 브라우저를 한 번 띄우므로 개수는 계속 제한한다. */
+        // A source can substantiate background facts without being about the people or
+        // event in this post. Only collect photos from sources whose title names a
+        // declared entity (or the article's main keyword).
+        const subjects = [
+          article.primaryKeyword,
+          ...(article.entities || []).flatMap((e) => [e.nameKo, e.nameEn]),
+        ]
+          .map((s) => String(s || '').replace(/\s+/g, '').trim())
+          .filter((s) => s.length >= 2);
+        const isSameSubject = (source) => {
+          const title = String(source?.title || '').replace(/\s+/g, '');
+          return subjects.some((subject) => title.includes(subject));
+        };
         const extra = article.sources
+          .filter((s) => isSameSubject(s))
           .map((s) => s.url)
           .filter((u) => u && u !== topic && /^https?:\/\//.test(u))
           .slice(0, 5);

@@ -886,7 +886,7 @@ export async function fetchBackgrounds(article, cfg, slots) {
    * 인물 사진도 못 구하면 이 함수로 되돌린다 (아래 press/person 단계 참고). */
   let restoreThumb = null;
   const clipShots = article.clipShots || [];
-  if (can(mode, 'clipShots') && cfg.images.useClipShots !== false && clipShots.length) {
+  if ((can(mode, 'clipShots') || clipShots.length > 0) && cfg.images.useClipShots !== false && clipShots.length) {
     log.warn(
       `영상 장면 캡처 ${clipShots.length}장을 이미지로 사용합니다 (${article.clipChannel || '유튜브'}). ` +
         '방송 화면은 제작사 저작물입니다 — 위험은 발행자가 집니다.'

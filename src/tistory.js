@@ -88,6 +88,7 @@ const SEL = {
     private: ['#open0', 'label[for="open0"]', 'input[value="0"]'],
   },
   reserveRadio: [
+    'button.btn_date:has-text("예약")',
     '#radio_reserve',
     'label:has-text("예약")',
     'button:has-text("예약")',
@@ -96,7 +97,7 @@ const SEL = {
     'input[type="radio"][id*="reserve" i]',
     'label[for*="reserve" i]',
   ],
-  nowRadio: ['#radio_now', 'label:has-text("현재")', 'input[value="now"]'],
+  nowRadio: ['button.btn_date:has-text("현재")', '#radio_now', 'label:has-text("현재")', 'input[value="now"]'],
 };
 
 const IMAGE_MACRO_RE = /\[##_Image\|[\s\S]*?_##\]/g;
@@ -232,7 +233,14 @@ async function writeWysiwyg(page, html) {
     const ed = window.tinymce?.activeEditor || window.tinyMCE?.activeEditor;
     if (ed && typeof ed.setContent === 'function') {
       ed.setContent(value);
+      /* 화면만 바꾼 것으로 끝나면 티스토리의 저장 모델은 이전(빈) 본문을
+       * 제출한다. TinyMCE 이벤트와 원본 textarea 동기화를 모두 발생시킨다. */
+      ed.getBody?.().dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+      ed.getBody?.().dispatchEvent(new Event('change', { bubbles: true }));
+      ed.fire?.('input');
       ed.fire?.('change');
+      ed.nodeChanged?.();
+      ed.save?.();
       return true;
     }
     return false;
@@ -454,7 +462,7 @@ export async function setBody(page, html) {
      *
      * 그래서 **채워질 때까지 폴링**한다. 진짜로 비었으면 그때 폴백으로 간다. */
     let len = 0;
-    const deadline = Date.now() + 4_000;
+    const deadline = Date.now() + 15_000;
     while (Date.now() < deadline) {
       await sleep(page, 700);
       len = await wysiwygTextLength(page);
@@ -748,7 +756,7 @@ export async function setVisibility(page, visibility) {
 }
 
 /** 예약 발행 시각 설정 (best-effort) */
-export async function setReserve(page, minutesLater) {
+export async function setReserve(page, minutesLater, reserveAt = '') {
   try {
     let clicked = await clickIfPresent(page, SEL.reserveRadio, { timeout: 4000 });
     if (!clicked) {
@@ -773,7 +781,10 @@ export async function setReserve(page, minutesLater) {
     }
     await sleep(page, 800);
 
-    const when = new Date(Date.now() + minutesLater * 60_000);
+    const when = reserveAt ? new Date(reserveAt) : new Date(Date.now() + minutesLater * 60_000);
+    if (!Number.isFinite(when.getTime()) || when.getTime() <= Date.now()) {
+      throw new Error(`유효하지 않은 예약 시각: ${reserveAt || minutesLater}`);
+    }
     const p = (n) => String(n).padStart(2, '0');
     const dateStr = `${when.getFullYear()}-${p(when.getMonth() + 1)}-${p(when.getDate())}`;
     const timeStr = `${p(when.getHours())}:${p(when.getMinutes())}`;
@@ -781,16 +792,49 @@ export async function setReserve(page, minutesLater) {
     const dateInput = page
       .locator('input[type="date"], #publish-date, .inp_date, input[name*="date" i], input[id*="date" i]')
       .first();
-    if ((await dateInput.count()) > 0) await dateInput.fill(dateStr).catch(() => {});
+    if ((await dateInput.count()) > 0) {
+      await dateInput.fill(dateStr);
+    } else {
+      const shownDate = ((await page.locator('button.btn_reserve').first().innerText().catch(() => '')) || '').trim();
+      if (shownDate !== dateStr) {
+        throw new Error(`예약 날짜 입력 UI를 찾지 못했습니다 (화면 ${shownDate || '없음'} · 목표 ${dateStr})`);
+      }
+    }
+
     const timeInput = page
       .locator('input[type="time"], #publish-time, .inp_time, input[name*="time" i], input[id*="time" i]')
       .first();
-    if ((await timeInput.count()) > 0) await timeInput.fill(timeStr).catch(() => {});
+    if ((await timeInput.count()) > 0) {
+      await timeInput.fill(timeStr);
+      if ((await timeInput.inputValue()) !== timeStr) {
+        throw new Error(`예약 시간 설정 검증 실패 (${await timeInput.inputValue()} · 목표 ${timeStr})`);
+      }
+    } else {
+      const hourInput = page.locator('#dateHour, input[name="dateHour"]').first();
+      const minuteInput = page.locator('#dateMinute, input[name="dateMinute"]').first();
+      if ((await hourInput.count()) === 0 || (await minuteInput.count()) === 0) {
+        throw new Error('예약 시·분 입력칸을 찾지 못했습니다.');
+      }
+      await hourInput.fill(String(when.getHours()));
+      await minuteInput.fill(String(when.getMinutes()));
+
+      const gotHour = Number(await hourInput.inputValue());
+      const gotMinute = Number(await minuteInput.inputValue());
+      if (gotHour !== when.getHours() || gotMinute !== when.getMinutes()) {
+        throw new Error(`예약 시간 설정 검증 실패 (${gotHour}:${gotMinute} · 목표 ${timeStr})`);
+      }
+    }
+
+    const reserveButton = page.locator('button.btn_date').filter({ hasText: /^예약$/ }).first();
+    if ((await reserveButton.count()) > 0) {
+      const selected = await reserveButton.evaluate((el) => el.classList.contains('on'));
+      if (!selected) throw new Error('예약 발행 옵션 선택 상태를 확인하지 못했습니다.');
+    }
 
     log.ok(`예약 발행: ${dateStr} ${timeStr}`);
     return true;
   } catch (err) {
-    log.warn(`예약 발행 설정 실패: ${err.message}`);
+    log.warn(`예약 발행 설정 실패: ${err.message} — 즉시 발행하지 않고 중단합니다.`);
     return false;
   }
 }
@@ -816,6 +860,108 @@ async function hasCaptcha(page) {
       return byNode || byText;
     })
     .catch(() => false);
+}
+
+/**
+ * 캡차가 나타난 순간의 화면 상태를 보존한다.
+ *
+ * 정답을 읽거나 추론하지 않는다. 사람이 브라우저에서 직접 해결할 수 있도록 스크린샷의
+ * 위치와, 발견된 프레임·입력칸 정보를 JSON 색인으로 남긴다. 발행 로그만 보고도 어떤
+ * 화면에서 멈췄는지 추적할 수 있고, 다음 셀렉터 보완에도 쓸 수 있다.
+ */
+async function indexCaptcha(page, { screenshot, focused } = {}) {
+  const frameIndex = [];
+  for (const [index, frame] of page.frames().entries()) {
+    const detail = await frame
+      .evaluate(() => {
+        const visible = (el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 20 && r.height > 10;
+        };
+        const captchaNodes = [
+          ...document.querySelectorAll(
+            '[class*="kaptcha" i],[id*="kaptcha" i],[class*="captcha" i],[id*="captcha" i]'
+          ),
+        ].filter(visible);
+        const inputs = [...document.querySelectorAll('input')]
+          .filter((el) => visible(el) && !el.disabled && !el.readOnly)
+          .map((el) => ({
+            tag: el.tagName.toLowerCase(),
+            id: el.id || '',
+            name: el.name || '',
+            type: el.type || 'text',
+            placeholder: el.placeholder || '',
+          }));
+        return { captchaNodes: captchaNodes.length, inputs };
+      })
+      .catch(() => null);
+    if (detail) {
+      frameIndex.push({
+        index,
+        url: frame === page.mainFrame() ? page.url() : frame.url(),
+        ...detail,
+      });
+    }
+  }
+
+  const file = path.join(DIRS.shots, `${stamp()}-publish-captcha.index.json`);
+  const payload = {
+    capturedAt: new Date().toISOString(),
+    pageUrl: page.url(),
+    screenshot: screenshot || null,
+    focusedInput: focused || null,
+    frames: frameIndex,
+    note: 'This index contains UI metadata only. Solve the CAPTCHA manually in the open browser.',
+  };
+  try {
+    fs.mkdirSync(DIRS.shots, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(payload, null, 2), 'utf8');
+    log.info(`캡차 화면 색인 저장: ${file}`);
+    return file;
+  } catch (err) {
+    log.warn(`캡차 화면 색인 저장 실패: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * DKAPTCHA를 사람이 통과한 뒤의 발행 재시도.
+ *
+ * 티스토리는 캡차를 닫으면서 발행 레이어와 기존 버튼 노드를 함께 교체할 수 있다.
+ * 먼저 현재 화면의 활성 발행 버튼을 누르고, 없으면 발행 레이어를 다시 열어 새 버튼을
+ * 찾는다. 캡차 정답의 판정·입력은 여기에 포함하지 않는다.
+ */
+async function retryPublishAfterCaptcha(page) {
+  const clickedLiveButton = await page
+    .evaluate(() => {
+      const visible = (el) => {
+        const r = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return r.width > 20 && r.height > 12 && style.visibility !== 'hidden' && style.display !== 'none';
+      };
+      const buttons = [...document.querySelectorAll('button, [role="button"], a')]
+        .filter((el) => visible(el) && !el.disabled && /발행/.test((el.innerText || el.textContent || '').trim()));
+      const button = buttons.at(-1);
+      if (!button) return false;
+      button.click();
+      return true;
+    })
+    .catch(() => false);
+  if (clickedLiveButton) {
+    log.ok('캡차 통과 뒤 현재 발행 버튼을 다시 눌렀습니다. 결과를 확인합니다...');
+    return true;
+  }
+
+  try {
+    await openPublishLayer(page);
+    const again = await findFirst(page, SEL.publishButton, { timeout: 8000 });
+    await again.locator.click();
+    log.ok('캡차 통과 뒤 발행 레이어를 다시 열어 발행했습니다. 결과를 확인합니다...');
+    return true;
+  } catch (err) {
+    log.warn(`캡차 통과 뒤 발행 버튼 재시도 실패: ${err.message.split('\n')[0]}`);
+    return false;
+  }
 }
 
 /**
@@ -863,7 +1009,7 @@ export async function clickPublish(page, urls, { interactive = false } = {}) {
        * (2026-08-05 실측 — 오디세이 글이 그렇게 실패하고 글은 404 였다). */
       const captcha = await hasCaptcha(page);
       if (captcha) {
-        await shot(page, 'publish-captcha');
+        const captchaShot = await shot(page, 'publish-captcha');
         /* 얼마나 기다릴지.
          *
          * `MONEYTI_CAPTCHA_WAIT=<초>` 가 있으면 그 값(최대 900). 없으면 **창이 떠 있을
@@ -977,6 +1123,8 @@ export async function clickPublish(page, urls, { interactive = false } = {}) {
          *
          * 이 파일에 답을 한 줄 쓰면(어떤 경로로든) 코드가 입력칸을 채우고 확인을
          * 누른다. 처리한 뒤에는 파일을 비워 같은 답이 두 번 들어가지 않게 한다. */
+        await indexCaptcha(page, { screenshot: captchaShot, focused });
+
         const answerFile = path.join(DIRS.tmp, 'captcha-answer.txt');
         try {
           fs.mkdirSync(DIRS.tmp, { recursive: true });
@@ -1040,13 +1188,7 @@ export async function clickPublish(page, urls, { interactive = false } = {}) {
              *
              * → **발행 버튼을 다시 누른다.** */
             log.info('캡차가 사라졌습니다. 발행 버튼을 다시 누릅니다...');
-            try {
-              const again = await findFirst(page, SEL.publishButton, { timeout: 8000 });
-              await again.locator.click();
-              log.ok('발행을 다시 눌렀습니다. 결과를 확인합니다...');
-            } catch (err) {
-              log.warn(`발행 버튼을 다시 찾지 못했습니다: ${err.message.split('\n')[0]}`);
-            }
+            await retryPublishAfterCaptcha(page);
             break;
           }
         }
@@ -1107,7 +1249,39 @@ export async function clickPublish(page, urls, { interactive = false } = {}) {
  *
  * 비공개로 **의도한** 발행(`--private`)에는 대지 않는다 — 그때 404 는 정상이다.
  */
-export async function verifyPublicReachable(postUrl, { minChars = 500 } = {}) {
+function normalizeVisibleText(value = '') {
+  return String(value)
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&(lsquo|rsquo|apos);/gi, "'")
+    .replace(/&(ldquo|rdquo);/gi, '"')
+    .replace(/&middot;/gi, '·')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function containsExpectedBody(text, expectedText) {
+  const normalized = normalizeVisibleText(expectedText);
+  if (!normalized) return true;
+  const words = normalized
+    .replace(/[^0-9A-Za-z가-힣]+/g, ' ')
+    .split(' ')
+    .filter((word) => word.length >= 2)
+    .slice(0, 10);
+  const haystack = normalizeVisibleText(text);
+  /* 스마트 따옴표·HTML 엔티티는 게시 시 모양이 달라질 수 있으므로, 원문 첫
+   * 문장의 핵심 어절을 함께 확인한다. 제목만 남은 빈 글은 이 기준을 못 넘는다. */
+  return words.length === 0 || words.filter((word) => haystack.includes(word)).length >= Math.min(6, words.length);
+}
+
+export async function verifyPublicReachable(postUrl, { minChars = 500, expectedText = '' } = {}) {
   try {
     const res = await fetch(postUrl, { redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0' } });
     if (!res.ok) return { ok: false, status: res.status, reason: `익명 접근 ${res.status}` };
@@ -1126,9 +1300,14 @@ export async function verifyPublicReachable(postUrl, { minChars = 500 } = {}) {
     if (/보호되어 있는 글|비밀번호를 입력/.test(html)) {
       return { ok: false, status: res.status, reason: '보호글로 올라갔습니다 (비밀번호 필요)' };
     }
-    const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ');
-    const chars = text.replace(/\s+/g, ' ').trim().length;
+    const text = normalizeVisibleText(html);
+    const chars = text.length;
     if (chars < minChars) return { ok: false, status: res.status, chars, reason: `익명으로 본 본문 ${chars}자` };
+    /* 페이지 전체 글자 수에는 스킨·광고·추천글도 섞인다. 실제 본문에서 가져온
+     * 고유 문장이 있어야 빈 글을 '공개 성공'으로 오인하지 않는다. */
+    if (!containsExpectedBody(text, expectedText)) {
+      return { ok: false, status: res.status, chars, reason: '익명 공개 페이지에서 작성 본문을 찾지 못했습니다' };
+    }
     return { ok: true, status: res.status, chars };
   } catch (err) {
     /* 네트워크 문제로 발행 성공을 뒤집지 않는다 — 판단 불가로 남긴다 */
@@ -1136,7 +1315,7 @@ export async function verifyPublicReachable(postUrl, { minChars = 500 } = {}) {
   }
 }
 
-export async function verifyPublished(page, postUrl, { minChars = 1000, imageCount = 0 } = {}) {
+export async function verifyPublished(page, postUrl, { minChars = 1000, imageCount = 0, expectedText = '' } = {}) {
   try {
     await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await sleep(page, 1500);
@@ -1146,6 +1325,7 @@ export async function verifyPublished(page, postUrl, { minChars = 1000, imageCou
         document.querySelector('.entry-content, .article_view, #article-view, article') ||
         document.body;
       return {
+        text: (scope?.innerText || '').replace(/\s+/g, ' ').trim(),
         chars: (scope?.innerText || '').replace(/\s+/g, ' ').trim().length,
         images: scope ? scope.querySelectorAll('img').length : 0,
       };
@@ -1154,6 +1334,9 @@ export async function verifyPublished(page, postUrl, { minChars = 1000, imageCou
     const problems = [];
     if (info.chars < minChars) problems.push(`본문 ${info.chars}자 (기준 ${minChars}자)`);
     if (imageCount && info.images < imageCount) problems.push(`이미지 ${info.images}/${imageCount}장`);
+    if (!containsExpectedBody(info.text, expectedText)) {
+      problems.push('작성 본문 고유 문장 미확인');
+    }
 
     if (problems.length) {
       await shot(page, 'verify-failed');
@@ -1161,7 +1344,7 @@ export async function verifyPublished(page, postUrl, { minChars = 1000, imageCou
     } else {
       log.ok(`발행 검증: 본문 ${info.chars.toLocaleString()}자 · 이미지 ${info.images}장`);
     }
-    return { ...info, ok: !problems.length };
+    return { chars: info.chars, images: info.images, ok: !problems.length, problems };
   } catch (err) {
     // 검증 실패가 발행 성공을 뒤집으면 안 된다 — 스킨·네트워크 문제일 수 있다
     log.warn(`발행 검증을 건너뜁니다 (${err.message.split('\n')[0]})`);
@@ -1236,9 +1419,9 @@ export async function publishPost(
   await setPostUrl(page, urlSlug);
   await setVisibility(page, cfg.blog.visibility);
   if (cfg.blog.publishMode === 'reserve') {
-    const reserved = await setReserve(page, cfg.blog.reserveAfterMinutes);
+    const reserved = await setReserve(page, cfg.blog.reserveAfterMinutes, cfg.blog.reserveAt || '');
     if (!reserved) {
-      throw new Error('예약 발행 설정에 실패해 발행을 중단했습니다. 즉시 발행으로 진행하지 않습니다.');
+      throw new Error('예약 발행 설정을 확인하지 못해 발행을 중단했습니다. 즉시 발행으로 전환하지 않습니다.');
     }
   }
 
@@ -1253,8 +1436,22 @@ export async function publishPost(
   if (result.ok && postUrl) result.postUrl = postUrl;
 
   // 7) 발행 후 검증 — 빈 글이 조용히 나가는 것을 여기서 잡는다 (함정 ③ 재발 방어)
-  if (result.ok && postUrl) {
-    result.verify = await verifyPublished(page, postUrl, { imageCount: macros.length });
+  if (result.ok && postUrl && cfg.blog.publishMode !== 'reserve') {
+    const expectedText = article?.directAnswer || normalizeVisibleText(finalHtml).slice(0, 300);
+    result.verify = await verifyPublished(page, postUrl, {
+      imageCount: macros.length,
+      expectedText,
+    });
+
+    // 본문 컨테이너가 비었거나 작성한 문장이 없으면 '발행 완료'로 취급하지 않는다.
+    // 공개 여부와 별개로, 이 경우에는 사람이 편집 화면에서 복구할 수 있도록 실패를 남긴다.
+    if (result.verify.ok === false) {
+      result.ok = false;
+      result.reason =
+        `글은 열리지만 본문 검증에 실패했습니다 (${result.verify.problems.join(' · ')}). ` +
+        `빈 글일 수 있으니 관리 화면에서 복구하세요: ${urls.host}/manage/posts/`;
+      log.error(result.reason);
+    }
 
     /* **익명으로 열리는지가 "발행됐다" 의 증거다.**
      *
@@ -1265,7 +1462,7 @@ export async function publishPost(
      * 공개 발행을 의도한 경우에만 댄다 — `--private` 로 낸 글은 404 가 정상이다.
      * 판단 불가(네트워크 실패, ok === null)는 성공을 뒤집지 않는다. */
     if (String(cfg.blog.visibility || 'public') === 'public') {
-      const pub = await verifyPublicReachable(postUrl);
+      const pub = await verifyPublicReachable(postUrl, { expectedText });
       result.publicCheck = pub;
       if (pub.ok === false) {
         await shot(page, 'not-public');
@@ -1293,7 +1490,7 @@ export async function publishPost(
         const settleMs = cfg.blog.verifySettleMs ?? 25_000;
         if (settleMs > 0) {
           await sleep(page, settleMs);
-          const again = await verifyPublicReachable(postUrl);
+          const again = await verifyPublicReachable(postUrl, { expectedText });
           result.publicCheckSettled = again;
           if (again.ok === false) {
             await shot(page, 'vanished-after-publish');
@@ -1309,6 +1506,12 @@ export async function publishPost(
         }
       }
     }
+  } else if (result.ok && cfg.blog.publishMode === 'reserve') {
+    // 예약 글은 지정 시각 전까지 익명 접근이 되지 않는 것이 정상이다.
+    // 공개 글 검증을 적용하면 정상 예약도 404로 실패 처리되므로, 발행 전
+    // setReserve에서 확인한 시각을 결과에 남기고 공개 검증은 예약 시각 뒤로 미룬다.
+    result.reservedAt = cfg.blog.reserveAt || '';
+    log.ok(`예약 등록 완료: ${cfg.blog.reserveAt || `${cfg.blog.reserveAfterMinutes}분 뒤`}`);
   }
   return result;
 }

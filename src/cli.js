@@ -84,6 +84,7 @@ const HELP = `
   --no-images       생성 이미지를 만들지 않음 (사진을 직접 붙일 글)
   --collage         네이버 사진 자동 묶기 (기본 꺼짐 — 보통은 imageBriefs[].group 으로 지정)
   --category <이름>  이번 실행만 카테고리 지정 (config 전역값을 뒤집지 않는다)
+  --reserve-at <시각> 티스토리 예약 발행 (예: 2026-08-07T18:00:00+09:00)
   --force           모드 출력 규격 위반을 무시하고 발행 (권하지 않음 — 규격을 고치세요)
 
   규격 검사
@@ -133,6 +134,8 @@ function parseArgs(argv) {
      * 맞춰져 있어서, 다른 글을 낼 때마다 설정을 뒤집고 되돌리는 것을 잊는다. */
     else if (a === '--category') flags.category = argv[++i];
     else if (a.startsWith('--category=')) flags.category = a.split('=')[1];
+    else if (a === '--reserve-at') flags.reserveAt = argv[++i];
+    else if (a.startsWith('--reserve-at=')) flags.reserveAt = a.slice('--reserve-at='.length);
     else if (a === '--force') flags.force = true;
     else if (a === '--spoiler') flags.spoiler = true;
     else if (a === '--no-spoiler') flags.spoiler = false;
@@ -182,6 +185,16 @@ function applyFlags(cfg, flags) {
   }
   if (flags.noImages) {
     cfg.images = { ...cfg.images, enabled: false, thumbnail: false, bodyImages: 0 };
+  }
+  if (flags.reserveAt) {
+    const when = new Date(flags.reserveAt);
+    if (!Number.isFinite(when.getTime())) {
+      throw new Error(`예약 시각 형식이 올바르지 않습니다: ${flags.reserveAt}`);
+    }
+    if (when.getTime() <= Date.now()) {
+      throw new Error(`예약 시각은 현재보다 뒤여야 합니다: ${flags.reserveAt}`);
+    }
+    cfg.blog = { ...cfg.blog, publishMode: 'reserve', reserveAt: when.toISOString() };
   }
   if (flags.spoiler !== undefined) {
     cfg.movie = { ...(cfg.movie || {}), spoiler: flags.spoiler };
