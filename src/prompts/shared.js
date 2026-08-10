@@ -266,6 +266,18 @@ export function imageBriefRules(a, bodyImages, { mode = '', maxSection = 0, noSt
     "진심에도 속도가 있다" ← 무슨 글인지 알 수 없고 클릭할 이유가 없습니다.
     감상을 압축한 문학적 표현은 여기 쓰지 마세요.`;
 
+  const photoQueryRules = mode === 'news'
+    ? `- **기사 모드의 photoQuery 는 항상 빈 문자열로 두세요.**
+  실제 인물·그룹·사건 사진은 sources 의 기사 사진과 검증된 인물 사진에서만 가져옵니다.
+  일정→달력, 발표→마이크, 팬 반응→스마트폰, 활동 공백→빈 공연장처럼 사안을
+  스톡 소품으로 번역하지 마세요.`
+    : `- photoQuery는 배경으로 깔 실사 사진을 스톡 사진 사이트(Unsplash/Pexels)에서 찾을 **영어** 검색어입니다.
+  - 반드시 영어 2~4단어. 한국어를 쓰면 검색이 실패합니다.
+  - 카메라로 실제 찍을 수 있는 구체적 장면이어야 합니다. 추상 개념(예: "financial freedom")은 금지.
+  - 좋은 예: "woman using mobile banking app", "calculator receipts wooden desk", "seoul apartment skyline"
+  - 나쁜 예: "청년도약계좌", "savings concept", "success"
+  - 이미지마다 서로 다른 장면을 쓰세요.`;
+
   return `# 이미지 브리프
 - imageBriefs 첫 번째 항목은 placement="thumbnail", afterSection=0 인 대표 이미지 1개.
 - 그 뒤에 placement="body" 이미지 ${bodyImages}개를 만드세요. afterSection은 1 이상 ${lastSection} 이하.
@@ -273,12 +285,7 @@ export function imageBriefRules(a, bodyImages, { mode = '', maxSection = 0, noSt
 ${headlineRules}
 - eyebrow는 헤드라인 위에 붙는 작은 분류 라벨입니다(2~8자). 이미지마다 다르게 쓰세요.
 ${statRules}
-- photoQuery는 배경으로 깔 실사 사진을 스톡 사진 사이트(Unsplash/Pexels)에서 찾을 **영어** 검색어입니다.
-  - 반드시 영어 2~4단어. 한국어를 쓰면 검색이 실패합니다.
-  - 카메라로 실제 찍을 수 있는 구체적 장면이어야 합니다. 추상 개념(예: "financial freedom")은 금지.
-  - 좋은 예: "woman using mobile banking app", "calculator receipts wooden desk", "seoul apartment skyline"
-  - 나쁜 예: "청년도약계좌", "savings concept", "success"
-  - 이미지마다 서로 다른 장면을 쓰세요.
+${photoQueryRules}
 - alt / caption 은 **사진에 찍힌 물건을 설명하는 자리가 아닙니다.** 그 자리에서
   독자가 알아야 할 **글의 내용**을 쓰세요.
   - 왜: photoQuery 로 찾은 스톡 사진은 발행 직전에 **다른 사진으로 교체됩니다**

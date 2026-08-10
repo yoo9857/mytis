@@ -701,6 +701,18 @@ export async function runTopic(topic, cfg, { publish: doPublish = true, platform
     return { ...gen, published: false };
   }
 
+  /* 기사 사진은 출처 검사만으로 화면 품질을 완전히 판별할 수 없다.
+   * 관련 기사에도 얼굴이 잘린 크롭·여러 화면을 붙인 캡처·광고 썸네일이 섞인다.
+   * 따라서 기사 URL의 한 번짜리 `post` 자동 발행은 여기서 멈추고,
+   * `draft → repreview --pin → publish` 검수 경로만 허용한다. */
+  if (can(gen.article.mode, 'requirePinnedPhotos') && !gen.article.photoDir) {
+    throw new Error(
+      `기사 사진을 아직 고정하지 않아 발행하지 않습니다. 초안은 저장됐습니다: ${gen.articleFile}\n` +
+        `  사진을 확인한 뒤 npm run repreview -- "${gen.articleFile}" --pin 을 실행하고 ` +
+        '그 JSON을 npm run publish 로 발행하세요.'
+    );
+  }
+
   /* 모드 출력 규격 관문 — `npm run post` · `npm run queue` 가 지나는 길이다.
    * `npm run publish` 쪽(cli.js)과 **같은 함수**를 부른다. 두 벌로 두면 갈라진다. */
   const { assertContract } = await import('./contract.js');

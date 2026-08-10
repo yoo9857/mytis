@@ -22,13 +22,16 @@ import { resolveCodex, isUrl } from './codexWriter.js';
 import { discoverNews } from './newsFeed.js';
 import { discoverRadar, saveRadar } from './radar.js';
 import * as queue from './queue.js';
+import { can } from './mode.js';
 
 const HELP = `
 티스토리 자동 글쓰기 · 자동 발행
 
   npm run login                        브라우저를 열어 티스토리(카카오) 로그인 · 세션 저장
   npm run post -- "주제"                주제로 글 생성 → 이미지 → 즉시 발행
-  npm run post -- "기사URL"             기사를 읽고 출처를 밝힌 자체 해설 글로 발행
+  npm run post -- "기사URL"             기사 초안·미리보기 생성 (사진 검수·고정 전에는 발행 차단)
+  npm run repreview -- out/기사.json --pin  확인한 기사 사진을 고정
+  npm run publish -- out/기사.json       고정된 기사 사진으로 발행
   npm run draft -- "주제 또는 기사URL"   발행 없이 글과 미리보기만 생성
   npm run publish -- out/xxx.json      이미 생성한 아티클을 발행
   npm run queue                        topics.txt 에서 하나를 꺼내 발행 (스케줄러용)
@@ -403,6 +406,16 @@ async function cmdPublishFile(cfg, file, flags = {}) {
 
   const article = JSON.parse(fs.readFileSync(abs, 'utf8'));
   log.info(`아티클 로드: ${article.title}`);
+
+  /* 기사 모드는 미리보기에서 확인하고 고정한 사진만 발행한다.
+   * `--force` 로도 넘기지 않는다 — 형식 취향이 아니라 다른 인물·광고 사진이
+   * 공개되는 사고를 막는 안전 조건이다. */
+  if (can(article.mode, 'requirePinnedPhotos') && !article.photoDir) {
+    throw new Error(
+      '기사 사진이 고정되지 않았습니다. 자동 재검색 사진으로는 발행하지 않습니다.\n' +
+        `  먼저 실행: npm run repreview -- "${abs}" --pin`
+    );
+  }
 
   /* 발행 직전 안전망 — 생성 직후에만 검사하면 **손으로 고친 문장**이 검사 없이
    * 나간다 (검토 루프에서 JSON 을 직접 편집하는 일이 많다). 경고만 하고 막지는 않는다. */

@@ -6,6 +6,7 @@ import { log } from './log.js';
 import { fetchBackgrounds } from './photo.js';
 import { imageSize } from './imageSize.js';
 import { renderCard, pickLayout, personBgPosition, hash } from './cardLayouts.js';
+import { can } from './mode.js';
 
 /** 본문 사진의 가로세로 비율 후보 — 세로 사진도 섞이도록 한다. */
 const ASPECTS = {
@@ -376,6 +377,33 @@ export async function renderImages(article, cfg) {
     log.warn(`배경 사진 확보 실패: ${err.message} — 그라디언트로 진행합니다.`);
   }
 
+  /* 연예 기사 사진은 "분위기가 비슷한 스톡"으로 대체할 수 없다.
+   * 사람·그룹을 다룬 글에 외국 군악대나 일반 콘서트 관객이 들어가면 독자는
+   * 실제 사진으로 오해한다. 모드가 소재 사진을 요구하면 출처와 최소 장수를
+   * 렌더 직전에 강제한다. 경고만 남기면 그대로 발행되므로 반드시 예외로 막는다. */
+  if (can(article.mode, 'requireSubjectPhotos')) {
+    const allowed = new Set(['source-article', 'wikimedia', 'local-photo', 'clip-shot']);
+    const unsafe = backgrounds
+      .map((bg, i) => ({ bg, i }))
+      .filter(({ bg }) => bg && !allowed.has(bg.source));
+    if (unsafe.length) {
+      throw new Error(
+        `기사 사진 안전 검사 실패: 소재와 무관할 수 있는 출처 ${unsafe
+          .map(({ bg, i }) => `${i}:${bg.source || 'unknown'}`)
+          .join(', ')}. 원문·실제 인물·고정 사진만 허용합니다.`
+      );
+    }
+
+    const subjectPhotos = backgrounds.filter(Boolean).length;
+    if (subjectPhotos < 3) {
+      throw new Error(
+        `기사 사진이 ${subjectPhotos}장뿐입니다 (최소 3장). ` +
+          '외국 스톡으로 채우지 않고 발행을 중단합니다. 관련 기사 사진이나 검증된 인물 사진을 확보하세요.'
+      );
+    }
+    log.ok(`기사 사진 안전 검사 통과: 소재 자체 사진 ${subjectPhotos}장 · 스톡 0장`);
+  }
+
   /* **그라디언트 카드를 만들지 않는다 (사용자 지시 2026-08-05).**
    *
    * 사진을 못 구한 슬롯은 예전에 그라디언트 배경 카드로 렌더했다. 그런데 그것은
@@ -609,7 +637,11 @@ export async function renderImages(article, cfg) {
           photoLook: noText ? '' : resolveLook(cfg.images.look).filter,
           // 인물 사진은 얼굴이 잘리지 않도록 크롭 위치를 바꾼다
           bgPosition: isPerson ? personBgPosition(layout, bg.portrait) : '',
-          credit: bgDataUri && cfg.images.showCredit ? bg.credit : '',
+          /* noText 는 이미 렌더가 끝난 고정 이미지다. `repreview --pin` 으로 고정한
+           * 대표 카드에는 출처 문구도 이미 들어 있다. 다시 얹으면 같은 문구가
+           * 두 겹으로 겹친다. 완성 이미지의 출처는 본문 하단 manifest 크레딧에도
+           * 남으므로 여기서는 재삽입하지 않는다. */
+          credit: bgDataUri && cfg.images.showCredit && !noText ? bg.credit : '',
         }),
         { waitUntil: 'load' }
       );

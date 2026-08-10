@@ -577,12 +577,13 @@ ${calloutRules()}
 ${a.extraInstructions ? `\n# 추가 지시\n${a.extraInstructions}\n` : ''}
 ${mediaRules()}
 
-${imageBriefRules(a, bodyImages)}
+${imageBriefRules(a, bodyImages, { mode: 'news' })}
 - 인물 사진은 photoQuery 로 구하지 마세요(초상권·저작권). 실제 인물 사진이 필요하면
   코드가 sources 의 기사에서 걷어 옵니다 — 그러므로 **사진이 실린 기사를 sources 에**
   넣는 것이 photoQuery 를 잘 쓰는 것보다 중요합니다.
-- photoQuery 는 사안의 분위기를 나타내는 일반적인 장면으로. 예: "concert stage lights
-  crowd", "television studio camera", "microphones press conference", "seoul night street".
+- 기사 모드에서는 모든 photoQuery 를 빈 문자열로 두세요. 일정→달력, 발표→마이크,
+  팬 반응→스마트폰, 활동 공백→빈 공연장처럼 **사안을 외국 스톡 소품으로 번역하지 마세요.**
+  사진은 sources 의 기사 사진과 검증된 실제 인물 사진만 사용합니다.
 
 - ⚠️ **무관한 스톡으로 자릿수를 채우지 마세요.** 사안과 상관없는 스톡은 독자가 즉시
   알아챕니다. 분위기컷이 사안을 설명하지 못하면 **브리프를 줄이는 것이 맞습니다** —
@@ -593,6 +594,10 @@ ${imageBriefRules(a, bodyImages)}
 > 메웠더니 대표 이미지가 **미국 지역방송 "12 NEWS" 스튜디오**, 본문이 **프랑스어 SNS
 > 피드 · 빈 노트 · 쌓아둔 빈 의자**였습니다. 사용자 지적: *"썸네일이나, 이런거
 > 연관성이 없는데?"* 같은 규칙이 영화 모드에는 있었는데 기사 모드에는 없었습니다.
+>
+> 실패 실측 (2026-08-10, 세븐틴 병역 기사): 군악대를 이유로 외국 군악대, 일정 때문에
+> 달력, 공백 때문에 빈 해외 공연장을 넣었습니다. 경고만 하고 발행해 버렸으므로 이제
+> 기사 모드는 코드에서도 스톡을 거부하고, 소재 자체 사진이 부족하면 발행을 막습니다.
 
 # 출력
 - 파일을 만들지 말고, 최종 응답으로 지정된 JSON 스키마에 맞는 JSON 객체 하나만 반환하세요.

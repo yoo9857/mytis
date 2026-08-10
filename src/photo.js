@@ -519,9 +519,12 @@ function slotQueries(article, slots) {
     else queries.push('');
   }
 
-  // 비어 있는 슬롯은 범용 검색어로 채운다
-  const generic = ['korean office desk laptop', 'person using smartphone', 'city street daytime'];
-  return queries.map((q, i) => q || generic[i % generic.length]);
+  /* 빈 검색어는 그대로 둔다.
+   *
+   * 예전에는 노트북·스마트폰·거리 같은 범용 검색어로 바꿨다. 그러면 모델이
+   * "이 슬롯에는 스톡을 쓰지 말라"는 뜻으로 비워 둔 자리까지 외국 스톡이
+   * 차지한다. 검색어가 없으면 사진도 검색하지 않는 것이 맞다. */
+  return queries;
 }
 
 /**
@@ -1328,7 +1331,7 @@ export async function fetchBackgrounds(article, cfg, slots) {
 
   for (const [name, key, fn] of apiTiers) {
     for (let slot = 0; slot < slots; slot++) {
-      if (result[slot]) continue;
+      if (result[slot] || !queries[slot]) continue;
       try {
         await tryFill(slot, await fn(queries[slot], key));
       } catch (err) {
@@ -1338,7 +1341,7 @@ export async function fetchBackgrounds(article, cfg, slots) {
   }
 
   // --- 2순위: codex 웹 검색 (Pexels 원본 URL 을 잘 찾아온다) --------------
-  let missing = result.map((r, i) => (r ? -1 : i)).filter((i) => i >= 0);
+  let missing = result.map((r, i) => (r || !queries[i] ? -1 : i)).filter((i) => i >= 0);
   if (missing.length) {
     log.info(`codex 웹 검색으로 사진 ${missing.length}장을 찾는 중...`);
     try {
@@ -1366,7 +1369,7 @@ export async function fetchBackgrounds(article, cfg, slots) {
   }
 
   // --- 3순위: Openverse (키 불필요 폴백) ----------------------------------
-  missing = result.map((r, i) => (r ? -1 : i)).filter((i) => i >= 0);
+  missing = result.map((r, i) => (r || !queries[i] ? -1 : i)).filter((i) => i >= 0);
   for (const slot of missing) {
     try {
       await tryFill(slot, await fromOpenverse(queries[slot]));

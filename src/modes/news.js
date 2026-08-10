@@ -6,6 +6,9 @@ export default {
   capabilities: {
     sourcePhoto: true,            // 원문 기사의 og:image (images.useSourcePhoto 로 별도 동의)
     relatedArticlePhotos: true,   // 같은 사안을 다룬 기사들이라 사진도 같은 사안이다
+    noStockPhotos: true,          // 연예 기사에 외국인·달력·마이크 스톡을 대체 사진으로 넣지 않는다
+    requireSubjectPhotos: true,   // 원문·실제 인물 등 소재 자체의 사진이 3장 미만이면 발행 중단
+    requirePinnedPhotos: true,    // 자동 즉시 발행 금지: 미리보기로 확인하고 고정한 사진만 발행
     clipShots: false,
     youtubeEmbeds: true,
     socialEmbeds: true,

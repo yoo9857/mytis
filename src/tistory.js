@@ -1489,7 +1489,10 @@ export async function publishPost(
          * 분명히 남긴다 — 사람이 관리 화면을 열어 봐야 하는 상황이다. */
         const settleMs = cfg.blog.verifySettleMs ?? 25_000;
         if (settleMs > 0) {
-          await sleep(page, settleMs);
+          /* 정착 대기는 브라우저 페이지와 무관하다. 캡차를 푼 뒤 사용자가 창을 닫아도
+           * 공개 URL 재검증은 fetch 로 할 수 있는데, page.waitForTimeout 을 쓰면
+           * "Target page ... has been closed" 로 성공한 발행을 실패 처리했다. */
+          await new Promise((resolve) => setTimeout(resolve, settleMs));
           const again = await verifyPublicReachable(postUrl, { expectedText });
           result.publicCheckSettled = again;
           if (again.ok === false) {
