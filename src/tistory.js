@@ -789,20 +789,39 @@ export async function setReserve(page, minutesLater, reserveAt = '') {
     const dateStr = `${when.getFullYear()}-${p(when.getMonth() + 1)}-${p(when.getDate())}`;
     const timeStr = `${p(when.getHours())}:${p(when.getMinutes())}`;
 
+    // `input[name*="date"]` is unsafe here: Tistory's hour/minute controls are
+    // named dateHour/dateMinute, so the broad selector can mistake the hour for
+    // the calendar date. Only accept controls that are unambiguously dates.
     const dateInput = page
-      .locator('input[type="date"], #publish-date, .inp_date, input[name*="date" i], input[id*="date" i]')
+      .locator([
+        'input[type="date"]',
+        'input#publish-date',
+        'input[name="publishDate"]',
+        'input[name="reserveDate"]',
+        'input.inp_date:not([type="number"])',
+      ].join(', '))
       .first();
     if ((await dateInput.count()) > 0) {
       await dateInput.fill(dateStr);
     } else {
       const shownDate = ((await page.locator('button.btn_reserve').first().innerText().catch(() => '')) || '').trim();
-      if (shownDate !== dateStr) {
+      const now = new Date();
+      const targetIsToday = when.getFullYear() === now.getFullYear()
+        && when.getMonth() === now.getMonth()
+        && when.getDate() === now.getDate();
+      // Tistory currently defaults the calendar to today and exposes only
+      // dateHour/dateMinute inputs. A same-day reservation therefore needs no
+      // calendar edit; for another day, fail closed unless the displayed date
+      // can be verified.
+      const normalizedShownDate = shownDate.replace(/[^0-9]/g, '');
+      const normalizedTargetDate = dateStr.replace(/-/g, '');
+      if (!targetIsToday && normalizedShownDate !== normalizedTargetDate) {
         throw new Error(`예약 날짜 입력 UI를 찾지 못했습니다 (화면 ${shownDate || '없음'} · 목표 ${dateStr})`);
       }
     }
 
     const timeInput = page
-      .locator('input[type="time"], #publish-time, .inp_time, input[name*="time" i], input[id*="time" i]')
+      .locator('input[type="time"], input#publish-time, input[name="publishTime"], input[name="reserveTime"], input.inp_time')
       .first();
     if ((await timeInput.count()) > 0) {
       await timeInput.fill(timeStr);
