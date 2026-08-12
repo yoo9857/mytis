@@ -607,8 +607,30 @@ function imageGroup(uploadedPair, { caption = '' } = {}) {
     layout: 'collage',
     contentMode: 'extend',
     caption: text ? [paragraph(text)] : null,
-    // 묶음 안의 이미지는 represent 를 켜지 않는다 — 대표는 맨 위 단독 사진이다
-    images: pair.map((img) => ({ ...img, id: uid(), represent: false, caption: null })),
+    /* 묶음 안의 이미지는 represent 를 켜지 않는다 — 대표는 맨 위 단독 사진이다.
+     *
+     * ⚠️ **`widthPercentage` 를 다시 계산해야 한다.** 업로드는 '개별사진' 으로 하므로
+     * 올라온 컴포넌트는 전부 `widthPercentage: 100` 이다. 그대로 묶으면 두 장이
+     * 각자 한 줄을 차지해 **나란히 붙지 않는다.**
+     *
+     * > 2026-08-02 실측 (`scripts/probe-imagegroup.mjs`) — 에디터에서 '콜라주' 로
+     * >   3장을 넣으니 49.750953% / 50.249046% / 100% 가 나왔다. 앞의 두 장이 한 줄,
+     * >   마지막이 다음 줄이다. 즉 **합이 100 이 되는 만큼이 한 줄**이고,
+     * >   배분은 **가로세로비 비례**다:
+     * >     769×1200 → 0.64083 · 600×927 → 0.64725 · 합 1.28808
+     * >     0.64083 / 1.28808 = 49.75% ✓ (관측값과 소수점까지 일치)
+     * 높이를 맞추고 폭을 나누는 계산이므로 세로 사진과 가로 사진을 섞어도 줄이 맞는다. */
+    images: (() => {
+      const ar = pair.map((i) => (i.originalWidth || i.width || 1) / (i.originalHeight || i.height || 1));
+      const sum = ar.reduce((a, b) => a + b, 0) || 1;
+      return pair.map((img, k) => ({
+        ...img,
+        id: uid(),
+        represent: false,
+        caption: null,
+        widthPercentage: (ar[k] / sum) * 100,
+      }));
+    })(),
     '@ctype': 'imageGroup',
   };
 }
@@ -635,6 +657,31 @@ function chunkByRhythm(items, seed = 0) {
     out.push(take);
     i += take.length;
     step += 1;
+  }
+  return out;
+}
+
+/**
+ * **한 섹션 안의 사진을 짝으로 묶는다** — 홀수면 첫 장만 단독, 나머지는 둘씩.
+ *
+ * `chunkByRhythm` 은 섹션마다 시드로 시작 위치를 바꾼다. 그래서 **한 섹션에 2장을
+ * 두어도 시드가 `1` 에 걸리면 [1],[1] 로 갈려 나란히 붙지 않는다.**
+ *
+ * > 2026-08-02 실측 — 책 글에 1절 2장·3절 2장을 넣었는데 발행된 글은
+ * >   `image 8 · imageGroup 0` 이었다. 리듬 시드가 1에서 시작한 탓이다.
+ *
+ * 티스토리는 §7-7 ② 에서 같은 문제를 "섹션에 온 장수를 존중(홀수면 첫 장 단독,
+ * 나머지 짝)" 으로 고쳤다. 규칙이 플랫폼마다 다르면 **글쓴이가 결과를 예측할 수 없다** —
+ * 여기서도 같은 규칙을 쓴다. 1·2·2·1 리듬은 **아티클이 섹션별 장수로 만든다**
+ * (사진 1장 → 단독 줄, 2장 → 나란히). 코드가 임의로 정하지 않는다.
+ */
+function chunkPreferPairs(items) {
+  const out = [];
+  let i = 0;
+  if (items.length % 2 === 1) out.push([items[i++]]); // 홀수면 첫 장 단독
+  while (i < items.length) {
+    out.push(items.slice(i, i + 2));
+    i += 2;
   }
   return out;
 }
@@ -813,7 +860,10 @@ export function buildDocument(article, { cfg, baseDoc, images = [], imageMeta = 
         }
         pending.get(g).push(x);
       }
-      const loose = cfg.naver?.collage === false ? rest.map((x) => [x]) : chunkByRhythm(rest, rhythmSeed + i);
+      const loose =
+        cfg.naver?.collage === false
+          ? rest.map((x) => [x])
+          : chunkPreferPairs(rest);
       groups.push(...loose);
       // 사진 순서대로 다시 정렬한다 (묶음의 첫 사진 기준)
       groups.sort((a, b) => a[0].k - b[0].k);

@@ -12,6 +12,7 @@
     "publish": "node src/cli.js publish",
     "queue": "node src/cli.js queue",
     "news": "node src/cli.js news",
+    "radar": "node src/cli.js radar",
     "probe": "node src/cli.js probe",
     "login:naver": "node src/cli.js login:naver",
     "probe:naver": "node src/cli.js probe:naver",
@@ -20,7 +21,11 @@
     "postinstall": "playwright install chromium",
     "post:naver": "node src/cli.js post --naver",
     "post:both": "node src/cli.js post --both",
-    "book": "node src/cli.js book"
+    "book": "node src/cli.js book",
+    "gate": "node scripts/gate.mjs",
+    "repreview": "node scripts/repreview.mjs",
+    "imgprompts": "node scripts/img-prompts.mjs",
+    "photolint": "node scripts/photolint.mjs"
   },
   "dependencies": {
     "playwright": "^1.49.0"

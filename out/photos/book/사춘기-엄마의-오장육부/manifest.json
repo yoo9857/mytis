@@ -1,0 +1,48 @@
+{
+ "items": [
+  {
+   "file": "card-quote.png",
+   "source": "card",
+   "note": "예스24 '책 속으로' 발췌(「사춘기는 언제 오는가」)"
+  },
+  {
+   "file": "card-quote-2.png",
+   "source": "card",
+   "note": "예스24 '책 속으로' 발췌"
+  },
+  {
+   "file": "card-author.png",
+   "source": "press",
+   "note": "저자 사진은 표지 띠지에서 크롭 (서교책방 제공)"
+  },
+  {
+   "file": "cover.jpg",
+   "source": "press",
+   "note": "서교책방 판본 표지"
+  },
+  {
+   "file": "02-titlepage.jpg",
+   "source": "press",
+   "note": "속표지 (알라딘 미리보기)"
+  },
+  {
+   "file": "04-page011.jpg",
+   "source": "press",
+   "note": "본문 11쪽 (알라딘 미리보기)"
+  },
+  {
+   "file": "05-page012.jpg",
+   "source": "press",
+   "note": "본문 12쪽 (알라딘 미리보기)"
+  },
+  {
+   "file": "06-backcover.jpg",
+   "source": "press",
+   "note": "뒤표지 (알라딘 미리보기)"
+  },
+  {
+   "file": "03-reading.jpg",
+   "source": "stock"
+  }
+ ]
+}

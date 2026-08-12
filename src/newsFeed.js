@@ -1,4 +1,4 @@
-import { FILES } from './paths.js';
+import { FILES, todayStr } from './paths.js';
 import { log } from './log.js';
 import { runCodexJson } from './codexWriter.js';
 
@@ -8,7 +8,7 @@ import { runCodexJson } from './codexWriter.js';
  */
 export async function discoverNews({ cfg, query, count = 5, hours = 24 }) {
   const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10);
+  const dateStr = todayStr(today);
   const q = query || cfg.news?.query || '한국 연예 뉴스';
 
   const prompt = `당신은 조회수가 잘 나오는 이슈 블로그의 편집장입니다.

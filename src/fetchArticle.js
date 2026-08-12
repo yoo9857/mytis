@@ -34,6 +34,23 @@ const NOISE_SELECTORS = [
   '[id*="outbrain"]',
 ];
 
+/** 네이버 블로그 PC 주소는 본문이 iframe/스크립트 경로로 남는 경우가 있다.
+ * 모바일 상세 주소는 본문 HTML을 직접 제공하므로 추출 전용으로만 변환한다. */
+function articleFetchUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'blog.naver.com') {
+      const [blogId, logNo] = u.pathname.split('/').filter(Boolean);
+      if (blogId && /^\d+$/.test(logNo || '')) {
+        return `https://m.blog.naver.com/${blogId}/${logNo}`;
+      }
+    }
+  } catch {
+    // The normal navigation path will report an actionable error for an invalid URL.
+  }
+  return url;
+}
+
 /** 페이지 안에서 실행되는 본문 추출기 */
 function extractInPage(noiseSelectors) {
   const clean = (s) =>
@@ -57,7 +74,11 @@ function extractInPage(noiseSelectors) {
 
   // 본문 후보: 문단 텍스트가 가장 많이 뭉쳐 있는 컨테이너
   const candidates = [
-    ...document.querySelectorAll('article, main, [itemprop="articleBody"], .article_content, #content, .news_txt, [class*="article"], [class*="content"], [class*="body"]'),
+    // Naver Blog mobile uses SmartEditor markup without a semantic article/main wrapper.
+    ...document.querySelectorAll(
+      '.se-main-container, .se-viewer, #postViewArea, #postListBody, article, main, ' +
+        '[itemprop="articleBody"], .article_content, #content, .news_txt, [class*="article"], [class*="content"], [class*="body"]'
+    ),
   ];
 
   let best = null;
@@ -137,7 +158,11 @@ export async function fetchArticle(url, cfg, maxChars = 12_000) {
     });
     page.setDefaultTimeout(30_000);
 
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 });
+    const fetchUrl = articleFetchUrl(url);
+    await page.goto(fetchUrl, { waitUntil: 'domcontentloaded', timeout: 40_000 });
+    if (new URL(fetchUrl).hostname === 'm.blog.naver.com') {
+      await page.locator('.se-main-container').waitFor({ state: 'attached', timeout: 10_000 }).catch(() => {});
+    }
     await page.waitForTimeout(1500);
 
     const info = await page.evaluate(extractInPage, NOISE_SELECTORS);

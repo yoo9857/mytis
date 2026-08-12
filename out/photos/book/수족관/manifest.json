@@ -1,0 +1,68 @@
+{
+  "title": "수족관 — 유래혁 (포스터샵)",
+  "collectedAt": "2026-08-01",
+  "note": "서점 상품 페이지의 표지·미리보기 실물컷과 우리가 만든 카드다. 수집은 고르기 위한 것이며 발행 허가가 아니다 — 위험은 발행자가 진다 (HANDOVER §6).",
+  "pages": [
+    "https://www.yes24.com/product/goods/124235834",
+    "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=330811810",
+    "https://store.kyobobook.co.kr/person/detail/1117117901"
+  ],
+  "items": [
+    {
+      "file": "01.jpg",
+      "what": "표지 실물컷",
+      "photographer": "포스터샵",
+      "license": "예스24 상품 이미지",
+      "credit": "포스터샵 · 예스24 상품 이미지",
+      "pageUrl": "https://www.yes24.com/product/goods/124235834"
+    },
+    {
+      "file": "03.jpg",
+      "what": "뒤표지",
+      "photographer": "포스터샵",
+      "license": "알라딘 미리보기",
+      "credit": "포스터샵 · 알라딘 미리보기",
+      "pageUrl": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=330811810"
+    },
+    {
+      "file": "07.jpg",
+      "what": "표지 스케치",
+      "photographer": "포스터샵",
+      "license": "알라딘 미리보기",
+      "credit": "포스터샵 · 알라딘 미리보기",
+      "pageUrl": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=330811810"
+    },
+    {
+      "file": "09.jpg",
+      "what": "제사 페이지 (카렌 블릭센 인용)",
+      "photographer": "포스터샵",
+      "license": "알라딘 미리보기",
+      "credit": "포스터샵 · 알라딘 미리보기",
+      "pageUrl": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=330811810"
+    },
+    {
+      "file": "pv-t2.jpg",
+      "what": "반표제지",
+      "photographer": "포스터샵",
+      "license": "알라딘 미리보기",
+      "credit": "포스터샵 · 알라딘 미리보기",
+      "pageUrl": "https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=330811810"
+    },
+    {
+      "file": "card-author.png",
+      "what": "작가 카드 (저자 사진 + 이력)",
+      "photographer": "유래혁",
+      "license": "저자 제공 사진 · 교보문고 저자 페이지",
+      "credit": "저자 사진 (C) 유래혁",
+      "pageUrl": "https://store.kyobobook.co.kr/person/detail/1117117901"
+    },
+    {
+      "file": "card-quote.png",
+      "what": "글귀 카드 (출판사 소개문)",
+      "photographer": "",
+      "license": "출판사 소개 인용 · 예스24 상품 페이지",
+      "credit": "인용 (C) 포스터샵",
+      "pageUrl": "https://www.yes24.com/product/goods/124235834"
+    }
+  ]
+}

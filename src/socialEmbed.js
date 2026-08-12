@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { log } from './log.js';
-import { FILES } from './paths.js';
+import { FILES, todayStr } from './paths.js';
 import { runCodexJson } from './codexWriter.js';
 
 /**
@@ -54,8 +54,22 @@ const UA =
 const OFFICIAL_HINTS =
   /official|공식|entertainment|엔터테인먼트|records|studios?|cube|starship|hybe|pledis|\bsm\b|\bjyp\b|\byg\b|kakao|antenna|fnc|wm\b|mbc|kbs|sbs|jtbc|tvn|mnet|tving|coupangplay|netflix/i;
 
-/** 팬·비공식 계정 신호. 이게 걸리면 임베드하지 않는다. */
-const FAN_HINTS = /\bfan(s|cam|base|page)?\b|팬|직캠|백업|backup|archive|아카이브|update(s)?\b|\bbot\b|daily|pics?\b|media\b/i;
+/**
+ * 팬·비공식 계정 신호. 이게 걸리면 임베드하지 않는다.
+ *
+ * ⚠️ **외국 저자·감독은 이 목록이 유일한 방어선이다.** `OFFICIAL_HINTS` 는 한국 연예
+ * 소속사 이름(hybe·sm·jyp·엔터테인먼트…) 위주라 외국 인물에게는 아무 신호도 걸리지
+ * 않는다. 그래서 팬 계정이 그냥 통과한다.
+ *
+ * > 2026-08-02 실측 — 해리 포터 책 글에 `@jkrowling_stories` 게시물이 임베드됐다.
+ * > 팬 계정인데 `fan|팬|update|daily|pics|media|archive|bot` 어디에도 걸리지 않았다.
+ * > 임베드는 **내용을 우리가 통제할 수 없다** — 그 계정이 무엇을 올렸는지 모른 채
+ * > 우리 글에 실린다. 작가의 정치적 발언 같은, 글의 주제와 무관한 것이 딸려 올 수 있다.
+ *
+ * `<인물명>_stories` · `~quotes` · `~edits` · `~universe` 같은 형태는 거의 팬 계정이다.
+ */
+const FAN_HINTS =
+  /\bfan(s|cam|base|page)?\b|팬|직캠|백업|backup|archive|아카이브|update(s)?\b|\bbot\b|daily|pics?\b|media\b|stor(y|ies)\b|quotes?\b|edits?\b|universe\b|world\b|lovers?\b|forever\b|_hq\b|club\b/i;
 
 /**
  * @param {object} opts
@@ -316,7 +330,7 @@ ${list}
   깨진 임베드가 본문에 실립니다. 못 찾았으면 빈 배열로 두세요 — 그게 정답일 수 있습니다.
 
 # 오늘 날짜
-${new Date().toISOString().slice(0, 10)}
+${todayStr()}
 
 지정된 JSON 스키마에 맞는 JSON 객체 하나만 반환하세요.`;
 
@@ -581,9 +595,21 @@ export async function fillSocialEmbeds(article, cfg) {
 
   const platforms = sc.platforms || ['x', 'instagram'];
   const maxAge = sc.maxAgeDays ?? 180;
-  const people = (article.entities || []).filter((e) => e.nameKo || e.nameEn);
+  /* 역사 인물·고인은 통째로 뺀다. **공식 계정이 존재할 수 없으므로 검색해서
+   * 나오는 것은 정의상 팬 계정이다.** 이름 패턴(FAN_PATTERN)으로는 못 잡는다 —
+   * 팬 계정이 인물 이름을 그대로 쓰기 때문이다.
+   * > 2026-08-03 실측: 『세네카』 글에 @seneca_theyounger 가 '공식 근황' 으로
+   * > 붙었다. 세네카는 기원후 65년에 죽었다. */
+  const all = (article.entities || []).filter((e) => e.nameKo || e.nameEn);
+  const historical = all.filter((e) => e.historical);
+  if (historical.length) {
+    log.debug(
+      `SNS 임베드: 역사 인물 제외 — ${historical.map((p) => p.nameKo || p.nameEn).join(', ')}`
+    );
+  }
+  const people = all.filter((e) => !e.historical);
   if (!people.length) {
-    log.debug('SNS 임베드: 인물이 없는 글이라 생략합니다.');
+    log.debug('SNS 임베드: 대상 인물이 없는 글이라 생략합니다.');
     return [];
   }
 

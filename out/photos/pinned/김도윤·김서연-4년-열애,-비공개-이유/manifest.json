@@ -1,0 +1,40 @@
+{
+  "note": "렌더 결과를 고정한 것이다. 원저작권은 각 원저작자에게 있다.",
+  "items": [
+    {
+      "file": "00-thumb.png",
+      "source": "source-article",
+      "photographer": "entertain.naver.com",
+      "license": "press photo",
+      "permalink": "https://m.entertain.naver.com/home/article/009/0005715708"
+    },
+    {
+      "file": "01.png",
+      "source": "source-article",
+      "photographer": "entertain.naver.com",
+      "license": "press photo",
+      "permalink": "https://m.entertain.naver.com/home/article/009/0005715708"
+    },
+    {
+      "file": "02.png",
+      "source": "source-article",
+      "photographer": "entertain.naver.com",
+      "license": "press photo",
+      "permalink": "https://m.entertain.naver.com/home/article/009/0005715708"
+    },
+    {
+      "file": "03.png",
+      "source": "source-article",
+      "photographer": "entertain.naver.com",
+      "license": "press photo",
+      "permalink": "https://m.entertain.naver.com/home/article/009/0005715708"
+    },
+    {
+      "file": "04.png",
+      "source": "openverse/flickr",
+      "photographer": "Japanexperterna.se",
+      "license": "by-sa",
+      "permalink": "https://www.flickr.com/photos/68532869@N08/17471462035"
+    }
+  ]
+}

@@ -1,0 +1,367 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "seoTitle",
+    "metaDescription",
+    "primaryKeyword",
+    "urlSlug",
+    "secondaryKeywords",
+    "tags",
+    "angle",
+    "directAnswer",
+    "keyTakeaways",
+    "sections",
+    "faq",
+    "conclusion",
+    "sources",
+    "entities",
+    "embeds",
+    "imageBriefs",
+    "spoiler"
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "글 제목. **앞은 검색어, 뒤는 축(angle)** 이다. 형식: \"영화 <제목> 줄거리 결말 (스포 O|스포 X) | <축>\". spoiler 값에 맞는 표기를 쓴다. **60자를 넘기지 말고, 작품명을 두 번 쓰지 말 것** (2026-08-01 실측: 끝에 제목을 또 붙여 65자가 됐다). 감독 이름은 제목에 넣지 않는다 — seoTitle 과 태그가 담고, 그 자리는 축이 써야 클릭이 된다. 축은 15자 안팎으로 줄여도 되지만 angle 필드가 가리키는 것과 같아야 한다. 좋은 예: \"영화 스파이더맨 브랜드 뉴 데이 줄거리 결말 (스포 X) | 혼자 남은 히어로\". 나쁜 예: \"영화 스파이더맨: 브랜드 뉴 데이 (스포 X) 줄거리 결말 정보\" (2026-08-02 실측 — 우리 발행글. 검색어만 있고 읽을 이유가 없어, 같은 검색 결과의 참고 글 \"…후기｜액션보다 피터 파커의 외로움이 남았던 영화\" 에 눌린다). 홍보 문구(\"역대급\", \"인생영화\")는 쓰지 않는다."
+    },
+    "seoTitle": {
+      "type": "string",
+      "description": "검색엔진용 제목. 60자 이내. \"영화 <제목> 줄거리 결말 <개봉연도> <감독>\" 처럼 검색어를 나열한다."
+    },
+    "metaDescription": {
+      "type": "string",
+      "description": "검색 결과 스니펫용 요약. 90~150자. 제목·감독·개봉연도·장르와 \"줄거리/결말을 정리했다\"가 들어간다."
+    },
+    "primaryKeyword": {
+      "type": "string",
+      "description": "이 글이 노리는 메인 검색 키워드 하나."
+    },
+    "urlSlug": {
+      "type": "string",
+      "description": "글 주소에 쓸 영문 슬러그. 소문자 영문·숫자·하이픈만. 3~6단어, 60자 이내. 한글을 쓰면 URL이 퍼센트 인코딩되어 SEO에 불리하므로 반드시 영문으로. 예: 'lim-young-woong-brand-reputation-july-2026'"
+    },
+    "entities": {
+      "type": "array",
+      "description": "이 영화의 감독과 주연 배우. nameEn 은 위키백과·위키미디어 공용에 실제 등재된 로마자 표기 (예: \"Alfred Hitchcock\"). 확실하지 않으면 nameEn 을 빈 문자열로 — 빈 값은 \"위키미디어에 없다\"는 신호로 쓰인다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nameKo",
+          "nameEn",
+          "role",
+          "historical"
+        ],
+        "properties": {
+          "nameKo": {
+            "type": "string",
+            "description": "한국어 정식 표기. 예: 임영웅"
+          },
+          "nameEn": {
+            "type": "string",
+            "description": "영문 표기. 위키백과·위키미디어 공용에서 쓰는 로마자 표기를 그대로 쓸 것. 예: Lim Young-woong, IU, BTS. 모르면 빈 문자열."
+          },
+          "role": {
+            "type": "string",
+            "description": "가수 / 배우 / 그룹 / 프로그램 등 짧은 분류."
+          },
+          "historical": {
+            "type": "boolean",
+            "description": "역사 인물이거나 이미 고인이라 공식 SNS 계정이 존재할 수 없으면 true. 세네카·플라톤처럼 오래전 사람은 반드시 true. 생존 여부를 모르면 false."
+          }
+        }
+      }
+    },
+    "secondaryKeywords": {
+      "type": "array",
+      "description": "본문에 자연스럽게 녹일 보조 키워드 및 롱테일 질의 5~10개.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tags": {
+      "type": "array",
+      "description": "태그 10개 이상. 제목 키워드 조합이 뼈대지만 **그것만 쓰지 않는다** (2026-08-02 실측 — 우리 발행글은 8개가 전부 제목 조합이었고, 같은 영화를 다룬 참고 글은 15개를 다섯 유형으로 섞었다). 유형별로: ① 제목 조합 7개 안팎 (제목 / 제목+줄거리 / 제목+결말 / 제목+정보 / 영화+제목 / 영화+제목+줄거리 / 영화+제목+결말) ② 쿠키영상 관련 2개 (제목+쿠키영상 / 제목+쿠키 — 쿠키가 있는 작품만) ③ 후기 유형 2개 (영화후기 / 스포없는후기 또는 스포주의) ④ 주연 배우 이름 1~2개 ⑤ 장르·시의성 1~2개 (마블영화 / 최신영화 / 개봉영화). 감독명도 하나 넣는다. 쉼표를 포함하지 않는다.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "angle": {
+      "type": "string",
+      "description": "이 글을 꿰는 **축** 한 줄. 30자 이내, 명사구나 짧은 평서문. 큰따옴표를 쓰지 않는다(당신의 문장이고 누구의 인용도 아니다). 참고 글 실측(메모리아 리뷰): \"눈으로 보기보다 귀로 듣는 영화\" 한 줄을 세우고 모든 문단이 소리를 다뤄, 1,494자·소제목 0개인데도 남는 글이 되었다. 축은 지어내지 않고 **평론의 표현·감독 인터뷰·예고편이 실제로 강조하는 것**에서 가져오며 근거가 된 출처를 sources 에 넣는다. 좋은 예: \"사람 많은 거리에서 혼자인 히어로\", \"액션이 아니라 성장의 영화\". 나쁜 예: \"재미있고 볼만한 영화\"(축이 아니라 감상), \"2026년 최고의 화제작\"(홍보 문구). 이 문장은 프롤로그의 마지막 문장으로 한 번, 해석 섹션의 닫는 판단으로 한 번 — 두 곳에서 회수된다."
+    },
+    "directAnswer": {
+      "type": "string",
+      "description": "이 영화가 무엇이고 이 글이 무엇을 정리했는지 2~3문장. 정보 글 톤으로 명확하게 — 검색과 AI 가 인용하는 자리다."
+    },
+    "keyTakeaways": {
+      "type": "array",
+      "description": "GEO(생성형 검색)용 사실 요약 4~6개. ⚠️ **결말을 적지 않는다** — 스포 O 글이라도 이 상자는 줄거리보다 **위**에 렌더링되어, 여기 결말을 쓰면 글을 읽기 시작하자마자 결말을 본다 (2026-08-01 실측 — 황해 초안의 '이 글의 핵심' 상자가 글 맨 위에서 결말을 그대로 밝혔다). 때로는 본문에 실리지 않기도 한다. 개봉연도·감독·상영시간·장르·수상·원작 같은 **확인된 사실**을 단독 인용 가능한 완결 문장으로.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sections": {
+      "type": "array",
+      "description": "본문 섹션 목록. 각 섹션은 h2 하나에 해당한다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "heading",
+          "paragraphs",
+          "bullets",
+          "table",
+          "callout"
+        ],
+        "properties": {
+          "heading": {
+            "type": "string",
+            "description": "섹션 이름. 반드시 이 순서: \"프롤로그\" \"영화 정보\" \"줄거리\" \"결말\" \"등장인물\" \"해석\" \"포인트\", 그리고 **쿠키영상이 있는 작품에서만** 마지막에 \"쿠키영상\". 쿠키가 없거나 확인하지 못했으면 그 섹션을 통째로 빼서 7개로 둔다(2026-08-02 실측 — 참고 글은 쿠키영상에 독립 소제목을 주었고 태그 15개 중 둘이 쿠키 관련이었는데, 우리 글은 언급이 0회였다). 뒤에 \" — 구절\"을 덧붙일 수 있다. ⚠️ **이 모드에서는 구절에 영화 제목을 넣는 것이 맞다** — 독자가 \"영화 <제목> 줄거리\" 로 검색해서 들어오기 때문이다 (책 모드는 반대로 제목 반복을 금지한다. 모드를 혼동하지 말 것). 단 **\"영화 정보\"·\"줄거리\"·\"결말\" 세 개까지만** 넣는다. 일곱 개 전부에 넣으면 같은 이름이 화면에 일곱 번 찍혀 목차가 읽히지 않는다(2026-08-01 실측 — 발행 전에 손으로 7 → 3 으로 줄였다). 좋은 예: \"줄거리 — 영화 새 줄거리\", \"결말 — 영화 새 결말\". 나머지(프롤로그·등장인물·해석·포인트)는 **내용을 말하는 구절**로 한다: \"해석 — 거리를 비추는 카메라\". 쿠키영상 섹션만 예외로 \"쿠키영상 — 영화 <제목> 쿠키영상\" 처럼 검색어를 그대로 쓴다(검색으로 들어오는 자리다). 의문형 어미(~인가, ~나, ~까)는 쓰지 않는다."
+          },
+          "paragraphs": {
+            "type": "array",
+            "description": "문단 2~4개. 문체와 어미는 지시문의 '당신의 목소리'를 따른다 — 여기서 문체를 정하지 않는다. 공통 규칙: 문단마다 문장 수를 달리한다, \"~이다. ~다.\" 단문 연타 금지. **줄거리·결말 섹션은 사건을 시간순으로** 적는다(참고 글 실측: 문단마다 다음 장면으로 넘어간다). 다만 한 문단이 200자를 넘지 않게 끊는다 — 참고 글은 중간값 162자였지만 모바일에서 벽으로 읽힌다. ⚠️ **이 글은 두 층이다.** 줄거리·영화 정보·등장인물은 정보층이라 문체를 자랑하지 않고 사건만 정확히 옮긴다. 프롤로그·해석·포인트는 평론층이라 여기서 판단을 내린다 — **해석 섹션을 가장 길고 공들여** 쓰고(문단 3~4개), 예고편에서 본 것 → 감독의 전작·같은 계열 작품과의 비교 → 이 영화가 포기한 것 → 평론의 합의(귀속) → **판단 한 문장** 순서로 쌓는다. 계보는 뭉뚱그리지 말고 **한 편에 한 줄씩** 짚는다(2026-08-02 실측 — 참고 글은 시리즈 4편을 개봉순으로 한 줄씩 짚어 인물의 변화를 보여 줬고, 우리 글은 감독 전작을 한 번 언급하고 끝냈다). **포인트 섹션은 첫 문단이 '아쉬운 점'** 이다 — 무엇이 덜 되었는지 구체적으로, 근거는 구조·평론의 합의·러닝타임 같은 사실에서만. 그 다음 문단이 맞는 관객과 안 맞는 관객, 함께 볼 작품, 확인된 평론 총점(매체명과 함께) 순이다. **쿠키영상 섹션은 문단 1~2개로 짧게** 쓰고 개수만 밝히며 내용은 쓰지 않는다. 보지 않고는 알 수 없는 것(연기의 미세한 좋고 나쁨, 편집 리듬, 음악의 효과)은 평론에 귀속해야만 쓸 수 있고, 체험을 주장하는 문장(\"숨을 죽였다\", \"객석이 조용해졌다\")은 어느 층에서도 금지다.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bullets": {
+            "type": "array",
+            "description": "이 섹션의 불릿 목록. 필요 없으면 빈 배열.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "table": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "caption",
+              "headers",
+              "rows"
+            ],
+            "description": "\"영화 정보\" 섹션에만 넣는 표. headers 는 [\"항목\",\"내용\"]. 행은 원제/감독/출연/장르/제작국가/상영시간/개봉/등급/원작 — 각 행의 첫 칸이 항목 이름이다. 확인하지 못한 항목은 행을 빼고, 지어내지 않는다. 다른 섹션의 table 은 빈 값.",
+            "properties": {
+              "caption": {
+                "type": "string"
+              },
+              "headers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "description": "영화 정보 행. 예: [[\"원제\",\"The Birds\"],[\"감독\",\"알프레드 히치콕\"],[\"출연\",\"로드 테일러, 티피 헤드런\"],[\"장르\",\"공포, 스릴러\"],[\"제작국가\",\"미국\"],[\"상영시간\",\"120분\"],[\"개봉\",\"1963년\"]]"
+              }
+            }
+          },
+          "callout": {
+            "type": "string",
+            "description": "이미 공개된 **대사 한 줄** 또는 **평론 한 문장** (공식 예고편·배급사 보도자료·언론 리뷰에서 확인한 것만). 당신의 감상이 아니다. 확인된 것이 없으면 반드시 빈 문자열. 대사는 어느 장면인지 본문에서 밝힌다."
+          }
+        }
+      }
+    },
+    "faq": {
+      "type": "array",
+      "description": "자주 묻는 질문. 실제 검색 질의처럼 쓰고, 답변은 2~4문장으로 완결한다. **해당하면 반드시 넣는 두 문항** (2026-08-02 실측 — 참고 글은 둘 다 다뤘고 우리 글은 둘 다 없었다): ① 쿠키영상 — \"○○ 쿠키영상 있나요?\" 개수만 답하고 내용은 쓰지 않는다 ② 전작 관람 — 시리즈·속편이면 \"전작을 보고 가야 하나요?\" 와 그 이유, 그리고 전작을 안 본 사람이 알아야 할 요점 두세 개. 나머지는 상영시간·원작·관람 경로 같은 질의로 채운다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question",
+          "answer"
+        ],
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "conclusion": {
+      "type": "string",
+      "description": "에필로그. 글을 접는 두세 문장 — 요약 반복이 아니라 여운. 문체는 지시문의 '당신의 목소리'를 따르고, 그 목소리의 시그니처가 있으면 여기서 쓴다. \"~이다\" 연타 금지."
+    },
+    "sources": {
+      "type": "array",
+      "description": "웹 검색으로 실제 확인한 출처만 넣는다. 확인하지 못했으면 빈 배열. URL을 지어내지 않는다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "url",
+          "publisher",
+          "date"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD 또는 YYYY-MM. 모르면 빈 문자열."
+          }
+        }
+      }
+    },
+    "embeds": {
+      "type": "array",
+      "description": "본문에 넣을 **공식 예고편·클립 유튜브 임베드**. ⚠️ **이 배열의 첫 영상이 본문 사진의 원천이다** — 코드가 그 예고편을 재생해 장면을 캡처한다(스틸컷은 배급사 저작물이라 쓰지 않고, 예고편은 배급사가 배포를 의도한 홍보물이라 성격이 다르다). 그러므로 **비워 두면 본문 사진이 0장이 된다.** 반드시 공식 예고편 하나는 찾아 넣는다. **한국 공식 채널을 최우선**으로 — 외국 채널 영상은 캡처에 그 나라 자막이 박혀 나온다(2026-08-01 실측: 채널명이 소니 픽처스인데 일본어 자막이 박혔다). 배급사·공식 채널 영상만, 검색으로 실제 확인한 것만. 2~4개를 목표로 하고, 확실하지 않으면 빈 배열.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "videoId",
+          "title",
+          "channel",
+          "afterSection",
+          "startSeconds",
+          "quote",
+          "caption",
+          "speaker",
+          "isStudio",
+          "isHook"
+        ],
+        "properties": {
+          "speaker": {
+            "type": "string",
+            "description": "이 장면에서 말하고 있는 사람의 이름(방송에 나오는 이름 그대로). 이 장면을 캡처하면 화면에 이 사람이 나올 가능성이 높으므로, 글의 주인공이 실제로 보이는 장면을 고르는 데 쓴다. 자막 맥락으로 판단이 안 되면 빈 문자열."
+          },
+          "isStudio": {
+            "type": "boolean",
+            "description": "스튜디오 MC·패널이 상황을 논평하는 장면이면 true. 데이트·대화 현장이면 false. 스튜디오 컷은 출연자가 화면에 없어 캡처 대상으로 쓸 수 없다. 확실하지 않으면 false."
+          },
+          "isHook": {
+            "type": "boolean",
+            "description": "이 장면이 **대표 이미지로 쓸 만한가**. 감정이 터지는 순간(울음·분노·충격·폭소), 표정이 크게 드러나는 클로즈업, 두 사람이 정면으로 부딪히는 대목이면 true. 인물이 걸어오거나 배경만 보이거나 담담히 설명하는 장면은 false. 이 표시가 붙은 장면 중에서 얼굴이 가장 크게 잡힌 것을 대표 이미지로 씁니다. 판단이 안 되면 false."
+          },
+          "videoId": {
+            "type": "string",
+            "description": "유튜브 영상 ID 11자리. watch?v= 뒤의 값. 전체 URL이 아니라 ID만. 검색으로 실제 확인한 것만 넣고 절대 추측하지 말 것."
+          },
+          "title": {
+            "type": "string",
+            "description": "영상 제목."
+          },
+          "channel": {
+            "type": "string",
+            "description": "채널명. 반드시 공식 채널이어야 한다(소속사·방송사·아티스트 공식). 팬 채널이나 재업로드 채널은 금지."
+          },
+          "afterSection": {
+            "type": "integer",
+            "description": "몇 번째 섹션 뒤에 넣을지 (1부터 시작)."
+          },
+          "startSeconds": {
+            "type": "integer",
+            "description": "재생을 시작할 지점(초). **제공된 자막에 실제로 있는 시각만** 쓸 것. 지어내면 엉뚱한 장면이 재생된다. 지정할 근거가 없으면 0."
+          },
+          "quote": {
+            "type": "string",
+            "description": "그 지점의 실제 대사 한두 줄. **자막에 있는 말만** 옮길 것. 요약·창작 금지. 없으면 빈 문자열."
+          },
+          "caption": {
+            "type": "string",
+            "description": "이 장면이 왜 볼 만한지 한 줄 설명. 낚시 금지. 없으면 빈 문자열."
+          }
+        }
+      }
+    },
+    "imageBriefs": {
+      "type": "array",
+      "description": "생성할 이미지 카드 설명. 첫 항목은 반드시 placement가 thumbnail 인 대표 이미지.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "placement",
+          "headline",
+          "subline",
+          "caption",
+          "alt",
+          "afterSection",
+          "photoQuery",
+          "eyebrow",
+          "statValue",
+          "statLabel",
+          "noText"
+        ],
+        "properties": {
+          "placement": {
+            "type": "string",
+            "enum": [
+              "thumbnail",
+              "body"
+            ],
+            "description": "thumbnail은 대표 이미지, body는 본문 삽입 이미지."
+          },
+          "photoQuery": {
+            "type": "string",
+            "description": "배경으로 깔 사진을 스톡 사진 사이트에서 검색할 영어 키워드 2~4단어. 한국어 금지. ⚠️ **영화 장면을 재현하려 하지 마세요** — 스톡으로 장면을 흉내내면 독자가 실제 스틸로 오인한다. 극장·필름·포스터 벽처럼 **영화를 보는 자리**의 사물 컷을 쓴다. 좋은 예: \"empty cinema seats\", \"film reel close up\", \"movie theater marquee night\". 나쁜 예: \"woman attacked by birds\"(장면 재현), \"scary crows\"(장면 재현)."
+          },
+          "headline": {
+            "type": "string",
+            "description": "이미지 위에 얹히는 문구. 12자 이내. 이 영화를 한 조각으로 보여 주는 조용한 말 — 순위·퍼센트 같은 뉴스 어법과 낚시 문구는 금지. **포스터 이미지를 쓰는 브리프는 headline 을 빈 문자열로 두고 noText 를 true 로 한다** (포스터에는 제목·배우명이 이미 인쇄돼 있어 글자가 겹친다)."
+          },
+          "subline": {
+            "type": "string",
+            "description": "헤드라인 아래 보조 문구. 30자 이내."
+          },
+          "eyebrow": {
+            "type": "string",
+            "description": "헤드라인 위에 작게 들어갈 분류 라벨. 2~8자. 예: '가입 조건', '핵심 정리', '신청 방법'. 이미지마다 다르게."
+          },
+          "statValue": {
+            "type": "string",
+            "description": "**영화 글에서는 항상 빈 문자열.** 수치 카드는 정보 글의 톤과 맞지 않는다. 개봉연도·상영시간은 정보 표가 이미 말한다."
+          },
+          "statLabel": {
+            "type": "string",
+            "description": "**영화 글에서는 항상 빈 문자열.** statValue 와 같은 이유."
+          },
+          "caption": {
+            "type": "string",
+            "description": "이미지 아래 캡션. 본문 이미지에만 사용."
+          },
+          "alt": {
+            "type": "string",
+            "description": "SEO용 alt 텍스트. 키워드를 포함한 서술형 문장."
+          },
+          "afterSection": {
+            "type": "integer",
+            "description": "body 이미지를 몇 번째 섹션 뒤에 넣을지 (1부터 시작). thumbnail 이면 0."
+          },
+          "noText": {
+            "type": "boolean",
+            "description": "사진 위에 글자를 얹지 않는다. 포스터처럼 **이미 글자가 인쇄된 이미지**와 우리가 만든 카드에는 true. 그 밖에는 false. (구조화 출력이 모든 필드를 요구하므로 항상 명시한다.)"
+          }
+        }
+      }
+    },
+    "spoiler": {
+      "type": "boolean",
+      "description": "이 글이 결말을 밝히는가. **true 면 title 에 \"(스포 O)\" 를, false 면 \"(스포 X)\" 를 넣는다.** true 여도 결말 섹션 밖에서는 결말을 흘리지 않는다. 지시문이 요구한 쪽을 그대로 따른다."
+    }
+  }
+}

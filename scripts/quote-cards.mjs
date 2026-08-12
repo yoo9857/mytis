@@ -77,10 +77,17 @@ const BASE = `
     .small { font-size:24px; letter-spacing:.35em; color:${PAL.sub}; }
   </style>`;
 
-const authorCard = `${BASE}
-  <div class="card">
-    <div class="grain"></div><div class="edge"></div>
-    <div style="position:absolute; top:120px; left:50%; transform:translateX(-50%);
+/* 사진이 있으면 폴라로이드, 없으면 **이름을 조판한 명패**.
+ *
+ * 왜 분기가 필요한가: `--author-img` 는 처음부터 선택 인자였지만 레이아웃이
+ * 그대로여서, 사진 없이 돌리면 **빈 흰 사각형**이 나왔다 (깨진 것처럼 보인다).
+ *
+ * > 2026-08-01: 히가시노 게이고는 커먼즈에 자유 라이선스 사진이 **없다**
+ * > (검색 결과가 전부 東野駅·초등학교·동명이인이었다). 자동 경로로는 0장이 정답이라
+ * > 사진 없는 작가 카드가 필요했다. 최종 발행글에는 발행자가 직접 고른 보도사진을
+ * > 넣었지만, **그 판단이 없을 때 카드가 깨지지 않아야** 한다. */
+const authorPlate = imgData
+  ? `<div style="position:absolute; top:120px; left:50%; transform:translateX(-50%);
                 width:640px; height:790px; background:#fff; padding:22px 22px 110px;
                 box-shadow:0 24px 60px #7a5c3a33; border-radius:4px;">
       <div style="width:100%; height:100%; background:url('${imgData}') center 20%/cover no-repeat;
@@ -88,7 +95,19 @@ const authorCard = `${BASE}
       <div class="serif" style="position:absolute; left:0; right:0; bottom:34px; text-align:center;
                   font-size:34px; color:#4a4a4a; letter-spacing:.08em;">${esc(author)}</div>
       <!-- 폴라로이드 안 이름은 흰 종이 위 — 팔레트 잉크(밝은 색일 수 있음)를 쓰면 안 보인다 -->
-    </div>
+    </div>`
+  : `<div style="position:absolute; top:120px; left:110px; right:110px; height:790px;
+                display:flex; flex-direction:column; justify-content:center; align-items:center;">
+      <div style="width:120px; height:1px; background:${PAL.sub}88; margin-bottom:64px;"></div>
+      <div class="serif" style="font-size:96px; line-height:1.35; color:${PAL.ink};
+                  letter-spacing:.06em; text-align:center; word-break:keep-all;">${esc(author)}</div>
+      <div style="width:120px; height:1px; background:${PAL.sub}88; margin-top:64px;"></div>
+    </div>`;
+
+const authorCard = `${BASE}
+  <div class="card">
+    <div class="grain"></div><div class="edge"></div>
+    ${authorPlate}
     <div class="bottom">
       <div class="bookline"></div>
       <div class="serif" style="font-size:40px; margin-bottom:14px; color:${PAL.ink};">${esc(life)}</div>

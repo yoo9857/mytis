@@ -46,9 +46,17 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["nameKo", "nameEn", "role"],
+        "required": [
+          "nameKo",
+          "nameEn",
+          "role",
+          "historical"
+        ],
         "properties": {
-          "nameKo": { "type": "string", "description": "한국어 정식 표기. 예: 임영웅" },
+          "nameKo": {
+            "type": "string",
+            "description": "한국어 정식 표기. 예: 임영웅"
+          },
           "nameEn": {
             "type": "string",
             "description": "영문 표기. 위키백과·위키미디어 공용에서 쓰는 로마자 표기를 그대로 쓸 것. 예: Lim Young-woong, IU, BTS. 모르면 빈 문자열."
@@ -56,6 +64,10 @@
           "role": {
             "type": "string",
             "description": "가수 / 배우 / 그룹 / 프로그램 등 짧은 분류."
+          },
+          "historical": {
+            "type": "boolean",
+            "description": "역사 인물이거나 이미 고인이라 공식 SNS 계정이 존재할 수 없으면 true. 세네카·플라톤처럼 오래전 사람은 반드시 true. 생존 여부를 모르면 false."
           }
         }
       }
@@ -63,12 +75,16 @@
     "secondaryKeywords": {
       "type": "array",
       "description": "본문에 자연스럽게 녹일 보조 키워드 및 롱테일 질의 5~10개.",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "tags": {
       "type": "array",
       "description": "티스토리 태그. 각 태그는 공백 없이 또는 짧은 단어 조합으로. 쉼표를 포함하지 않는다.",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "directAnswer": {
       "type": "string",
@@ -77,7 +93,9 @@
     "keyTakeaways": {
       "type": "array",
       "description": "핵심 요약 4~6개. 각 항목은 그 자체로 인용 가능한 완결된 사실 문장이어야 한다.",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "sections": {
       "type": "array",
@@ -85,7 +103,13 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["heading", "paragraphs", "bullets", "table", "callout"],
+        "required": [
+          "heading",
+          "paragraphs",
+          "bullets",
+          "table",
+          "callout"
+        ],
         "properties": {
           "heading": {
             "type": "string",
@@ -94,24 +118,44 @@
           "paragraphs": {
             "type": "array",
             "description": "본문 문단 2~4개. 한 문단은 3~6문장. 추상적 서술 대신 수치·사례·비교를 넣는다.",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           },
           "bullets": {
             "type": "array",
             "description": "이 섹션의 불릿 목록. 필요 없으면 빈 배열.",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           },
           "table": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["caption", "headers", "rows"],
+            "required": [
+              "caption",
+              "headers",
+              "rows"
+            ],
             "description": "비교표. 필요 없으면 caption은 빈 문자열, headers와 rows는 빈 배열로 둔다.",
             "properties": {
-              "caption": { "type": "string" },
-              "headers": { "type": "array", "items": { "type": "string" } },
+              "caption": {
+                "type": "string"
+              },
+              "headers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "rows": {
                 "type": "array",
-                "items": { "type": "array", "items": { "type": "string" } }
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               }
             }
           },
@@ -128,10 +172,17 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["question", "answer"],
+        "required": [
+          "question",
+          "answer"
+        ],
         "properties": {
-          "question": { "type": "string" },
-          "answer": { "type": "string" }
+          "question": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          }
         }
       }
     },
@@ -145,12 +196,26 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["title", "url", "publisher", "date"],
+        "required": [
+          "title",
+          "url",
+          "publisher",
+          "date"
+        ],
         "properties": {
-          "title": { "type": "string" },
-          "url": { "type": "string" },
-          "publisher": { "type": "string" },
-          "date": { "type": "string", "description": "YYYY-MM-DD 또는 YYYY-MM. 모르면 빈 문자열." }
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD 또는 YYYY-MM. 모르면 빈 문자열."
+          }
         }
       }
     },
@@ -160,7 +225,18 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["videoId", "title", "channel", "afterSection", "startSeconds", "quote", "caption", "speaker", "isStudio", "isHook"],
+        "required": [
+          "videoId",
+          "title",
+          "channel",
+          "afterSection",
+          "startSeconds",
+          "quote",
+          "caption",
+          "speaker",
+          "isStudio",
+          "isHook"
+        ],
         "properties": {
           "speaker": {
             "type": "string",
@@ -178,7 +254,10 @@
             "type": "string",
             "description": "유튜브 영상 ID 11자리. watch?v= 뒤의 값. 전체 URL이 아니라 ID만. 검색으로 실제 확인한 것만 넣고 절대 추측하지 말 것."
           },
-          "title": { "type": "string", "description": "영상 제목." },
+          "title": {
+            "type": "string",
+            "description": "영상 제목."
+          },
           "channel": {
             "type": "string",
             "description": "채널명. 반드시 공식 채널이어야 한다(소속사·방송사·아티스트 공식). 팬 채널이나 재업로드 채널은 금지."
@@ -193,11 +272,11 @@
           },
           "quote": {
             "type": "string",
-            "description": "그 지점의 실제 대사 한두 줄. **자막에 있는 말만** 옮길 것. 요약·창작 금지. 없으면 빈 문자열."
+            "description": "그 지점의 실제 대사 한두 줄. **자막에 있는 말만** 옮길 것. 요약·창작 금지. 없으면 빈 문자열. 자동 자막인 영상에서는 **어절을 주워 문장을 만들지 말 것** — 발행 전 verifyQuotes 가 자막과 대조한다."
           },
           "caption": {
             "type": "string",
-            "description": "이 장면이 왜 볼 만한지 한 줄 설명. 낚시 금지. 없으면 빈 문자열."
+            "description": "이 장면이 **어느 대목인지** 한 줄. 캡처된 정지 화면에 붙는 설명이므로 **화면과 자막으로 확인되는 것만** 쓴다. ⚠️ 분위기·흐름 서술 금지 — 정지 화면은 그것을 보여줄 수 없다. 나쁜 예(2026-08-01 실제로 나온 것): \"웃음이 번진 직후\", \"대화의 속도가 늦어진다\", \"번호를 세는 동안 분위기가 다시 가벼워진다\", \"첫인상 평가가 확인된다\". 좋은 예: \"7번 자리에 영철의 이름이 놓인다\", \"광수를 1위로 답한 직후\". 캡션끼리 **같은 소재를 반복하지 않는다**. 없으면 빈 문자열."
           }
         }
       }
@@ -223,7 +302,10 @@
         "properties": {
           "placement": {
             "type": "string",
-            "enum": ["thumbnail", "body"],
+            "enum": [
+              "thumbnail",
+              "body"
+            ],
             "description": "thumbnail은 대표 이미지, body는 본문 삽입 이미지."
           },
           "photoQuery": {

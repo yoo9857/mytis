@@ -3,8 +3,16 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { DIRS, FILES, stamp, safeSlug } from './paths.js';
 import { log, fmtDuration } from './log.js';
-import { buildArticlePrompt, buildNewsPrompt, buildClipPrompt, buildBookPrompt } from './prompt.js';
-import { MODE, MODE_LABEL, detectMode, resolveMode, can } from './mode.js';
+import {
+  buildArticlePrompt,
+  buildNewsPrompt,
+  buildClipPrompt,
+  buildBookPrompt,
+  buildMoviePrompt,
+  buildEconPrompt,
+  buildDramaPrompt,
+} from './prompt.js';
+import { MODE, MODE_LABEL, MODES, detectMode, resolveMode, can, bodyImageCount } from './mode.js';
 
 /** 주제 문자열이 기사 URL 인지 판별한다. */
 export function isUrl(text) {
@@ -217,13 +225,17 @@ function guessShow(clip) {
 }
 
 /** 스키마 결과를 안전한 형태로 다듬는다 (누락 필드 보정). */
-function normalizeArticle(raw, { topic, cfg }) {
+function normalizeArticle(raw, { topic, cfg, mode = '' }) {
   const arr = (v) => (Array.isArray(v) ? v : []);
   const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
   const sections = arr(raw.sections)
     .map((s) => ({
       heading: str(s?.heading),
+      /* `answer` — 소제목 바로 아래 **한 줄 답**. html.js 가 굵은 한 줄로 그린다.
+       * 목차로 건너온 독자가 문단을 읽지 않고도 자기 자리인지 알게 하는 장치다
+       * (사용자 지적 2026-08-06 · 검사는 contract.js 의 sectionsMissingAnswer). */
+      answer: str(s?.answer),
       paragraphs: arr(s?.paragraphs).map(str).filter(Boolean),
       bullets: arr(s?.bullets).map(str).filter(Boolean),
       table: {
@@ -235,10 +247,18 @@ function normalizeArticle(raw, { topic, cfg }) {
     }))
     .filter((s) => s.heading && (s.paragraphs.length || s.bullets.length || s.table.rows.length));
 
+  /* 태그 상한은 **모드 규격**을 따른다.
+   *
+   * ⚠️ 예전에는 `cfg.article.tagCount`(=8)로 잘랐다. 그래서 모델이 16개를 만들어도
+   * 8개만 남았고, 규격이 10~16을 요구하는 모드는 **매번 경고가 찍혔다.**
+   * 지시문을 고쳐도 스키마를 고쳐도 8개였던 이유가 여기였다 —
+   * learned.md 가 "태그는 안 붙었다" 며 규격 하한을 올린 것은 증상 대응이었다.
+   * > 2026-08-03 발각: 책·영화 모드 규격 [10,16] · 지시문 "12~16개" · 결과 8개. */
+  const tagMax = MODES[mode]?.contract?.tags?.[1] || Math.max(1, cfg.article.tagCount);
   const tags = arr(raw.tags)
     .map((t) => str(t).replace(/[#,"']/g, '').trim())
     .filter(Boolean)
-    .slice(0, Math.max(1, cfg.article.tagCount));
+    .slice(0, tagMax);
 
   // 유튜브 ID 는 정확히 11자리. 형식이 어긋나면 지어낸 값일 가능성이 높아 버린다.
   const embeds = arr(raw.embeds)
@@ -251,6 +271,22 @@ function normalizeArticle(raw, { topic, cfg }) {
       startSeconds: Number.isFinite(e?.startSeconds) ? Math.max(0, Number(e.startSeconds)) : 0,
       quote: str(e?.quote),
       caption: str(e?.caption),
+      /* 영상 모드의 **장면 판정 세 필드.** 스키마가 required 로 요구하고 지시문이
+       * 요청하는데 여기 한 줄이 없어 **조용히 버려지고 있었다** — CLAUDE.md 가
+       * 경고한 그 고장이다. `doctor` 는 아티클 **최상위** 키만 대조하므로
+       * embeds 안쪽은 보지 못했다 (§7-15).
+       *
+       * > 2026-08-04 발각 — 이 셋이 비어서 죽어 있던 경로 3개:
+       * >  ① speaker  → `pickScenes` 의 대표 장면 승격이 **한 번도 작동하지 않았다.**
+       * >     "…말하는 장면이 없어 대표 사진에 주인공이 안 나올 수 있습니다" 경고가
+       * >     주인공이 실제로 말하는 글에서도 **매번** 찍혔다.
+       * >  ② isStudio → 스튜디오 컷 제외 필터가 아무것도 걸러내지 못했다.
+       * >  ③ isHook   → 대표 후보 pool 이 늘 전체가 되어, "의미 판단은 AI(isHook),
+       * >     화면 검증은 코드(얼굴 크기)" 설계가 **얼굴 크기 하나로** 주그러졌다.
+       * >     지시문은 isHook 설명에 16줄을 쓰고 있었다. */
+      speaker: str(e?.speaker),
+      isStudio: e?.isStudio === true,
+      isHook: e?.isHook === true,
     }))
     .filter((e) => /^[A-Za-z0-9_-]{11}$/.test(e.videoId));
 
@@ -287,10 +323,110 @@ function normalizeArticle(raw, { topic, cfg }) {
       .slice(0, 70),
     primaryKeyword: str(raw.primaryKeyword) || (fromNews ? title : topic),
     entities: arr(raw.entities)
-      .map((e) => ({ nameKo: str(e?.nameKo), nameEn: str(e?.nameEn), role: str(e?.role) }))
+      .map((e) => ({
+        nameKo: str(e?.nameKo),
+        nameEn: str(e?.nameEn),
+        role: str(e?.role),
+        /* 역사 인물·고인은 공식 SNS 가 존재할 수 없다 — 찾으면 그건 팬 계정이다.
+         * > 2026-08-03: 세네카(기원후 65년 사망) 글에 @seneca_theyounger 가
+         * > '공식 근황' 으로 붙었다. FAN_PATTERN 은 이름 변형이라 못 걸렀다. */
+        historical: e?.historical === true,
+      }))
       .filter((e) => e.nameKo || e.nameEn),
     secondaryKeywords: arr(raw.secondaryKeywords).map(str).filter(Boolean),
     tags,
+    /* ⚠️ **여기에 없는 키는 버려진다.** 이 함수는 고정된 모양을 만들기 때문에
+     * 스키마에 필드를 추가해도 여기 한 줄을 안 넣으면 아티클에 남지 않는다.
+     *
+     * > 2026-08-01 발각 — `spoiler` 는 영화 스키마 required 에 처음부터 있었는데
+     * > 발행된 글 두 편 모두 그 키가 없었다. 제목의 "(스포 O)" 표기는 지시문이
+     * > 시켜서 됐던 것이고, 필드는 한 번도 통과한 적이 없다. `angle` 도 같았다.
+     * > 이 함정은 `npm run doctor` 의 스키마-정규화 대조가 잡는다(modes/index.js). */
+    angle: str(raw.angle),
+    /* 네이버 글감 > 장소 카드에 쓸 **네이버 지도 등재 장소명**.
+     * 지어내면 검색이 비어 카드가 안 붙는다 — 확인한 이름만. */
+    place: str(raw.place),
+    spoiler: raw.spoiler === true,
+    /* 경제 모드 전용 두 필드 (src/schema/econ.schema.json).
+     *
+     * `asOf` — 이 글에 실린 수치·제도의 기준 시점. 금리·세율·한도는 바뀌므로
+     * 기준일이 없는 숫자는 독자를 속인다.
+     * `figures` — 본문 수치와 출처·기준일의 짝. 여기 올릴 수 없는 숫자는 본문에도
+     * 쓰지 않는다는 규칙을 기계가 셀 수 있게 만든 것이다(contract.figures).
+     *
+     * 다른 모드에서는 빈 값으로 남는다 — 스키마에 없으니 모델이 채우지 않는다. */
+    asOf: str(raw.asOf),
+    /* `airDate` — 드라마 모드의 방송일. `contract.sourcesAfterAirDate` 가 이 날짜를
+     * `sources[].date` 와 대조해 **그 회차를 실제로 취재했는지** 막는다.
+     * 표 안에만 있으면 코드가 읽을 수 없어서 따로 받는다. 이 한 줄이 없으면
+     * 모델이 채운 값이 조용히 버려지고 검사가 "방송일 없음" 으로 전부 막는다. */
+    airDate: str(raw.airDate),
+    figures: arr(raw.figures)
+      .map((f) => ({
+        label: str(f?.label),
+        value: str(f?.value),
+        source: str(f?.source),
+        asOf: str(f?.asOf),
+      }))
+      /* 출처 없는 수치는 **버린다.** 남겨 두면 표에 빈 칸으로 실려서,
+       * 근거를 대겠다고 만든 표가 근거가 없다는 증거가 된다. */
+      .filter((f) => f.label && f.value && f.source)
+      /* **가상 사례의 숫자를 기관 출처로 내보내지 않는다.**
+       *
+       * > 2026-08-03 실측: 주담대 글에서 `가상 사례 담보가치 = 10억원 [금융위원회]`,
+       * > `가상 사례 LTV 산출액 = 7억원 [금융위원회]` 가 나왔다. 금융위원회는
+       * > 그런 사례를 발표한 적이 없다. **모델이 자기가 만든 예시에 기관 이름을 붙인 것**이다.
+       *
+       * 계산 예시는 글에 필요하다(지시문이 시킨다). 다만 그 숫자는 본문에서 조건과 함께
+       * 보여주는 것이고, `figures` 는 **기관이 정한 값**만 담는 자리다. 출처를 대겠다고
+       * 만든 표에 거짓 출처가 한 줄 섞이면 표 전체를 믿을 수 없다. */
+      .filter((f) => !/가상|예시|사례|가정|시뮬|만약/.test(f.label)),
+    /* `cards` — 본문에 넣을 정보 카드. infographic.js 가 정사각 이미지로 그린다.
+     * 이미지 검색 키워드가 아니라 **카드에 들어갈 글**이다 (참고: dampick 분석,
+     * learned.md 2026-08-03 — 그쪽 카드도 템플릿에 글자를 채운 것이었다). */
+    cards: arr(raw.cards)
+      .map((c) => ({
+        type: c?.type === 'columns' ? 'columns' : 'reasons',
+        title: str(c?.title),
+        afterSection: Number.isFinite(c?.afterSection) ? Math.max(1, Number(c.afterSection)) : 1,
+        items: arr(c?.items)
+          .map((it) => ({ label: str(it?.label), text: str(it?.text) }))
+          .filter((it) => it.label),
+      }))
+      // 제목이 없거나 항목이 2개 미만이면 카드가 아니다 — 그리면 빈 틀만 나온다
+      .filter((c) => c.title && c.items.length >= 2)
+      /**
+       * 상한은 **모드 규격**(`modes/<id>.js` 의 `contract.cards`)이 갖는다.
+       *
+       * 전에는 `.slice(0, 2)` 로 박혀 있었다. 그래서 경제 모드가 규격을 3~5 로 올린 뒤
+       * **모델이 3개를 내도 코드가 2개로 잘랐고**, 게이트는 자기가 자른 결과를 보고
+       * "cards 2개 (규격 3~5)" 라고 다섯 번 보고했다. 지시문·스키마를 두 번 고치며
+       * 모델을 의심했는데 원인은 이 줄이었다 (2026-08-04, §7-19).
+       *
+       * ⚠️ 규격을 올릴 때 이 줄을 함께 볼 필요는 없다 — 규격에서 읽는다. 대신
+       * **새 필드에 상한을 손으로 박지 말 것.** 상한은 규격 한 곳에만 둔다.
+       */
+      .slice(0, MODES[mode]?.contract?.cards?.[1] ?? 2),
+    /* `checkSites` — 독자가 직접 열어 확인할 기관 조회 페이지. html.js 가 링크 카드로 그린다.
+     * 참고 글 분석에서 나온 것이다: "확인하세요" 와 **확인할 주소를 주는 것**은 다르다
+     * (learned.md 2026-08-03, hye_life 집 구하기 — 인터넷등기소·중개업정보 링크). */
+    checkSites: arr(raw.checkSites)
+      .map((s) => ({ name: str(s?.name), url: str(s?.url), why: str(s?.why) }))
+      // 주소가 없거나 형식이 아니면 버린다 — 막힌 링크는 없는 것보다 나쁘다
+      .filter((s) => s.name && /^https?:\/\//i.test(s.url)),
+    /* `relatedPosts` — **이 블로그의 이전 글**로 가는 링크. html.js 가 '이어 읽기' 로 그린다.
+     *
+     * 왜 필드인가: 같은 주제를 여러 편으로 나눠 쓰면 검색에서 서로를 끌어올리는데,
+     * 그 연결이 산문 안에 있으면 렌더가 없어서 **주소가 화면에 남거나 사라진다**
+     * (rich() 는 굵게만 태그로 바꾼다 — 링크는 일부러 열지 않았다).
+     *
+     * 앞 글에서 뒤 글로는 걸 수 없다 — **발행된 글은 수정할 수 없다.**
+     * 그래서 연결은 늘 새 글 → 옛 글 한 방향이고, 이 필드는 그 방향만 담는다. */
+    relatedPosts: arr(raw.relatedPosts)
+      .map((p) => ({ title: str(p?.title), url: str(p?.url), why: str(p?.why) }))
+      .filter((p) => p.title && /^https?:\/\//i.test(p.url))
+      // 셋을 넘기면 글 끝이 링크 목록이 된다 — 이어 읽기는 다음 한두 편이면 된다
+      .slice(0, 3),
     directAnswer: str(raw.directAnswer),
     keyTakeaways: arr(raw.keyTakeaways).map(str).filter(Boolean),
     sections,
@@ -310,6 +446,17 @@ function normalizeArticle(raw, { topic, cfg }) {
     imageBriefs,
     generatedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * `normalizeArticle` 이 실제로 만들어 내는 **최상위 키 목록**.
+ *
+ * 스키마 required 와 이 목록을 대조하면, 스키마에만 있고 아티클까지 오지 못하는
+ * 필드를 찾을 수 있다 (`npm run doctor`). 목록을 손으로 옮겨 적지 않고 빈 입력으로
+ * 한 번 돌려서 얻는다 — 옮겨 적으면 그것부터 낡는다.
+ */
+export function articleShapeKeys(cfg) {
+  return Object.keys(normalizeArticle({}, { topic: '점검', cfg }));
 }
 
 function articleCharCount(article) {
@@ -334,7 +481,11 @@ export async function writeArticle({ topic, cfg }) {
    * 조언형 callout 이 계속 나왔다 (2026-07-29 · 6차 시도까지 재발 —
    * 이 라우팅 자체가 한 번 조용히 빠져서 6차도 옛 스키마로 나갔다).
    * codex 는 --output-schema 의 description 을 프롬프트보다 강하게 따른다. */
-  const schemaFile = detectMode(topic) === MODE.BOOK ? FILES.bookSchema : FILES.articleSchema;
+  /* 스키마는 **모드 선언에서** 읽는다 (src/modes/<id>.js 의 schemaFile).
+   * 예전에는 여기 삼항식으로 하드코딩돼 있었고, 모드를 추가할 때마다 이 줄을
+   * 같이 고쳐야 했다 — 잊으면 새 모드가 article.schema.json 으로 나간다. */
+  const detected = detectMode(topic);
+  const schemaFile = path.join(DIRS.schema, MODES[detected]?.schemaFile || 'article.schema.json');
   if (!fs.existsSync(schemaFile)) {
     throw new Error(`아티클 스키마를 찾을 수 없습니다: ${schemaFile}`);
   }
@@ -399,18 +550,32 @@ export async function writeArticle({ topic, cfg }) {
     log.info('검색과 집필에 수 분이 걸립니다. 기다려 주세요...');
 
     try {
-      let prompt = clip
-        ? buildClipPrompt({ clip, cfg, buzz })
-        : fromNews
-          ? buildNewsPrompt({ url: topic, cfg, source })
-          : buildArticlePrompt({ topic, cfg });
+      /* 지시문은 **모드로** 고른다.
+       *
+       * ⚠️ 예전에는 `clip / fromNews / else` 세 갈래였다. 그래서 `buildBookPrompt` 는
+       * import 되어 있는데 **한 번도 호출되지 않았다** — 책 글이 연예 이슈 톤의
+       * `buildArticlePrompt` 로 쓰였고, 책다운 것은 스키마(book.schema.json)뿐이었다.
+       *
+       * > 2026-08-01 발견: 그래서 BOOK_VOICES·'읽은 척 금지'·섹션 7개 구조가
+       * > 모델에 닿은 적이 없었다. "스키마가 프롬프트를 이긴다" 로 보였던 현상의
+       * > 절반은 **프롬프트가 아예 없었기 때문**이다.
+       *
+       * mode.js 가 모드를 정하므로 여기서 조건을 새로 세우지 말고 mode 로 분기한다. */
+      let prompt;
+      if (mode === MODE.CLIP) prompt = buildClipPrompt({ clip, cfg, buzz });
+      else if (mode === MODE.ECON) prompt = buildEconPrompt({ topic, cfg });
+      else if (mode === MODE.BOOK) prompt = buildBookPrompt({ topic, cfg });
+      else if (mode === MODE.MOVIE) prompt = buildMoviePrompt({ topic, cfg, spoiler: cfg.movie?.spoiler !== false });
+      else if (mode === MODE.DRAMA) prompt = buildDramaPrompt({ topic, cfg });
+      else if (mode === MODE.NEWS) prompt = buildNewsPrompt({ url: topic, cfg, source });
+      else prompt = buildArticlePrompt({ topic, cfg });
       if (attempt > 1 && lastErr) {
         prompt += `\n\n# 재시도 사유\n직전 시도 결과가 기준에 못 미쳤습니다: ${lastErr}\n이번에는 분량과 섹션 수를 반드시 채우세요.`;
       }
 
       const last = await runCodexExec({ prompt, schemaFile, cfg });
       const raw = extractJson(last);
-      const article = normalizeArticle(raw, { topic, cfg });
+      const article = normalizeArticle(raw, { topic, cfg, mode });
 
       /* ⚠️ 모드는 **모든 글에** 붙여야 한다.
        *
@@ -426,8 +591,18 @@ export async function writeArticle({ topic, cfg }) {
        * mode.js 로 판단을 한곳에 모은 뒤에도 **값을 심는 것을 빼먹으면** 같은
        * 사고가 난다. 새 모드를 추가할 때 이 줄을 잊지 마세요. */
       article.mode = mode;
-      // 책 글은 사진이 많아야 한다 — 프롬프트(bodyImages+2)와 렌더 수를 맞춘다
-      if (mode === MODE.BOOK) article.bodyImageCount = cfg.images.bodyImages + 2;
+      /* 렌더할 본문 사진 수를 심는다 — **지시문이 요청한 수와 같은 값**이다.
+       *
+       * 예전에는 이 줄이 **책 모드에만** 있었고 값도 `+2` 였다. 지시문은 그 사이
+       * `+4` 로 바뀌었고(주석은 "+2" 로 남아 있었다) 경제 모드는 `+2` 를 요청하는데
+       * 심는 줄이 아예 없었다. 그래서 `images.js` 가 앞에서부터 slice 하며
+       * **뒤쪽 브리프를 버렸다** — 사라지는 것은 마지막 절의 사진이다.
+       * 게이트는 사진 총수만 세므로 이것을 보지 못했다 (2026-08-04 발각).
+       *
+       * 이제 값은 모드 선언(`bodyImageDelta`) 한 곳에 있다.
+       * 영상·영화 모드는 뒤이어 `run.js: applyClipShotLayout` 이 실제 캡처 수로
+       * 덮어쓴다 — 그 모드의 사진 수는 장면이 정한다. */
+      article.bodyImageCount = bodyImageCount(mode, cfg);
 
       // 영상 소재 글: 지어낸 타임스탬프를 실제 자막 시각으로 스냅하고,
       // 자막에 없는 지점은 0(처음부터)으로 되돌린다.
@@ -468,6 +643,18 @@ export async function writeArticle({ topic, cfg }) {
         article.sourceImages = (source.images || []).map((i) => i.url);
         article.sourcePublisher = source.publisher || '';
         article.sourceUrl = topic;
+        /* 사진마다 **그 사진이 실린 기사**를 기록한다.
+         *
+         * 아래에서 관련 기사 사진을 같은 배열에 이어 붙이므로, URL 만 남기면
+         * 어느 매체 것인지가 사라진다. 그러면 photo.js 가 전부 소재 기사의
+         * 매체로 표기해 **OSEN 사진이 entertain.naver.com 으로 찍힌다.**
+         * 보도사진은 출처 표기가 유일한 완화책인데, 틀린 매체를 적는 것은
+         * 안 적는 것보다 나쁘다 (2026-08-05 실측 — 이민 1주기 글). */
+        article.sourceImageOrigins = Object.fromEntries(
+          [source.image, ...(source.images || []).map((i) => i.url)]
+            .filter(Boolean)
+            .map((u) => [u, { publisher: source.publisher || '', pageUrl: topic }])
+        );
         log.debug(
           `원문 사진 확보: 대표 ${source.image ? 1 : 0}장 · 본문 ${(source.images || []).length}장`
         );
@@ -496,22 +683,58 @@ export async function writeArticle({ topic, cfg }) {
       if (
         can(mode, 'relatedArticlePhotos') &&
         cfg.images?.useSourcePhoto === true &&
-        (article.sourceImages?.length || 0) < 6 &&
+        (article.sourceImages?.length || 0) < 10 &&
         article.sources?.length > 1
       ) {
         const { fetchArticle } = await import('./fetchArticle.js');
+        /* 사안을 다룬 기사 사진은 **구조적으로 글과 관련이 있다.** 여기서 넉넉히
+         * 모아 두면 뒤의 스톡·검색 티어를 부를 일이 줄어든다 — 그 티어들이
+         * 무관한 사진을 넣는 지점이다 (2026-08-05 실측: 제니퍼 로렌스·주윤발).
+         * 기사 한 곳당 브라우저를 한 번 띄우므로 개수는 계속 제한한다. */
+        // A source can substantiate background facts without being about the people or
+        // event in this post. Only collect photos from sources whose title names a
+        // declared entity (or the article's main keyword).
+        const subjects = [
+          article.primaryKeyword,
+          ...(article.entities || []).flatMap((e) => [e.nameKo, e.nameEn]),
+        ]
+          .map((s) => String(s || '').replace(/\s+/g, '').trim())
+          .filter((s) => s.length >= 2);
+        const isSameSubject = (source) => {
+          const title = String(source?.title || '').replace(/\s+/g, '');
+          return subjects.some((subject) => title.includes(subject));
+        };
         const extra = article.sources
+          .filter((s) => isSameSubject(s))
           .map((s) => s.url)
           .filter((u) => u && u !== topic && /^https?:\/\//.test(u))
-          .slice(0, 3);
+          .slice(0, 5);
 
         for (const url of extra) {
-          if ((article.sourceImages?.length || 0) >= 8) break;
+          if ((article.sourceImages?.length || 0) >= 12) break;
           try {
             const s = await fetchArticle(url, cfg, 300);
-            const got = [s?.image, ...(s?.images || []).map((i) => i.url)].filter(Boolean);
+            /* **기사당 3장까지만** 받는다.
+             *
+             * `fetchArticle` 의 images 는 기사 사진만이 아니다 — 페이지의 광고와
+             * 관련기사 썸네일이 섞여 있다. 앞쪽(og:image + 본문 첫 사진)이 실제
+             * 기사 사진일 확률이 높고, 뒤로 갈수록 페이지 장식물이다.
+             *
+             * > 2026-08-05 실측 — 김우빈 '기프트' 글: 기사 4곳에서 15장을 받았더니
+             * > mk.co.kr 후보에 **속옷 광고 사진**과 사안과 무관한 배우 사진이 있었고,
+             * > 그게 본문 카드로 들어갔다. 많이 받는 것이 손해였다. */
+            const got = [s?.image, ...(s?.images || []).map((i) => i.url)]
+              .filter(Boolean)
+              .slice(0, 3);
             if (got.length) {
               article.sourceImages = [...(article.sourceImages || []), ...got];
+              // 이 사진들의 출처는 소재 기사가 아니라 이 기사다 — 사진별로 남긴다.
+              article.sourceImageOrigins = {
+                ...(article.sourceImageOrigins || {}),
+                ...Object.fromEntries(
+                  got.map((u) => [u, { publisher: s?.publisher || '', pageUrl: url }])
+                ),
+              };
               log.debug(`추가 출처 사진 ${got.length}장: ${new URL(url).hostname}`);
             }
           } catch (err) {
@@ -520,6 +743,63 @@ export async function writeArticle({ topic, cfg }) {
         }
         if (article.sourceImages?.length) {
           log.ok(`관련 기사에서 사진 ${article.sourceImages.length}장 확보`);
+        }
+      }
+
+      /* 영화 모드 — **배급사 키아트(포스터) 한 장만** 좁게 가져온다.
+       *
+       * 위 블록을 그대로 쓸 수 없다. 배급사·마블 공식 페이지는 한 페이지에 여러 작품
+       * 사진이 섞여 있어 `relatedArticlePhotos` 를 false 로 둘 수밖에 없었는데
+       * (§7-7 ⑥ — 어벤저스 둠스데이 단체 사진이 스파이더맨 글에 실렸다),
+       * 그렇게 끄면 **포스터 수집 경로까지 함께 막힌다.**
+       *
+       * > 2026-08-01 실측 — 그래서 대표 이미지가 감독의 위키미디어 사진이 됐고,
+       * > 결국 소니 포스터를 손으로 받아 photoDir 로 고정했다. 자동으로 돌릴 수 없다.
+       *
+       * 좁히는 방법: **모양과 이름 두 가지를 함께** 본다.
+       *   · 세로로 긴 것만 (포스터는 2:3 계열이고 스틸·단체 사진은 가로다)
+       *   · 파일 이름이나 alt 에 poster/키아트 표시가 있거나 작품명이 박힌 것
+       * og:image 는 쓰지 않는다 — 대개 가로 몽타주이고 다른 작품이 섞인다.
+       *
+       * 그래도 남의 작품 포스터가 걸릴 수 있으니 **찾은 것을 로그에 남긴다.**
+       * 발행 전에 사람이 본다는 전제가 이 모드의 안전망이다. */
+      if (can(mode, 'posterPhoto') && !(article.sourceImages?.length || 0) && article.sources?.length) {
+        const { fetchArticle } = await import('./fetchArticle.js');
+        const filmTitle = String(topic)
+          .replace(/^영화\s*:\s*/, '')
+          .replace(/\s*\(.*$/, '')
+          .trim();
+        const POSTER_WORD = /poster|keyart|key[-_]?art|메인포스터|포스터/i;
+        const found = [];
+        for (const url of article.sources
+          .map((s) => s.url)
+          .filter((u) => u && /^https?:\/\//.test(u))
+          .slice(0, 4)) {
+          if (found.length >= 3) break;
+          try {
+            const s = await fetchArticle(url, cfg, 300);
+            for (const img of s?.images || []) {
+              if (found.length >= 3) break;
+              const portrait = img.h >= img.w * 1.2;
+              if (!portrait) continue;
+              const named = POSTER_WORD.test(`${img.url} ${img.alt}`);
+              const titled = filmTitle && img.alt.includes(filmTitle);
+              if (named || titled) found.push({ ...img, from: new URL(url).hostname });
+            }
+          } catch (err) {
+            log.debug(`포스터 수집 실패 (${url.slice(0, 50)}): ${err.message.slice(0, 60)}`);
+          }
+        }
+        if (found.length) {
+          article.sourceImages = found.map((f) => f.url);
+          log.ok(`배급사 포스터 후보 ${found.length}장 (세로 비율 + 이름 확인)`);
+          for (const f of found) log.info(`  ${f.w}×${f.h} · ${f.from} · ${f.alt || '설명 없음'}`);
+          log.warn('발행 전에 이 포스터가 이 작품의 것인지 눈으로 확인하세요.');
+        } else {
+          log.warn(
+            '배급사 포스터를 찾지 못했습니다 — 대표 이미지가 인물 사진으로 갈 수 있습니다. ' +
+              '공식 포스터를 손으로 받아 photoDir 로 고정하세요.'
+          );
         }
       }
 
@@ -544,20 +824,84 @@ export async function writeArticle({ topic, cfg }) {
 
       /* 조사 오류는 지시문으로 두 번 연속 새어나갔다 — 규칙이 기계적이라 코드가 잡는다.
        * 고치지는 않는다(사람 이름 오탐이 있다). 발행 전에 눈으로 확인할 목록만 남긴다. */
-      const { findParticleErrors, findMonotoneEndings, articleText } = await import('./lintKo.js');
-      const particleErrs = findParticleErrors(articleText(article));
+      const { findParticleErrors, findMonotoneEndings, articleText, articleNames } = await import('./lintKo.js');
+      const particleErrs = findParticleErrors(articleText(article), { names: articleNames(article) });
       if (particleErrs.length) {
         log.warn(`조사가 의심되는 곳 ${particleErrs.length}군데 — 발행 전에 확인하세요.`);
         for (const e of particleErrs.slice(0, 8)) {
           log.warn(`  ${e.phrase} → ${e.suggest}   …${e.context}…`);
         }
       }
-      // 같은 어미 3연타 — "기계적, AI 같다"의 첫 신호 (2026-07-29 독자 지적)
+      /* 같은 어미 3연타 — "기계적, AI 같다"의 첫 신호 (2026-07-29 독자 지적).
+       *
+       * ⚠️ 예전에는 **경고만** 했다. 그래서 같은 문제가 세 번 연속 그대로 나갔다.
+       * > 2026-08-01 실측 — 영화 모드 초안 3편: 종결이 100% · 99% · 100% 로
+       * >   "…니다." 였다. 경고는 매번 찍혔지만 아무도 막지 않았다.
+       *
+       * 분량·섹션 수와 같은 급으로 **재시도 사유**로 올린다. 문체는 고쳐 쓰기가
+       * 쉬우므로 한 번 더 요청하는 값이 크다. */
       const mono = findMonotoneEndings(article);
       if (mono.length) {
         log.warn(`같은 어미가 3문장 이상 이어지는 문단 ${mono.length}개 — 리듬을 확인하세요.`);
         for (const m of mono.slice(0, 4)) log.warn(`  섹션${m.section} "…${m.ending}." 연타: ${m.sample}…`);
+        /* `section: 0` 이 "글 전체 분포" 항목이다 (문단 안 3연타는 section >= 1).
+         * 재시도는 전체 도배일 때만 — 문단 하나의 연타로 4분을 다시 쓰는 것은 과하다. */
+        const whole = mono.find((m) => m.section === 0);
+        if (whole && attempt < maxAttempts) {
+          /* **먼저 코드로 고쳐 본다. 그래도 안 되면 재시도한다.**
+           *
+           * `~습니다` → `~죠` 는 뜻이 바뀌지 않는 기계적 변환이라 `endings.js` 가
+           * 이미 한다(아래 `autoFix`). 그런데 순서가 거꾸로여서, 고칠 수 있는 문제로
+           * codex 를 한 번 더 불렀다 — 아래 주석도 "재시도는 4분을 더 태우고 결과도
+           * 나아지지 않았다" 고 적어 두었다.
+           *
+           * > 2026-08-05 실측 — 근로장려금 글: 시도 1 이 종결 검사로 버려지고,
+           * >   시도 2 에서 **codex 사용량 한도**에 걸려 글이 아예 나오지 않았다.
+           * >   고칠 수 있는 문제 때문에 쓸 수 있는 초안을 잃었다.
+           *
+           * 그래서 여기서 교정을 먼저 돌린다. 기준 밑으로 내려가면 그대로 쓰고,
+           * 못 내려가면 그때 재시도한다 (호출 한 번을 아낀다). */
+          const { autoFix: fixNow } = await import('./contract.js');
+          const fixed = fixNow(article, mode);
+          const still = findMonotoneEndings(article).find((m) => m.section === 0);
+          if (!still) {
+            for (const line of fixed) log.info(`자동 교정 — ${line}`);
+            log.ok('종결 단조를 코드로 고쳤습니다 — 재시도하지 않습니다 (codex 호출 1회 절약).');
+          } else {
+            lastErr =
+              '글 전체가 한 종결로 끝납니다(단조로워 AI 가 쓴 것처럼 읽힙니다). ' +
+              '경어체 안에서 ~입니다 / ~이죠 / ~합니다 / 명사 종결을 섞고, ' +
+              '한 종결이 전체의 60% 를 넘지 않게 하세요';
+            log.warn(`${lastErr} — 코드 교정으로도 기준 밑으로 내려가지 않아 다시 시도합니다.`);
+            continue;
+          }
+        }
       }
+
+      /* 재시도까지 하고도 안 되면 **코드가 섞는다.**
+       *
+       * 재시도는 4분을 더 태우고 결과도 나아지지 않았다 (황해: 재시도 포함
+       * 10분 30초를 쓰고 93%). 그런데 `~습니다` → `~죠` 는 뜻이 바뀌지 않는
+       * 기계적 변환이라 사람이 할 이유가 없다 — 지난 글은 손으로 20곳을 고쳤다.
+       * 안전한 형태만 바꾸고 큰따옴표 안은 건드리지 않는다 (endings.js 머리말). */
+      /* 이미지를 끈 글은 **브리프도 비운다.**
+       * 모델은 지시문에 "본문 0개" 라고 적어도 대표 브리프 하나는 내놓는 일이 있다.
+       * 그 한 장 때문에 "사진을 쓰는 글" 로 판정돼 사진 규격에 막히고, 렌더도 안 되니
+       * 아무 데도 쓰이지 않는 값이 남는다. 여기서 끊는다. */
+      if (cfg.images?.enabled === false) {
+        if (article.imageBriefs?.length) {
+          log.info(`이미지를 끈 글이라 imageBriefs ${article.imageBriefs.length}개를 비웠습니다.`);
+        }
+        article.imageBriefs = [];
+        article.bodyImageCount = 0;
+      }
+
+      const { autoFix, checkContract, formatViolations } = await import('./contract.js');
+      for (const line of autoFix(article, mode)) log.info(`자동 교정 — ${line}`);
+      /* 교정 뒤에도 남은 것을 여기서 보여 준다. 발행 게이트(cli.js)가 다시 대조하지만,
+       * 초안 단계에서 알아야 사람이 손볼 수 있다. */
+      const { violations } = checkContract(article, mode);
+      for (const line of formatViolations(violations)) log.warn(`규격 — ${line}`);
 
       article.charCount = chars;
       log.ok(

@@ -1,0 +1,8 @@
+{ "note": "card-* 자체 제작 (발췌는 민음사 공식 책 소개 페이지에서 검증). 표지 2장 = 민음사 제공 이미지. author-src = 위키미디어 CC BY-SA 3.0 nl. 05-river = 위키미디어 CC BY 2.5 (Ulrich Egert).",
+  "items": [
+    { "file": "card-quote-1.png", "alt": "싯다르타 발췌 글귀 카드" },
+    { "file": "02-cover.jpg", "alt": "2025 양장판 표지", "owner": "민음사" },
+    { "file": "card-author.png", "alt": "헤르만 헤세 작가 카드", "source": "wikimedia", "author": "Unknown", "license": "CC BY-SA 3.0 nl" },
+    { "file": "card-quote-2.png", "alt": "헤세의 말 글귀 카드" },
+    { "file": "03-cover2002.jpg", "alt": "2002년판 표지", "owner": "민음사" },
+    { "file": "05-river.jpg", "alt": "갠지스강 새벽", "source": "wikimedia", "author": "Ulrich Egert", "license": "CC BY 2.5" } ] }

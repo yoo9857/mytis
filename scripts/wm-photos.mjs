@@ -24,8 +24,11 @@ import { DIRS, safeSlug } from '../src/paths.js';
 const API = 'https://commons.wikimedia.org/w/api.php';
 const UA = 'moneyti/1.0 (blog illustration; contact via repo)';
 
-/** 표기만 하면 쓸 수 있는 라이선스. 이 밖의 것은 받지 않는다. */
-const OK_LICENSE = /^(cc0|cc by|public domain|pd|no restrictions)/i;
+/* 허용 라이선스 판정은 **`src/photoLicense.js` 한 곳**이 갖는다.
+ * 전에는 이 파일의 정규식이 기준이었고 `.gitignore` 주석이 따로 "PD·CC0만" 이라고
+ * 말해서, 코드가 받아 둔 CC BY 폴더를 커밋해도 되는지 사람이 매번 다시 판단했다
+ * (2026-08-05). 수집기와 검사기(`scripts/photolint.mjs`)가 같은 함수를 쓴다. */
+import { isOpenLicense } from '../src/photoLicense.js';
 
 const argv = process.argv.slice(2);
 const opts = (name) =>
@@ -91,7 +94,7 @@ if (search) {
   const rows = Object.values(j?.query?.pages || {}).map(normalize);
   console.log(`검색 "${search}" — ${rows.length}건\n`);
   for (const r of rows) {
-    const ok = OK_LICENSE.test(r.license) || /^cc by-sa/i.test(r.license);
+    const ok = isOpenLicense(r.license);
     console.log(`${ok ? ' ' : '✗'} ${(r.license || '?').padEnd(14)} ${String(r.width)}x${r.height}`);
     console.log(`   ${r.name}`);
     if (r.desc) console.log(`   ${r.desc}`);
@@ -147,7 +150,7 @@ for (const want of wanted) {
   }
   /* 라이선스를 여기서 한 번 더 막는다. 검색 목록에서 눈으로 걸렀더라도
    * 이름을 손으로 옮기다 다른 파일을 받는 일이 생긴다. */
-  if (!(OK_LICENSE.test(info.license) || /^cc by-sa/i.test(info.license))) {
+  if (!isOpenLicense(info.license)) {
     console.error(`✗ ${info.name} — 라이선스 ${info.license || '알 수 없음'} 은 받지 않습니다`);
     continue;
   }

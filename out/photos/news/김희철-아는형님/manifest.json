@@ -1,0 +1,41 @@
+{
+  "note": "보도사진 2장 + 위키미디어 자유 라이선스 3장. 위험은 발행자가 진다. 검토에서 뺀 것: 위키미디어의 'Kim Hee-chul 20150506.png'는 KBS 방송 화면 캡처인데 업로더가 CC BY 3.0으로 걸어 둔 허위 라이선스로 보였고(§6 경고 사례), 스포츠월드의 메신저 캡처와 유튜브 자막 몽타주는 화질·출처 문제로 제외했다.",
+  "items": [
+    {
+      "file": "01-heechul-press.jpg",
+      "photographer": "스포츠조선",
+      "license": "보도사진",
+      "permalink": "https://m.entertain.naver.com/home/article/076/0004432283"
+    },
+    {
+      "file": "02-shinyoung.jpg",
+      "photographer": "연합뉴스",
+      "license": "보도사진",
+      "permalink": "https://www.yna.co.kr/view/AKR20260429172400005"
+    },
+    {
+      "file": "04-hodong.jpg",
+      "source": "wikimedia",
+      "author": "Wikimedia Commons 기여자",
+      "photographer": "Wikimedia Commons",
+      "license": "CC BY-SA 2.0",
+      "permalink": "https://commons.wikimedia.org/wiki/File:Kang_Ho-Dong_(cropped).jpg"
+    },
+    {
+      "file": "05-suju-2012.jpg",
+      "source": "wikimedia",
+      "author": "Wikimedia Commons 기여자",
+      "photographer": "Wikimedia Commons",
+      "license": "CC BY 2.0",
+      "permalink": "https://commons.wikimedia.org/wiki/File:Super_Junior_performing_at_'MBC_Korean_Music_Wave_In_Google'_concert.jpg"
+    },
+    {
+      "file": "06-suju.jpg",
+      "source": "wikimedia",
+      "author": "Wikimedia Commons 기여자",
+      "photographer": "Wikimedia Commons",
+      "license": "CC BY-SA 2.0",
+      "permalink": "https://commons.wikimedia.org/wiki/File:KCON_2015_Super_Junior_DSC03043_(19730898653).jpg"
+    }
+  ]
+}

@@ -1,0 +1,359 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "seoTitle",
+    "metaDescription",
+    "primaryKeyword",
+    "urlSlug",
+    "secondaryKeywords",
+    "tags",
+    "asOf",
+    "figures",
+    "cards",
+    "checkSites",
+    "relatedPosts",
+    "directAnswer",
+    "keyTakeaways",
+    "sections",
+    "faq",
+    "conclusion",
+    "sources",
+    "entities",
+    "relatedPosts",
+    "imageBriefs"
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "독자에게 보여줄 글 제목. 32자 내외. 핵심 키워드를 앞쪽에. 낚시성 표현과 단정적 전망('폭등','지금이 기회')은 금지."
+    },
+    "seoTitle": {
+      "type": "string",
+      "description": "검색엔진용 제목. 60자 이내. 핵심 키워드 + 연도 또는 구체 수치. 제도·세법 글은 반드시 적용 연도를 넣는다."
+    },
+    "metaDescription": {
+      "type": "string",
+      "description": "검색 결과 스니펫용 요약. 90~150자. 이 글이 답하는 질문과 결론을 압축."
+    },
+    "primaryKeyword": {
+      "type": "string",
+      "description": "이 글이 노리는 메인 검색 키워드 하나. 독자가 실제로 검색창에 치는 말로. 예: '연금저축 세액공제 한도'"
+    },
+    "urlSlug": {
+      "type": "string",
+      "description": "글 주소에 쓸 영문 슬러그. 소문자 영문·숫자·하이픈만. 3~6단어, 60자 이내. 예: 'pension-savings-tax-deduction-2026'"
+    },
+    "asOf": {
+      "type": "string",
+      "description": "이 글에 실린 수치·제도의 **기준 시점**. YYYY-MM-DD 또는 YYYY-MM. 금리·세율·한도는 바뀌므로 독자가 '언제 기준인지'를 알아야 한다. 여러 시점이 섞이면 가장 최근이 아니라 **가장 오래된** 것을 적어 독자가 과신하지 않게 한다."
+    },
+    "figures": {
+      "type": "array",
+      "description": "본문에 쓴 **수치마다** 출처와 기준일을 짝지어 놓은 목록. 3~10개. 여기에 올릴 수 없는 숫자는 본문에도 쓰지 않는다. 이 목록은 독자에게 표로 보여진다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "value",
+          "source",
+          "asOf"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "이 숫자가 무엇인지. 20자 이내. 예: '연금저축 납입 한도', '기준금리'"
+          },
+          "value": {
+            "type": "string",
+            "description": "숫자와 단위. 예: '600만원', '2.75%', '85㎡'"
+          },
+          "source": {
+            "type": "string",
+            "description": "확인한 기관 이름. **원자료를 내는 곳**을 적는다: 한국은행, 국세청, 통계청, 금융감독원, 국토교통부, 보건복지부 등. 다른 블로그나 요약 기사는 출처가 아니다."
+          },
+          "asOf": {
+            "type": "string",
+            "description": "이 숫자의 기준 시점. YYYY-MM-DD 또는 YYYY-MM. 제도라면 시행일 또는 적용 연도."
+          }
+        }
+      }
+    },
+    "cards": {
+      "type": "array",
+      "description": "본문에 넣을 **정보 카드 3~5개** (규격이 이 개수를 검사하고, 미달이면 발행을 막는다). 코드가 정사각 이미지로 그린다(글자는 한글로 정확히 렌더된다).\n\n⚠️ 이미지 검색 키워드를 쓰는 자리가 아니다. **카드에 들어갈 글**을 쓴다.\n\n무엇을 카드로 만드나: 독자가 **외워 가야 하는 목록**. 예) 한도가 줄어드는 이유 3가지, 계약 전 확인할 서류 3가지, 대처 방법 3가지.\n\n무엇을 카드로 만들지 않나: 본문에 이미 표로 있는 것(중복이다), 수치가 주인공인 것(제도가 바뀌면 이미지를 못 고친다 — 그것은 figures 표로 간다), 한 문장이면 되는 것.\n\n카드는 이 글의 시각 자료의 **중심**이다. 본문 사진은 글자를 얹지 않는 스톡 사진이라 독자에게 아무것도 알려주지 않는다 — 설명하는 것은 카드다. 그래서 빈 배열은 허용되지 않는다.\n\n만들 거리가 부족해 보이면 본문에서 찾는다: 무엇으로 갈리는가(유형 A와 B의 축), 어디서 막히는가(신청이 반려되는 지점), 어떤 순서로 지나는가, 제출 전에 확인할 것.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "title", "afterSection", "items"],
+        "properties": {
+          "afterSection": {
+            "type": "integer",
+            "description": "이 카드를 몇 번째 섹션 뒤에 넣을지 (1부터). **그 내용을 다룬 섹션 바로 뒤**에 둔다. 예: 서류를 설명한 섹션이 3번째면 3."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["reasons", "columns"],
+            "description": "reasons = 번호 카드를 세로로 쌓는다(설명이 두 줄 이상일 때). columns = 3열로 나란히 놓는다(항목이 짧고 서로 대등할 때). 항목이 4개 이상이면 reasons 를 쓴다."
+          },
+          "title": {
+            "type": "string",
+            "description": "카드 제목. 22자 이내. 질문형이 잘 맞는다. 예: '한도가 줄어드는 이유', '계약 전 확인할 서류'"
+          },
+          "items": {
+            "type": "array",
+            "description": "카드 항목 2~4개. columns 는 3개가 가장 보기 좋다.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label", "text"],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "항목 이름. 16자 이내. 명사구로. 예: '용도 증빙 강화', 'DSR 한도 축소'"
+                },
+                "text": {
+                  "type": "string",
+                  "description": "설명 1~2문장. reasons 는 70자 이내, columns 는 55자 이내. 넘으면 카드에서 잘린다. 여기에 수치를 쓰지 않는다 — 제도가 바뀌면 이미지를 고칠 수 없다."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "checkSites": {
+      "type": "array",
+      "description": "독자가 **직접 열어서 확인할 기관 조회 페이지** 2~5개. 링크 카드로 그려진다.\n\"확인하세요\" 라고 쓰는 것과 **확인할 주소를 주는 것**은 다르다. 이 목록이 글의 실용성을 결정한다.\n예: 인터넷등기소(등기부등본 열람), 부동산중개업정보(공인중개사 자격 조회), 청약홈(청약 자격 확인), 홈택스(연말정산 미리보기), 한국은행 ECOS(기준금리 추이).\n검색으로 실제 주소를 확인한 것만 넣는다. 지어낸 주소는 독자를 막힌 페이지로 보낸다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "url", "why"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "페이지·서비스의 정식 이름. 예: 대한민국 법원 인터넷등기소"
+          },
+          "url": {
+            "type": "string",
+            "description": "실제 확인한 URL. https 로 시작한다."
+          },
+          "why": {
+            "type": "string",
+            "description": "여기서 **무엇을 확인하는지** 한 문장. 40자 이내. 기능 설명이 아니라 독자의 목적으로 쓴다. 좋은 예: '계약 전에 근저당과 압류가 있는지 본다'. 나쁜 예: '부동산 등기 정보를 제공하는 사이트'."
+          }
+        }
+      }
+    },
+    "relatedPosts": {
+      "type": "array",
+      "description": "같은 블로그의 **이전 글**로 가는 링크 0~3개. '이어 읽기' 블록으로 그려진다.\n\n⚠️ **주소를 지어내지 마세요.** 이 블로그에 어떤 글이 있는지 당신은 모릅니다. 주제와 함께 이전 글 목록을 받지 않았다면 **빈 배열**로 두세요. 없는 주소를 넣으면 독자가 404로 갑니다.\n\n방향은 늘 새 글 → 옛 글 한 방향입니다. 발행된 글은 수정할 수 없어서 옛 글에서 새 글로는 걸 수 없습니다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "url", "why"],
+        "properties": {
+          "title": { "type": "string", "description": "그 글의 제목 그대로." },
+          "url": { "type": "string", "description": "그 글의 실제 주소. https 로 시작한다." },
+          "why": {
+            "type": "string",
+            "description": "이 글을 읽은 독자가 그 글에서 **무엇을 더 얻는지** 한 문장. 40자 이내. '함께 보면 좋은 글' 같은 빈 말을 쓰지 않는다."
+          }
+        }
+      }
+    },
+    "entities": {
+      "type": "array",
+      "description": "경제 글에서는 **항상 빈 배열**로 둔다. 이 필드는 인물 사진을 찾는 데 쓰이며, 경제 글은 특정 인물을 주제로 하지 않는다. 정책 결정자의 이름을 넣으면 그 사람의 얼굴 사진이 글에 실린다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nameKo",
+          "nameEn",
+          "role",
+          "historical"
+        ],
+        "properties": {
+          "nameKo": { "type": "string" },
+          "nameEn": { "type": "string" },
+          "role": { "type": "string" },
+          "historical": { "type": "boolean" }
+        }
+      }
+    },
+    "secondaryKeywords": {
+      "type": "array",
+      "description": "본문에 자연스럽게 녹일 보조 키워드 및 롱테일 질의 5~10개. '○○ 조건', '○○ 신청 방법', '○○ 계산' 처럼 독자가 실제로 치는 형태로.",
+      "items": { "type": "string" }
+    },
+    "tags": {
+      "type": "array",
+      "description": "티스토리 태그 10~14개. 쉼표를 포함하지 않는다. 종목명·코인명은 태그로 쓰지 않는다.",
+      "items": { "type": "string" }
+    },
+    "directAnswer": {
+      "type": "string",
+      "description": "글 맨 위에 놓이는 직답 문단. 제목이 던진 질문에 2~4문장으로 즉시 답한다. **구체적인 수치·기준·조건을 반드시 포함**하고, 그 수치의 기준 시점도 한 번 밝힌다. 전망이나 권유를 쓰지 않는다."
+    },
+    "keyTakeaways": {
+      "type": "array",
+      "description": "핵심 요약 4~6개. 각 항목은 그 자체로 인용 가능한 완결된 **사실** 문장이어야 한다. '~할 것으로 보인다' 같은 추측은 넣지 않는다.",
+      "items": { "type": "string" }
+    },
+    "sections": {
+      "type": "array",
+      "description": "본문 섹션 목록 5~8개. 각 섹션은 h2 하나에 해당한다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "heading",
+          "answer",
+          "paragraphs",
+          "bullets",
+          "table",
+          "callout"
+        ],
+        "properties": {
+          "heading": {
+            "type": "string",
+            "description": "섹션 제목. 독자가 검색창에 칠 법한 질문형 또는 명사구. 예: '누가 받을 수 있나', '얼마까지 되나', '신청 전에 확인할 것'"
+          },
+          "answer": {
+            "type": "string",
+            "description": "이 섹션 제목에 대한 **한 줄 답**. 40~90자, 한 문장. 소제목 바로 아래에 굵게 놓인다.\n\n독자는 목차에서 자기에게 필요한 절로 건너온다. 그 자리에 문단이 있으면 필요한 줄인지 알기 위해 다 읽어야 한다. 이 한 줄로 **읽기를 멈출지 이어 갈지** 고를 수 있게 한다.\n\n- 결론을 먼저 쓴다. 수치가 답이면 수치를 넣는다. 예: '무주택 세대주만 됩니다. 세대원 전원의 주택 보유를 봅니다.'\n- 요약하지 말고 **답한다.** '이 절에서는 소득 요건을 살펴봅니다' 같은 안내문은 금지.\n- 문단의 첫 문장을 그대로 복사하지 않는다. 한 줄 답이 결론이고 문단이 근거다."
+          },
+          "paragraphs": {
+            "type": "array",
+            "description": "한 줄 답의 **근거** 문단 2~3개. 한 문단은 2~4문장이고 한 문장은 짧게 끊는다. 추상적 서술 대신 수치·조건·계산을 넣는다. 용어를 처음 쓸 때는 그 자리에서 한 번 풀어 준다.\n\n같은 말을 한 줄 답과 문단에서 두 번 하지 않는다 — 독자는 두 번째를 읽지 않는다.",
+            "items": { "type": "string" }
+          },
+          "bullets": {
+            "type": "array",
+            "description": "이 섹션의 불릿 목록. 조건·서류·절차는 불릿이 읽기 쉽다. 필요 없으면 빈 배열.",
+            "items": { "type": "string" }
+          },
+          "table": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["caption", "headers", "rows"],
+            "description": "비교표. 경제 글의 핵심 도구다 — 한도·세율·구간·요건은 표가 문장보다 정확하다. **글 전체에 표가 최소 하나는 있어야 한다.** 필요 없는 섹션은 caption 빈 문자열, headers·rows 빈 배열.",
+            "properties": {
+              "caption": { "type": "string" },
+              "headers": { "type": "array", "items": { "type": "string" } },
+              "rows": {
+                "type": "array",
+                "items": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "callout": {
+            "type": "string",
+            "description": "강조 박스에 넣을 한 문장. **놓치면 손해 보는 조건**이나 마감일을 쓴다. 필요 없으면 빈 문자열."
+          }
+        }
+      }
+    },
+    "faq": {
+      "type": "array",
+      "description": "자주 묻는 질문 3~6개. 실제 검색 질의처럼 쓰고, 답변은 2~4문장으로 완결한다. '얼마 벌 수 있나', '지금 사야 하나' 같은 질문은 넣지 않는다 — 답할 수 없는 질문이다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "answer"],
+        "properties": {
+          "question": { "type": "string" },
+          "answer": { "type": "string" }
+        }
+      }
+    },
+    "conclusion": {
+      "type": "string",
+      "description": "마무리 문단 3~5문장. 요약 + 독자가 다음에 **직접 확인할 곳**을 알려 준다(해당 기관 사이트·계산기·상담 창구). 투자 권유로 끝내지 않는다."
+    },
+    "sources": {
+      "type": "array",
+      "description": "웹 검색으로 실제 확인한 출처만. **기관 원자료를 우선**한다(한국은행 통계, 국세청 고시, 법제처 조문, 부처 보도자료). 요약 기사와 블로그는 원자료를 찾는 단서로만 쓰고 여기 넣지 않는다. 확인하지 못했으면 빈 배열. URL을 지어내지 않는다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "url", "publisher", "date"],
+        "properties": {
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "publisher": { "type": "string" },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD 또는 YYYY-MM. 모르면 빈 문자열."
+          }
+        }
+      }
+    },
+    "imageBriefs": {
+      "type": "array",
+      "description": "본문 이미지 설명 4~7개. 첫 항목은 반드시 placement가 thumbnail 인 대표 이미지. 경제 글의 사진은 주인공이 아니라 **읽는 호흡을 끊어 주는 쉼표**다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "placement",
+          "headline",
+          "subline",
+          "caption",
+          "alt",
+          "afterSection",
+          "photoQuery",
+          "eyebrow",
+          "statValue",
+          "statLabel"
+        ],
+        "properties": {
+          "placement": {
+            "type": "string",
+            "enum": ["thumbnail", "body"],
+            "description": "thumbnail은 대표 이미지, body는 본문 삽입 이미지."
+          },
+          "photoQuery": {
+            "type": "string",
+            "description": "배경으로 쓸 실사 사진을 검색할 영어 키워드 2~4단어. 한국어 금지. 카메라로 찍을 수 있는 **일상의 장면**이어야 한다.\n\n좋은 예: 'calculator receipts kitchen table', 'apartment buildings evening', 'notebook coffee morning desk', 'moving boxes empty room'.\n\n다음 셋은 **반드시 피한다** (2026-08-03 실측에서 실제로 나온 사고):\n① **화폐·지폐·동전** — 'money', 'cash', 'banknote', 'dollar' 를 넣으면 한국 글에 **미국 달러 사진**이 실린다. 원화 사진은 스톡에 거의 없다. 금액은 본문과 표로 말한다.\n② **사람 얼굴이 주인공인 장면** — 'happy couple new home', 'businessman', 'woman smiling' 류. 광고 사진처럼 보이고, 경제 글은 사람이 아니라 제도를 다룬다. 손·사물·건물·서류로 쓴다.\n③ **글자가 읽히는 외국 서류** — 'contract', 'lease', 'form', 'invoice', 'tax return' 은 **영문 서식 사진**을 부른다. 한국 제도를 설명하는 글에 영문 계약서가 놓이면 남의 나라 이야기가 된다. 서류를 보여주려면 'blank paper and pen on desk' 처럼 **빈 종이**로.\n④ **개념** — 'financial growth concept', 'money rain', 'bull market'. 개념은 사진이 아니다."
+          },
+          "headline": {
+            "type": "string",
+            "description": "이미지 카드에 크게 들어갈 문구. 18자 이내."
+          },
+          "subline": {
+            "type": "string",
+            "description": "헤드라인 아래 보조 문구. 30자 이내."
+          },
+          "eyebrow": {
+            "type": "string",
+            "description": "헤드라인 위에 작게 들어갈 분류 라벨. 2~8자. 예: '가입 조건', '신청 방법', '한도 정리'. 이미지마다 다르게."
+          },
+          "statValue": {
+            "type": "string",
+            "description": "**항상 빈 문자열.** 이미지에 숫자를 박으면 기준일이 함께 붙지 않고, 발행 후 이미지를 고칠 수 없어 낡은 숫자가 남는다. 수치는 본문과 표에만 쓴다."
+          },
+          "statLabel": {
+            "type": "string",
+            "description": "**항상 빈 문자열.** statValue 와 같은 이유."
+          },
+          "caption": {
+            "type": "string",
+            "description": "이미지 아래 캡션. 본문 이미지에만. 사진에 없는 것을 설명하지 않는다. 없으면 빈 문자열."
+          },
+          "alt": {
+            "type": "string",
+            "description": "SEO용 alt 텍스트. 키워드를 포함한 서술형 문장."
+          },
+          "afterSection": {
+            "type": "integer",
+            "description": "body 이미지를 몇 번째 섹션 뒤에 넣을지 (1부터). thumbnail 이면 0."
+          }
+        }
+      }
+    }
+  }
+}

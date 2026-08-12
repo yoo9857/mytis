@@ -1,124 +1,36 @@
 /**
- * 글의 **용도(모드)** 를 한 곳에서 정한다.
+ * 글의 **용도(모드)** — 공개 창구.
  *
- * 이 파일이 왜 필요한가:
- *   모드는 원래도 셋이었지만 이름이 없었다. `isUrl(topic)`, `!clip`,
- *   `article.fromClip`, `article.clipShots?.length` 같은 조건이 4개 파일에
- *   흩어져 있었고, 단계마다 자기 나름대로 모드를 다시 판단했다.
- *   **그래서 한 단계가 모드를 놓치면 조용히 다른 모드처럼 동작했다.**
+ * 실제 선언은 `src/modes/<id>.js` 에 모드마다 한 파일씩 있고, `src/modes/index.js`
+ * 가 레지스트리다. 이 파일은 기존 import 경로를 지키기 위한 얇은 재수출이다.
  *
- *   > 2026-07-28 실측 — 나는솔로 영상 글:
- *   > '관련 기사에서 사진 더 긁어오기' 단계에 영상 글 예외가 없어서,
- *   > codex 가 배경조사로 인용한 기사에서 **전혀 다른 영상의 썸네일**을
- *   > 가져와 대표 이미지로 썼다. 그 위에 글 헤드라인이 얹혔다.
- *   >
- *   > 같은 글에서 출연자 '영숙·영철·영식·광수·옥순' 의 공식 SNS 계정도
- *   > 검색했다. 방송용 이름을 쓰는 일반인이라 있을 리 없는데 codex 호출
- *   > 1분을 그냥 버렸다.
+ * ## 왜 파일을 나눴나
  *
- *   두 사고 모두 "이 단계가 지금 어떤 글을 다루는지 몰라서" 생겼다.
- *   그래서 모드를 한 번만 정하고, 각 단계는 **묻기만** 한다.
+ * 모드 정보가 다섯 곳에 흩어져 있어서 한 곳만 빠뜨려도 조용히 다른 모드처럼
+ * 동작했다. 2026-08-01 에 세 건이 한꺼번에 드러났다:
+ *   ① `buildBookPrompt` 가 **한 번도 호출되지 않았다** (라우팅이 세 갈래였다)
+ *   ② 영화 모드에 `imageBriefRules` 를 빼먹었다
+ *   ③ `movie.schema.json` 에 책 어휘가 3곳 남았다 (스키마를 복제한 탓)
  *
- * 새 단계를 추가할 때는 조건문을 새로 쓰지 말고 CAPABILITIES 에 항목을 넣으세요.
+ * **새 단계를 추가할 때는 조건문을 새로 쓰지 말고** 모드 파일의 `capabilities` 에
+ * 항목을 넣고 `can(mode, '항목')` 으로 물어보세요.
+ *
+ * **모드를 추가할 때는 `src/modes/<id>.js` 한 파일만** 쓰세요.
+ * 빠뜨린 것은 `lintModes()` 가 `npm run doctor` 에서 잡습니다.
  */
-import { parseYouTube } from './ytClip.js';
-
-/* codexWriter 의 isUrl 과 같은 판별이지만 여기서 다시 쓴다.
- * codexWriter 가 이 파일을 import 하므로 반대로 가져오면 순환 참조가 된다. */
-const looksLikeUrl = (text) => /^https?:\/\/\S+$/i.test(String(text || '').trim());
-
-export const MODE = {
-  /** 주제 한 줄 → 검색해서 정보성 글 */
-  TOPIC: 'topic',
-  /** 기사 URL → 교차 확인한 뉴스 해설 */
-  NEWS: 'news',
-  /** 유튜브 URL → 장면을 따라가는 서사 에세이 */
-  CLIP: 'clip',
-  /** "책: 제목 — 저자" → '오늘 뭐 읽지?' 책 추천 (네이버 시리즈) */
-  BOOK: 'book',
-};
-
-/**
- * 모드별로 무엇을 하고 무엇을 하지 않는가.
- *
- * `false` 는 "안 되는 것" 이 아니라 **"이 모드에서는 하면 안 되는 것"** 이다.
- * 대개 결과가 글과 어긋나거나, 성공할 수 없는데 시간만 쓰는 단계다.
- */
-export const CAPABILITIES = {
-  [MODE.TOPIC]: {
-    sourcePhoto: false, // 원문이 없다
-    relatedArticlePhotos: false, // 인용 기사는 배경조사용이라 사진이 주제와 무관하다
-    clipShots: false,
-    youtubeEmbeds: true,
-    socialEmbeds: true,
-    allowTables: true,
-  },
-  [MODE.NEWS]: {
-    sourcePhoto: true, // 원문 기사의 og:image (images.useSourcePhoto 로 별도 동의)
-    relatedArticlePhotos: true, // 같은 사안을 다룬 기사들이라 사진도 같은 사안이다
-    clipShots: false,
-    youtubeEmbeds: true,
-    socialEmbeds: true,
-    allowTables: true,
-  },
-  [MODE.BOOK]: {
-    /* 처음에는 사진·SNS 를 다 껐다가 되켰다 (2026-07-29 사용자 결정).
-     * 작가의 얼굴·강연·사인회 사진은 서평·부고·인터뷰 **기사에** 있고,
-     * 보도사진 위험은 연예 글과 같은 기준으로 발행자가 감수한다.
-     * 표지 스캔이 섞여 들어오는 위험은 남는다 — 발행 전 눈으로 거른다. */
-    sourcePhoto: true, // sources 의 기사 사진(작가 보도사진)을 쓴다
-    relatedArticlePhotos: true,
-    clipShots: false,
-    /* 북트레일러가 있는 책도 있지만 공식 채널 판별이 어렵고(출판사 채널 이름이
-     * 제각각), 없는 책이 대부분이라 검색 시간만 쓴다. v1 은 끈다. */
-    youtubeEmbeds: false,
-    socialEmbeds: true, // 저자·출판사 공식 X·인스타 게시물 임베드 — 사진을 합법으로 보여 준다
-    allowTables: true, // 서지 정보(출판사·출간일·쪽수)가 표의 정석이다
-  },
-  [MODE.CLIP]: {
-    sourcePhoto: false,
-    /* ⚠️ 반드시 false. 영상 글에서 sources 는 배경조사용 참고 자료라
-     * 사안이 다르다. 여기를 켜면 무관한 사진이 대표 이미지가 된다. */
-    relatedArticlePhotos: false,
-    clipShots: true, // 장면 캡처가 이 모드의 이미지 공급원이다
-    /* 같은 영상의 장면이 이미 본문에 있다. 다른 영상을 덧붙이면 글과 따로 논다. */
-    youtubeEmbeds: false,
-    /* 출연자가 방송용 이름을 쓰는 일반인인 경우가 많아 공식 계정이 없다.
-     * 연예인이 나오는 영상이라면 config 의 social.enabled 로 켤 수 있다. */
-    socialEmbeds: false,
-    allowTables: false, // 이야기 흐름을 끊는다
-  },
-};
-
-/**
- * 입력만 보고 모드를 정한다. 유튜브 자막을 읽기 **전** 단계의 판단이다.
- *
- * 자막이 없으면 영상 글을 쓸 수 없으므로, 실제 확정은 자막을 받아 본 뒤
- * `resolveMode` 가 한다 (유튜브 주소인데 자막이 없으면 NEWS 로 내려간다).
- */
-export function detectMode(topic) {
-  if (/^책\s*:/.test(String(topic || '').trim())) return MODE.BOOK;
-  if (!looksLikeUrl(topic)) return MODE.TOPIC;
-  return parseYouTube(topic) ? MODE.CLIP : MODE.NEWS;
-}
-
-/** 자막 확보 결과까지 반영한 최종 모드. */
-export function resolveMode(topic, clip) {
-  const guess = detectMode(topic);
-  if (guess === MODE.CLIP && !clip?.lines?.length) return MODE.NEWS;
-  return guess;
-}
-
-/** 이 모드에서 해당 단계를 해도 되는가. 모르는 모드는 가장 보수적으로 본다. */
-export function can(mode, capability) {
-  const caps = CAPABILITIES[mode] || CAPABILITIES[MODE.TOPIC];
-  return caps[capability] === true;
-}
-
-/** 로그·디버깅용 이름 */
-export const MODE_LABEL = {
-  [MODE.TOPIC]: '주제',
-  [MODE.NEWS]: '기사',
-  [MODE.CLIP]: '영상',
-  [MODE.BOOK]: '책',
-};
+export {
+  MODE,
+  MODE_LABEL,
+  MODES,
+  ACTIVE,
+  CAPABILITIES,
+  RULE_MARKERS,
+  detectMode,
+  resolveMode,
+  can,
+  ruleOn,
+  bodyImageCount,
+  pickVoice,
+  lintModes,
+  platformOk,
+} from './modes/index.js';

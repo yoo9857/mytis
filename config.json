@@ -17,7 +17,9 @@
     "faqCount": 5,
     "tone": "이슈를 빠르게 짚어주는 연예 전문 에디터 톤. 문장은 짧고 리듬감 있게. 수치와 팩트로 밀어붙이되 추측은 금지.",
     "audience": "포털에서 연예 이슈를 검색해 들어온 한국 일반 독자",
-    "extraInstructions": "가수·배우·프로그램명은 정식 표기를 쓰고, 소속사 공식 입장이 있으면 반드시 인용 형태로 넣으세요. 팬덤 명칭이 있으면 정확히 표기하세요."
+    "extraInstructions": "가수·배우·프로그램명은 정식 표기를 쓰고, 소속사 공식 입장이 있으면 반드시 인용 형태로 넣으세요. 팬덤 명칭이 있으면 정확히 표기하세요.",
+    "bookVoice": "라디오 북튜버",
+    "movieVoice": ""
   },
   "naver": {
     "blogId": "",
@@ -58,7 +60,7 @@
   "images": {
     "enabled": true,
     "thumbnail": true,
-    "bodyImages": 5,
+    "bodyImages": 8,
     "brand": "ISSUE",
     "width": 1200,
     "height": 630,
@@ -129,5 +131,9 @@
     "slowMo": 50,
     "timeoutMs": 60000,
     "manualLoginWaitMs": 180000
+  },
+  "movie": {
+    "spoiler": false,
+    "voice": "이름난 평론가"
   }
 }

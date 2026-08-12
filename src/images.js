@@ -6,6 +6,7 @@ import { log } from './log.js';
 import { fetchBackgrounds } from './photo.js';
 import { imageSize } from './imageSize.js';
 import { renderCard, pickLayout, personBgPosition, hash } from './cardLayouts.js';
+import { can } from './mode.js';
 
 /** 본문 사진의 가로세로 비율 후보 — 세로 사진도 섞이도록 한다. */
 const ASPECTS = {
@@ -376,6 +377,61 @@ export async function renderImages(article, cfg) {
     log.warn(`배경 사진 확보 실패: ${err.message} — 그라디언트로 진행합니다.`);
   }
 
+  /* 연예 기사 사진은 "분위기가 비슷한 스톡"으로 대체할 수 없다.
+   * 사람·그룹을 다룬 글에 외국 군악대나 일반 콘서트 관객이 들어가면 독자는
+   * 실제 사진으로 오해한다. 모드가 소재 사진을 요구하면 출처와 최소 장수를
+   * 렌더 직전에 강제한다. 경고만 남기면 그대로 발행되므로 반드시 예외로 막는다. */
+  if (can(article.mode, 'requireSubjectPhotos')) {
+    const allowed = new Set(['source-article', 'wikimedia', 'local-photo', 'clip-shot']);
+    const unsafe = backgrounds
+      .map((bg, i) => ({ bg, i }))
+      .filter(({ bg }) => bg && !allowed.has(bg.source));
+    if (unsafe.length) {
+      throw new Error(
+        `기사 사진 안전 검사 실패: 소재와 무관할 수 있는 출처 ${unsafe
+          .map(({ bg, i }) => `${i}:${bg.source || 'unknown'}`)
+          .join(', ')}. 원문·실제 인물·고정 사진만 허용합니다.`
+      );
+    }
+
+    const subjectPhotos = backgrounds.filter(Boolean).length;
+    if (subjectPhotos < 3) {
+      throw new Error(
+        `기사 사진이 ${subjectPhotos}장뿐입니다 (최소 3장). ` +
+          '외국 스톡으로 채우지 않고 발행을 중단합니다. 관련 기사 사진이나 검증된 인물 사진을 확보하세요.'
+      );
+    }
+    log.ok(`기사 사진 안전 검사 통과: 소재 자체 사진 ${subjectPhotos}장 · 스톡 0장`);
+  }
+
+  /* **그라디언트 카드를 만들지 않는다 (사용자 지시 2026-08-05).**
+   *
+   * 사진을 못 구한 슬롯은 예전에 그라디언트 배경 카드로 렌더했다. 그런데 그것은
+   * 글에 아무것도 보태지 않으면서 업로드·렌더 자원을 쓰고, 독자에게는 빈 색면이다.
+   * 무관한 스톡으로 채우는 것도 금지다(그쪽은 흥미를 죽인다).
+   *
+   * → 남는 답은 **사진이 있는 만큼만 카드를 만드는 것**이다. 슬롯을 지우고
+   *   `targets` 를 실제 사진 수에 맞춘다. 사진이 4장이면 카드도 4장이다.
+   *
+   * 대표 이미지(슬롯 0)는 예외다 — 제목이 얹히는 카드라 없으면 글의 얼굴이 사라진다.
+   * 대표에 쓸 사진이 없으면 그 자리만 그라디언트를 허용한다.
+   */
+  if (cfg.images.gradientFill !== true) {
+    const keep = targets
+      .map((t, i) => ({ t, bg: backgrounds[i], i }))
+      .filter((x) => x.bg || x.t.placement === 'thumbnail');
+    const dropped = targets.length - keep.length;
+    if (dropped > 0) {
+      log.info(
+        `사진을 못 구한 ${dropped}칸은 카드를 만들지 않습니다 (그라디언트 대신 생략) — ` +
+          `카드 ${targets.length} → ${keep.length}장.`
+      );
+      targets.length = 0;
+      targets.push(...keep.map((x) => x.t));
+      backgrounds = keep.map((x) => x.bg);
+    }
+  }
+
   fs.mkdirSync(DIRS.images, { recursive: true });
   const palettes = cfg.images.palettes?.length
     ? cfg.images.palettes
@@ -423,7 +479,10 @@ export async function renderImages(article, cfg) {
           bg.file
         );
         const focus = bg.isPerson ? 'center 25%' : 'center center';
-        const p = await renderPlainPhoto(browser, bgDataUri, [bw, bh], focus, resolveLook(cfg.images.look));
+        /* noText = 이미 완성된 이미지(카드·표지·본문 페이지). 룩을 입히지 않는다.
+         * 종이 페이지에 goldenHour 를 씌우면 흰 종이가 누렇게 뜬다. */
+        const bodyLook = brief.noText === true ? LOOKS.neutral : resolveLook(cfg.images.look);
+        const p = await renderPlainPhoto(browser, bgDataUri, [bw, bh], focus, bodyLook);
         const file = path.join(DIRS.images, `${prefix}-body${i}.png`);
         await p.screenshot({ path: file, type: 'png' });
         await p.close();
@@ -482,9 +541,31 @@ export async function renderImages(article, cfg) {
       // 강조 수치: codex 가 준 값 우선, 없으면 본문에서 찾아본다
       let statValue = brief.statValue || '';
       let statLabel = brief.statLabel || '';
-      if (!statValue && !isThumb && cfg.images.useStats !== false) {
-        statValue = guessStat(article, brief.afterSection || i);
-        if (statValue && !statLabel) statLabel = '';
+      /* 대표 카드에는 원래 수치를 얹지 않는다 — 사진 위에 제목까지 있으면 복잡해진다.
+       *
+       * 예외: **사진이 없는 대표 카드.** 그때는 제목만 남아 색면 카드가 되고,
+       * 그건 자원만 쓰고 독자에게 아무것도 주지 않는다(사용자 지적 2026-08-05).
+       * 경제 글처럼 관련 사진 공급이 없는 모드가 여기 해당한다 — 핵심 수치를
+       * 얹으면 같은 카드가 정보를 담은 카드가 된다.
+       * 수치는 `figures`(라벨·값·출처)에서 오므로 글 내용과 어긋날 수 없다. */
+      const statAllowed = !isThumb || !bg;
+      if (!statValue && statAllowed && cfg.images.useStats !== false) {
+        /* 대표 카드에는 **`figures` 를 먼저** 쓴다.
+         *
+         * `guessStat` 은 본문에서 숫자를 주워 오므로 대표에 올릴 값이 아닌 것이
+         * 걸린다 — 실측: 보육수당 글에서 "1명" 이 뽑혔다(월 20만원이 맞는 값이다).
+         * `figures` 는 모델이 라벨·값·출처를 붙여 고른 값이라 글의 핵심 수치다. */
+        if (isThumb) {
+          const fig = (article.figures || []).find((f) => f?.value);
+          if (fig) {
+            statValue = String(fig.value);
+            if (!statLabel) statLabel = String(fig.label || '');
+          }
+        }
+        if (!statValue) {
+          statValue = guessStat(article, brief.afterSection || i);
+          if (statValue && !statLabel) statLabel = '';
+        }
       }
 
       const isPerson = !!bg?.isPerson;
@@ -507,7 +588,15 @@ export async function renderImages(article, cfg) {
         (printedOn
           ? cfg.images.thumbLayout || 'clean'
           : isThumb
-            ? cfg.images.thumbLayout || 'clean'
+            /* 사진이 없는 대표는 `clean` 을 쓰지 않는다.
+             *
+             * `clean` 은 **사진 전용 연출**이다 — 제목만 얹고 수치·라벨을 일부러
+             * 뺐다(사진 위 요소를 줄이려고). 그래서 사진이 없으면 색면에 제목
+             * 한 줄만 남아 아무 정보도 주지 않는다.
+             * 수치를 표시하는 `editorial` 로 바꿔 핵심 숫자를 얹는다. */
+            ? bg
+              ? cfg.images.thumbLayout || 'clean'
+              : 'editorial'
             : pickLayout({
                 title: article.title,
                 slot: i,
@@ -539,11 +628,20 @@ export async function renderImages(article, cfg) {
           isThumb,
           layout,
           bgDataUri,
-          // 전역 룩 — 레이아웃 자기 필터 뒤에 붙는다 (레이아웃 의도가 먼저다)
-          photoLook: resolveLook(cfg.images.look).filter,
+          /* 전역 룩 — 레이아웃 자기 필터 뒤에 붙는다 (레이아웃 의도가 먼저다).
+           *
+           * ⚠️ noText 는 **이미 완성된 이미지**라는 신호다(글귀 카드·작가 카드·
+           * 표지·제사 페이지). 여기에 룩을 입히면 우리가 맞춰 둔 색이 무너진다.
+           * > 2026-08-01 실측: 표지 지배색으로 만든 맑은 하늘색 글귀 카드가
+           * > goldenHour 필터를 먹고 회색으로 탁해졌다. */
+          photoLook: noText ? '' : resolveLook(cfg.images.look).filter,
           // 인물 사진은 얼굴이 잘리지 않도록 크롭 위치를 바꾼다
           bgPosition: isPerson ? personBgPosition(layout, bg.portrait) : '',
-          credit: bgDataUri && cfg.images.showCredit ? bg.credit : '',
+          /* noText 는 이미 렌더가 끝난 고정 이미지다. `repreview --pin` 으로 고정한
+           * 대표 카드에는 출처 문구도 이미 들어 있다. 다시 얹으면 같은 문구가
+           * 두 겹으로 겹친다. 완성 이미지의 출처는 본문 하단 manifest 크레딧에도
+           * 남으므로 여기서는 재삽입하지 않는다. */
+          credit: bgDataUri && cfg.images.showCredit && !noText ? bg.credit : '',
         }),
         { waitUntil: 'load' }
       );
@@ -551,7 +649,15 @@ export async function renderImages(article, cfg) {
 
       // 사진 밝기에 맞춰 스크림 세기를 자동 조절한다.
       // 어두운 사진에 기본 스크림을 그대로 얹으면 탁해지고, 밝은 사진은 글자가 묻힌다.
-      if (bgDataUri) {
+      if (bgDataUri && noText) {
+        /* 스크림은 **글자를 읽히게 하려고** 까는 것이다. 글자를 얹지 않는 이미지에는
+         * 탁하게 만드는 효과만 남는다 (2026-08-01: 글귀 카드가 비네트에 덮였다). */
+        await page.evaluate(() => {
+          const el = document.querySelector('.scrim');
+          if (el) el.style.opacity = '0';
+        });
+        await page.waitForTimeout(120);
+      } else if (bgDataUri) {
         const luma = await measureLuma(page, bgDataUri);
         if (luma !== null) {
           const opacity = Math.min(1, Math.max(0.35, 0.35 + (luma / 255) * 0.9));
@@ -606,5 +712,60 @@ export async function renderImages(article, cfg) {
     `이미지 ${targets.length}장 생성 (대표 ${result.thumbnail ? 1 : 0} · 본문 ${result.body.length}` +
       ` · 실사 배경 ${photoCount}장 · 연출 ${usedLayouts.join('/')})`
   );
+
+  /* 절차 글이면 **대표 이미지를 흐름도 카드로 바꾼다** (src/infographic.js).
+   *
+   * 왜 스톡 사진보다 나은가: 목록과 공유 카드에서 "무슨 글인지" 가 바로 보인다.
+   * "노트와 펜" 사진은 어떤 경제 글에도 붙을 수 있어서 아무것도 알려주지 않는다.
+   * 라벨은 아티클의 단계 소제목을 그대로 쓰므로 본문과 어긋나지 않는다.
+   *
+   * 단계 글이 아니거나 렌더가 실패하면 아무 일도 하지 않는다 —
+   * 그 경우 위에서 만든 스톡 대표 이미지가 그대로 남는다.
+   * ⚠️ 이 처리를 위쪽 루프의 조건문 **안**에 넣지 않는다. 그러면 사진을 끈 글
+   * (`--no-images`)에서 조용히 빠진다 (CLAUDE.md: 단계를 다른 단계 안에 얹지 않는다). */
+  /* 정보 카드 — `article.cards[]` 를 정사각 이미지로 그려 **본문 이미지에 섞는다.**
+   * 스톡 사진과 나란히 서지만 역할이 다르다: 사진은 호흡의 쉼표이고 카드는 정보다.
+   * 참고 글(dampick) 분석에서 온 것 — 그쪽 카드도 템플릿에 글자를 채운 것이었다.
+   * 카드가 없으면(빈 배열) 아무 일도 하지 않는다. */
+  try {
+    const { renderCards } = await import('./infographic.js');
+    for (const c of await renderCards(article, cfg)) {
+      result.body.push({
+        file: c.file,
+        placement: 'body',
+        alt: `${c.title} — ${article.primaryKeyword || article.title}`,
+        caption: '',
+        afterSection: c.afterSection || 1,
+        layout: `card-${c.type}`,
+        background: null,
+        isInfoCard: true,
+      });
+    }
+  } catch (err) {
+    log.debug(`정보 카드 건너뜀: ${err.message.split('\n')[0]}`);
+  }
+
+  try {
+    const { renderStepCard, steps } = await import('./infographic.js');
+    if (steps(article).length >= 2) {
+      const file = await renderStepCard(article, cfg);
+      if (file) {
+        result.thumbnail = {
+          file,
+          placement: 'thumbnail',
+          alt: `${article.primaryKeyword || article.title} 절차 요약`,
+          caption: '',
+          afterSection: 0,
+          layout: 'stepcard',
+          background: null,
+          /** html.js 가 이 표시를 보고 **HTML 흐름도를 그리지 않는다** — 같은 정보가 두 번 나온다 */
+          isStepCard: true,
+        };
+      }
+    }
+  } catch (err) {
+    log.debug(`절차 카드 건너뜀: ${err.message.split('\n')[0]}`);
+  }
+
   return result;
 }

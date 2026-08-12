@@ -1,0 +1,45 @@
+{
+ "items": [
+  {
+   "file": "card-quote.png",
+   "source": "card",
+   "note": "검증된 책 속 문장(95쪽)으로 만든 글귀 카드"
+  },
+  {
+   "file": "card-author.png",
+   "source": "wikimedia",
+   "author": "Nelson BrazUkA",
+   "license": "Public domain",
+   "note": "페소아 초상(퍼블릭 도메인)을 넣어 만든 작가 카드"
+  },
+  {
+   "file": "01-pessoa-wall.jpg",
+   "source": "wikimedia",
+   "author": "Pedro Ribeiro Simões",
+   "license": "CC BY 2.0"
+  },
+  {
+   "file": "02-backcover.jpg",
+   "source": "press",
+   "note": "문학동네 판본 뒤표지"
+  },
+  {
+   "file": "03-ilreodugi.jpg",
+   "source": "press",
+   "note": "문학동네 판본 일러두기 지면"
+  },
+  {
+   "file": "04-lisbon-tram.jpg",
+   "source": "stock"
+  },
+  {
+   "file": "05-reading-lamp.jpg",
+   "source": "stock"
+  },
+  {
+   "file": "card-quote-2.png",
+   "source": "card",
+   "note": "검증된 책 속 문장(14쪽)으로 만든 글귀 카드"
+  }
+ ]
+}

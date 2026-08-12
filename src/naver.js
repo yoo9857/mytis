@@ -5,6 +5,7 @@ import { shot, setDialogPolicy } from './browser.js';
 import { DIRS, stamp } from './paths.js';
 import { buildDocument, summarize } from './naverDoc.js';
 import { pickCategory } from './category.js';
+import { MODES } from './mode.js';
 
 /**
  * 네이버 블로그(스마트에디터 ONE) 글쓰기 자동화.
@@ -391,8 +392,43 @@ export async function injectDocument(page, article, { cfg, images, imageMeta, cr
  *   - 검색 결과에 원서·타 판본이 섞인다("Invisible Helix" 3종) —
  *     제목이 정확히 일치하는 첫 카드가 한국어판이다.
  */
-export async function attachBookMaterial(page, title) {
-  log.step(`글감 첨부: 책 "${title}"`);
+/**
+ * 글감 패널을 **열려 있을 때만** 닫는다.
+ *
+ * 글감 버튼은 토글이다. 실패 경로에서 무조건 한 번 누르면 **이미 닫힌 패널이 다시 열린다.**
+ * 열려 있으면 발행 설정 레이어가 아예 안 열린다 (2026-07-29 실측).
+ *
+ * > 2026-08-02 실측 — 책 카드 첨부가 문서 삽입 단계에서 실패했다. 그 지점에서는 패널이
+ * >   이미 닫혀 있었는데 catch 블록이 버튼을 눌러 되열었고, 그래서 발행 레이어를 못 열어
+ * >   **발행 자체가 실패했다.** 되돌리는 코드가 오히려 망가뜨린 경우다.
+ */
+async function closeMaterialPanel(page) {
+  const isOpen = () =>
+    page
+      .locator('button:text-is("전체 글감")')
+      .first()
+      .isVisible()
+      .catch(() => false);
+  for (let k = 0; k < 3; k++) {
+    if (!(await isOpen())) break;
+    await page.locator('button:has-text("글감")').first().click({ timeout: 2500 }).catch(() => {});
+    await sleep(page, 700);
+  }
+  await page.keyboard.press('Escape').catch(() => {});
+  await sleep(page, 400);
+}
+
+/**
+ * 글감 첨부의 **공통 흐름**. 탭 이름만 다르고 나머지는 같다 (책 · 장소 · 영화 …).
+ *
+ * `attachBookMaterial` 이 책 전용으로 굳어 있었는데, 장소(GPS)를 붙이려면 같은
+ * 흐름이 한 벌 더 필요했다 — 복사하면 실측으로 얻은 예외 처리가 두 곳으로 갈린다.
+ *
+ * `loose` 는 **장소용**이다. 책은 검색 결과의 말단 텍스트가 제목과 정확히 일치하지만,
+ * 장소는 이름 뒤에 지점·분류가 붙어 나오는 일이 많아 정확 일치로는 못 집는다.
+ */
+export async function attachMaterial(page, { tab, query, label = tab, loose = false, align = 'center' }) {
+  log.step(`글감 첨부: ${label} "${query}"`);
 
   // 커서를 본문 끝으로 — 카드는 커서 자리에 삽입된다
   await page.locator('.se-text-paragraph').last().click();
@@ -402,7 +438,7 @@ export async function attachBookMaterial(page, title) {
   await sleep(page, 1500);
 
   const input = page.locator('[class*="search"] input, [class*="side"] input[type="text"]').first();
-  await input.fill(title);
+  await input.fill(query);
   await input.press('Enter');
 
   /* 결과 패널이 **접힌 채** 올 때가 있다 — 에디터가 직전 상태(축소)를 기억한다
@@ -421,29 +457,37 @@ export async function attachBookMaterial(page, title) {
     await shot(page, 'naver-material-fail');
     throw new Error('글감 결과 패널이 펼쳐지지 않았습니다.');
   }
-  // 책 탭으로 좁힌다 — 쇼핑(나선호스…)이 섞이지 않게
-  await page.locator('button:text-is("책")').first().click({ timeout: 2500 }).catch(() => {}); // 30초 기본 대기 금지 — 책 선택이 70초 걸린 주범
+  // 해당 탭으로 좁힌다 — 책 글에서 쇼핑(나선호스…)이 섞여 나온 적이 있다
+  await page.locator(`button:text-is("${tab}")`).first().click({ timeout: 2500 }).catch(() => {}); // 30초 기본 대기 금지 — 책 선택이 70초 걸린 주범
   await sleep(page, 1200);
 
   /* 같은 글자가 **본문에도** 있다 — 서지 표 셀과 참고 자료에 책 제목이 그대로
    * 들어 있어서, 문서 전체에서 첫 일치를 집으면 본문을 클릭한다 (2026-07-29 실측:
    * 오클릭 여파로 라이브러리 패널까지 열려 발행 버튼이 막혔다).
    * 글감 패널의 위치를 '전체 글감' 탭으로 잡고, **그 아래·오른쪽 일치만** 받는다. */
-  const rect = await page.evaluate((q) => {
-    const tab = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '전체 글감');
-    if (!tab) return null;
-    const t = tab.getBoundingClientRect();
-    const els = [...document.querySelectorAll('div,strong,span,a,p')].filter(
-      (e) => e.childElementCount === 0 && e.textContent.trim() === q
-    );
-    for (const el of els) {
-      const r = el.getBoundingClientRect();
-      if (!r.width || !r.height) continue;
-      if (r.top > t.top && r.left > t.left - 60) return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  const rect = await page.evaluate(({ q, loose }) => {
+    const tabEl = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '전체 글감');
+    if (!tabEl) return null;
+    const t = tabEl.getBoundingClientRect();
+    const leaves = [...document.querySelectorAll('div,strong,span,a,p')].filter((e) => e.childElementCount === 0);
+    const norm = (x) => x.replace(/\s/g, '');
+    /* 정확 일치를 먼저 본다. 못 찾으면(장소) 앞부분 일치 → 포함 순으로 넓힌다.
+     * 넓히는 순서를 고정해야 "가장 그럴듯한 것" 이 아니라 **가장 좁은 일치**가 이긴다. */
+    const tiers = loose
+      ? [(e) => norm(e.textContent) === norm(q), (e) => norm(e.textContent).startsWith(norm(q)), (e) => norm(e.textContent).includes(norm(q))]
+      : [(e) => e.textContent.trim() === q];
+    for (const match of tiers) {
+      for (const el of leaves) {
+        if (!match(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        if (r.top > t.top && r.left > t.left - 60) return { x: r.x + r.width / 2, y: r.y + r.height / 2, text: el.textContent.trim().slice(0, 60) };
+      }
     }
     return null;
-  }, title);
-  if (!rect) throw new Error('글감 검색 결과에서 책 카드를 찾지 못했습니다.');
+  }, { q: query, loose });
+  if (!rect) throw new Error(`글감 검색 결과에서 ${label} 카드를 찾지 못했습니다.`);
+  log.debug(`글감 결과 선택: "${rect.text}"`);
   await page.mouse.click(rect.x, rect.y);
   await sleep(page, 2500);
 
@@ -463,7 +507,7 @@ export async function attachBookMaterial(page, title) {
   /* 카드를 **대표 사진 바로 아래**로 올린다 (2026-07-29 독자 요청 — 처음엔 제목
    * 바로 아래였는데 썸네일 아래가 낫다고 확정). UI 삽입은 커서 위치라 끝에 붙는데,
    * material 컴포넌트는 왕복이 확인됐으므로 setDocumentData 로 자리만 옮긴다. */
-  const ok = await page.evaluate(() => {
+  const ok = await page.evaluate((alignWanted) => {
     const e = window.__seEd();
     const cur = e.getDocumentData();
     const comps = cur.document.components;
@@ -471,19 +515,44 @@ export async function attachBookMaterial(page, title) {
     if (at < 0) return false;
     // align:center 는 2026-07-29 왕복 실측으로 살아남는 것을 확인했다 (unknown 0)
     const [card] = comps.splice(at, 1);
-    card.align = 'center';
+    card.align = alignWanted;
     const firstImage = comps.findIndex((c) => c['@ctype'] === 'image');
     const titleAt = comps.findIndex((c) => c['@ctype'] === 'documentTitle');
     comps.splice((firstImage >= 0 ? firstImage : titleAt) + 1, 0, card);
     e.setDocumentData({ ...cur, document: { ...cur.document, components: comps } });
     return true;
-  });
+  }, align);
   if (!ok) {
     await shot(page, 'naver-material-fail');
-    throw new Error('책 카드가 문서에 들어가지 않았습니다.');
+    throw new Error(`${label} 카드가 문서에 들어가지 않았습니다.`);
   }
   await sleep(page, 1500);
-  log.ok('책 카드 첨부 완료 (글감 > 책 · 대표 사진 아래 · 가운데)');
+  log.ok(`${label} 카드 첨부 완료 (글감 > ${tab} · 대표 사진 아래)`);
+}
+
+/**
+ * 글감 > 책 (책 글 전용 — 기존 호출부를 그대로 둔다)
+ *
+ * ⚠️ `loose: true` 다. 책도 **제목이 정확히 일치하지 않는다** —
+ * > 2026-08-02 실측 — 검색어는 "해리 포터와 마법사의 돌" 인데 카드 제목은
+ * >   "해리 포터와 마법사의 돌 1 (무선)" 이었다. 정확 일치로는 못 집어 첨부가 실패하고,
+ * >   그 여파로 발행 레이어까지 안 열려 **발행 자체가 실패했다.**
+ * 이전 책들(투명한 나선·악의·수족관)은 제목이 그대로 일치해 드러나지 않았다.
+ * 판본·권수 표기가 붙는 책에서 처음 터졌다.
+ */
+export async function attachBookMaterial(page, title) {
+  return attachMaterial(page, { tab: '책', query: title, label: '책', loose: true });
+}
+
+/**
+ * 글감 > 장소 — 네이버 지도의 장소 카드를 붙인다 (GPS·주소·지도가 함께 실린다).
+ *
+ * 지역 검색에서 이 카드가 있는 글이 유리하다. 사용자 요구(2026-08-01): "gps 써서".
+ * 장소명은 **네이버 지도에 등재된 이름**이어야 한다 — 없으면 검색 결과가 비고,
+ * 그때는 발행을 막지 않고 경고만 한다 (책 카드와 같은 기준).
+ */
+export async function attachPlaceMaterial(page, place) {
+  return attachMaterial(page, { tab: '장소', query: place, label: '장소', loose: true });
 }
 
 /** 발행 설정 레이어 열기 */
@@ -752,7 +821,11 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
   /* 책 글은 글 끝에 **글감 > 책 카드**를 단다 (독자 구조의 ⑧ 책등록).
    * 카드의 link·sign·dataId 는 네이버 서명값이라 손으로 만들 수 없다 —
    * 사진·장소와 같은 전략으로 UI 로 삽입하고 문서에서 확인만 한다. */
-  if (article.mode === 'book') {
+  /* `article.skipMaterial` 로 끌 수 있다.
+   * 카드는 있으면 좋은 것이고 **없어도 글은 나간다.** 그런데 첨부가 실패하면 그 여파로
+   * 발행 레이어까지 못 열려 발행 자체가 죽는다 (2026-08-02 실측 — 해리 포터 글이
+   * 같은 지점에서 두 번 실패했다). 곁가지가 본체를 막으면 곁가지를 끌 수단이 있어야 한다. */
+  if (article.mode === 'book' && !article.skipMaterial) {
     const bookTitle = String(article.topic || article.title || '')
       .replace(/^책\s*:\s*/, '')
       .split('—')[0]
@@ -762,10 +835,19 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
       await attachBookMaterial(page, bookTitle);
     } catch (err) {
       log.warn(`책 글감 첨부 실패 (발행은 계속합니다): ${err.message.slice(0, 100)}`);
-      // 실패해도 패널은 반드시 닫는다 — 열려 있으면 발행 레이어가 안 열린다
-      await page.locator('button:has-text("글감")').first().click({ timeout: 2500 }).catch(() => {});
-      await sleep(page, 800);
-      await page.keyboard.press('Escape').catch(() => {});
+      await closeMaterialPanel(page);
+    }
+  }
+
+  /* 글감 > 장소 — `article.place` 가 있으면 지도 카드를 붙인다.
+   * 네이버 지역 검색에서 이 카드가 있는 글이 유리하고, 독자에게도 위치가 바로 보인다.
+   * 실패해도 발행은 계속한다 — 장소명이 지도에 없을 수 있다(책 카드와 같은 기준). */
+  if (article.place) {
+    try {
+      await attachPlaceMaterial(page, article.place);
+    } catch (err) {
+      log.warn(`장소 글감 첨부 실패 (발행은 계속합니다): ${err.message.slice(0, 100)}`);
+      await closeMaterialPanel(page);
     }
   }
 
@@ -775,13 +857,83 @@ export async function publishPost(page, urls, cfg, { article, imageFiles = [], i
     aliases: cfg.naver.categoryAliases,
     fallback: cfg.naver.categoryFallback,
   });
-  await setTags(page, article.tags, { max: cfg.naver.tagCount });
+  /* 태그 상한은 **모드 규격**을 따른다. `cfg.naver.tagCount`(=10)로 자르면
+   * 규격이 12~16 을 요구하는 모드에서 앞의 10개만 나간다 — codexWriter 의
+   * 같은 버그를 고친 날 발행에서 15개 중 10개만 붙어 드러났다 (2026-08-03).
+   * 네이버 자체 상한(30)은 setTags 가 지킨다. */
+  const tagMax = MODES[article.mode]?.contract?.tags?.[1] || cfg.naver.tagCount;
+  await setTags(page, article.tags, { max: tagMax });
   await setVisibility(page, cfg.naver.visibility);
   await setPublishOptions(page, cfg);
 
   await shot(page, 'naver-before-publish');
 
-  return clickPublish(page, urls);
+  const result = await clickPublish(page, urls);
+
+  /* 발행 후 검증 — **네이버에 더 필요하다.**
+   *
+   * 티스토리에는 `verifyPublished` 가 있는데 네이버에는 없었다. 그런데 네이버는
+   * **발행 후 수정이 불가능하다**(HANDOVER §2 · 편집 진입 URL 이 전부 막혀 있다).
+   * 수정 가능한 쪽에만 검증이 있고 되돌릴 수 없는 쪽에 없었던 셈이다 (2026-08-03).
+   *
+   * 검증 실패가 발행 성공을 뒤집지는 않는다 — 이미 나갔다. 대신 **로그에 남겨서
+   * 사람이 즉시 글을 열어 보게** 한다. 지울지 말지는 사람이 정한다. */
+  if (result?.ok && result.postUrl) {
+    result.verify = await verifyPublished(page, result.postUrl, {
+      // 실제로 확보한 컴포넌트 수를 기준으로 센다 (요청한 장수가 아니라)
+      imageCount: images.length,
+    });
+  }
+  return result;
+}
+
+/**
+ * 발행된 네이버 글을 열어 본문 글자수·이미지 수를 센다.
+ *
+ * 네이버 본문은 iframe(`#mainFrame`) 안에 있고 컴포넌트가 `.se-main-container`
+ * 에 담긴다. 모바일 주소(m.blog)는 iframe 이 없어 더 단순하지만, 발행 직후에는
+ * 반영이 늦을 수 있어 PC 주소를 그대로 연다.
+ */
+export async function verifyPublished(page, postUrl, { minChars = 1000, imageCount = 0 } = {}) {
+  try {
+    await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await sleep(page, 2500);
+
+    /* 본문이 iframe 안이면 그 프레임에서 센다 */
+    const frame =
+      page.frames().find((f) => /PostView|blog\.naver\.com/i.test(f.url()) && f !== page.mainFrame()) ||
+      page.mainFrame();
+
+    const info = await frame.evaluate(() => {
+      const scope =
+        document.querySelector('.se-main-container') ||
+        document.querySelector('#postViewArea, .post_ct, .post-view') ||
+        document.body;
+      return {
+        chars: (scope?.innerText || '').replace(/\s+/g, ' ').trim().length,
+        images: scope ? scope.querySelectorAll('img').length : 0,
+      };
+    });
+
+    const problems = [];
+    if (info.chars < minChars) problems.push(`본문 ${info.chars}자 (기준 ${minChars}자)`);
+    if (imageCount && info.images < imageCount) problems.push(`이미지 ${info.images}/${imageCount}장`);
+
+    if (problems.length) {
+      await shot(page, 'naver-verify-failed');
+      log.warn(
+        `발행 검증 실패: ${problems.join(' · ')} — 네이버는 수정이 안 되니 ` +
+          `글을 열어 보고 필요하면 지우고 다시 내세요: ${postUrl}`
+      );
+    } else {
+      log.ok(`발행 검증: 본문 ${info.chars.toLocaleString()}자 · 이미지 ${info.images}장`);
+    }
+    return { ...info, ok: !problems.length };
+  } catch (err) {
+    // 검증 실패가 발행 성공을 뒤집으면 안 된다 — 네트워크·반영 지연일 수 있다
+    log.warn(`발행 검증을 건너뜁니다 (${err.message.split('\n')[0]})`);
+    return { ok: null };
+  }
 }
 
 /**
