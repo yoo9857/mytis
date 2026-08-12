@@ -2,6 +2,7 @@ node_modules/
 profile/
 logs/
 .tmp/
+tmp/
 
 # 초안·렌더 결과는 버리지만 **사람이 눈으로 고른 사진은 남긴다.**
 # 아티클 JSON 의 photoDir 이 이 폴더를 가리키므로, 커밋하지 않으면 다른 기기에서
