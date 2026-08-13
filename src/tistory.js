@@ -868,12 +868,33 @@ export async function setReserve(page, minutesLater, reserveAt = '') {
 async function hasCaptcha(page) {
   return page
     .evaluate(() => {
-      const visible = (el) => {
+      const bigEnough = (el) => {
         if (!el) return false;
         const r = el.getBoundingClientRect();
         return r.width > 40 && r.height > 40;
       };
-      const byNode = [...document.querySelectorAll('[class*="kaptcha" i],[id*="kaptcha" i],[class*="captcha" i],[id*="captcha" i]')].some(visible);
+      /* 매칭된 노드 자신이 아니라 **부모까지 거슬러 올라가며** 크기를 본다.
+       * `#dkaptcha` 는 캡차 스크립트가 내용을 그려 넣기 전까지 빈 채로
+       * `line-height:0` 이라 그 자체는 크기가 0이다.
+       * > 2026-08-13 실측 — 헤드리스 실행에서 dkaptcha.kakao.com 스크립트가
+       * >   위젯 내용을 그리지 못해 빈 레이어만 남았다. 화면에는 닫기(×) 버튼과
+       * >   빈 박스가 분명히 떠 있었는데(스크린샷 확인), 매칭 노드 자신의
+       * >   bounding box 만 봐서 캡차가 없다고 오판했다. 그래서 "발행 버튼을
+       * >   눌렀지만 화면을 벗어나지 않았습니다" 라는 원인과 무관한 메시지로
+       * >   3번 연속 실패했다 — 60초씩 허비하고 실제 원인(캡차)을 알리지 못했다. */
+      const visible = (el) => {
+        let cur = el;
+        for (let i = 0; i < 4 && cur; i += 1, cur = cur.parentElement) {
+          if (bigEnough(cur)) return true;
+        }
+        return false;
+      };
+      /* 티스토리 마크업은 "capcha_layer"(t 하나가 빠진 실제 표기)를 쓴다.
+       * "captcha" 철자만으로 찾으면 이 컨테이너를 놓친다 — id="dkaptcha" 만
+       * 우연히 "kaptcha" 부분 문자열로 걸렸을 뿐이다. */
+      const byNode = [...document.querySelectorAll(
+        '[class*="kaptcha" i],[id*="kaptcha" i],[class*="captcha" i],[id*="captcha" i],[class*="capcha" i]'
+      )].some(visible);
       const text = document.body?.innerText || '';
       const byText = /지도에서 아래 장소를 찾아|정답을 입력해주세요|DKAPTCHA/i.test(text);
       return byNode || byText;

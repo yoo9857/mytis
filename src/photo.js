@@ -1153,8 +1153,20 @@ export async function fetchBackgrounds(article, cfg, slots) {
    * 일반인이 방송 활동명(정숙·영호·순자)으로 나오는 글에서 위키미디어를
    * "정숙" 으로 검색해 **전혀 상관없는 사람 사진과 한자 문서 이미지**가 들어갔다.
    * (2026-07-27 실측)
+   *
+   * **단어 하나짜리 nameEn 은 받지 않는다.** `nameMatches` 는 부분 문자열 매칭이라,
+   * 성 없이 이름 하나만 로마자로 남는 사람(한류 아이돌 예명에 흔하다)은 그 이름을
+   * 가진 **다른 유명인**과 구별하지 못한다.
+   * > 2026-08-13 실측 — 하츠투하츠 '이안'(nameEn: "Ian") 기사의 대표 이미지가
+   * >   딥 퍼플 보컬 **Ian Gillan** 사진으로 나갔다. "Ian" 이 두 사람 모두의
+   * >   이름이라 `nameMatches`가 어느 쪽도 걸러내지 못했다. 실존 인물 오귀속이다.
+   * 토큰이 두 개 이상(성+이름)이어야 사람을 구분할 수 있다고 보고, 하나뿐이면
+   * 이 단계를 건너뛴다 — 빈 자리는 원문 사진·그라디언트가 대신한다.
    */
-  const people = (article.entities || []).filter((e) => (e.nameEn || '').trim());
+  const people = (article.entities || []).filter((e) => {
+    const en = (e.nameEn || '').trim();
+    return en && en.split(/\s+/).length >= 2;
+  });
   if (cfg.images.usePersonPhotos !== false && people.length) {
     log.info(`인물 사진 검색: ${people.map((p) => p.nameKo || p.nameEn).join(', ')}`);
 
