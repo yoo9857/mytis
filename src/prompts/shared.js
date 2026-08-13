@@ -280,8 +280,12 @@ export function imageBriefRules(a, bodyImages, { mode = '', maxSection = 0, noSt
 
   return `# 이미지 브리프
 - imageBriefs 첫 번째 항목은 placement="thumbnail", afterSection=0 인 대표 이미지 1개.
-- 그 뒤에 placement="body" 이미지 ${bodyImages}개를 만드세요. afterSection은 1 이상 ${lastSection} 이하.
-  (같은 자리에 두 장을 묶고 싶으면 afterSection 을 같게 두고 group 을 같은 이름으로 주세요.)
+- 그 뒤에 placement="body" 이미지를 **정확히 ${bodyImages}개만** 만드세요 — 대표 1개를 더해
+  imageBriefs 배열 전체 길이는 **정확히 ${bodyImages + 1}개**여야 합니다.
+  **이보다 많이 만들면 발행이 막힙니다.** 다룰 소재가 많아도 개수를 늘리지 말고,
+  그 안에서 가장 중요한 장면만 고르세요. afterSection은 1 이상 ${lastSection} 이하.
+  (같은 자리에 두 장을 묶고 싶으면 afterSection 을 같게 두고 group 을 같은 이름으로 주세요 —
+  이때도 배열 길이는 늘지 않습니다.)
 ${headlineRules}
 - eyebrow는 헤드라인 위에 붙는 작은 분류 라벨입니다(2~8자). 이미지마다 다르게 쓰세요.
 ${statRules}

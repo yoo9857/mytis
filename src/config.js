@@ -162,10 +162,14 @@ const DEFAULTS = {
     handles: {},
   },
   codex: {
-    model: '',
+    model: '', // 실제 codex CLI 에 넘길 모델명. 사진 검색·뉴스 탐색 등 모든 codex 호출에 쓰인다.
     reasoningEffort: 'medium',
     search: true,
     timeoutMs: 1200000,
+    // 비우면 codex CLI 를 그대로 쓴다. 'deepseek' 로 두면 집필 단계만 DeepSeek API 직접
+    // 호출로 바뀐다 — DeepSeek 는 codex 의 웹검색 도구가 없어 그 단계의 search 는 꺼진다.
+    provider: '',
+    deepseekModel: 'deepseek-v4-pro', // provider가 'deepseek'일 때만 쓰는, codex.model 과 분리된 값
   },
   browser: {
     headless: false,
@@ -230,6 +234,8 @@ export function loadConfig({ reload = false } = {}) {
   if (naverCategory) cfg.naver.category = naverCategory;
   if (env.MONEYTI_HEADLESS === '1') cfg.browser.headless = true;
   if (env.MONEYTI_HEADLESS === '0') cfg.browser.headless = false;
+  if (env.CODEX_PROVIDER) cfg.codex.provider = env.CODEX_PROVIDER;
+  if (env.DEEPSEEK_MODEL) cfg.codex.deepseekModel = env.DEEPSEEK_MODEL;
 
   cfg.secrets = {
     kakaoId: env.KAKAO_ID || '',
@@ -239,6 +245,7 @@ export function loadConfig({ reload = false } = {}) {
     pexelsApiKey: env.PEXELS_API_KEY || '',
     unsplashApiKey: env.UNSPLASH_ACCESS_KEY || '',
     pixabayApiKey: env.PIXABAY_API_KEY || '',
+    deepseekApiKey: env.DEEPSEEK_API_KEY || '',
   };
   cfg.verbose = env.MONEYTI_VERBOSE === '1';
   cfg.profileDir = DIRS.profile;

@@ -195,10 +195,102 @@ function runCodexExec({ prompt, schemaFile, cfg, timeoutMs, search }) {
   });
 }
 
+/**
+ * DeepSeek 전용 — 섹션마다 사진을 1~2장씩 골고루 넣어 규격(사진 수)을 넘기는 버릇을 자른다.
+ *
+ * codex 는 "본문 N개" 지시를 지키는데, DeepSeek 는 지시문을 강하게 고쳐도(2026-08-13
+ * 실측 2회 연속 동일 실패) afterSection 범위를 "구간마다 채우라"는 뜻으로 읽고 12장을
+ * 만든다. contract.js 의 autoFix 는 사진 수를 일부러 건드리지 않는데(어떤 사진을 버릴지는
+ * 내용 판단이라서) — 그건 codex 의 드문 실패를 염두에 둔 결정이고, DeepSeek 의 이 버릇은
+ * 매번 같은 모양(섹션당 1장 우선)이라 **어떤 걸 남길지가 아니라 몇 장을 남길지의 문제**다.
+ * 그래서 이 트리밍은 provider==='deepseek' 일 때만 켠다 — codex 경로는 한 글자도 안 건든다.
+ */
+function trimDeepSeekImageBriefs(article, bodyImages) {
+  const briefs = article.imageBriefs || [];
+  if (!briefs.length) return;
+  const thumbnail = briefs.find((b) => b.placement === 'thumbnail');
+  const body = briefs.filter((b) => b !== thumbnail);
+
+  const bySectionFirst = [];
+  const seenSections = new Set();
+  for (const b of body) {
+    if (seenSections.has(b.afterSection)) continue;
+    seenSections.add(b.afterSection);
+    bySectionFirst.push(b);
+  }
+  const leftovers = body.filter((b) => !bySectionFirst.includes(b));
+  const kept = [...bySectionFirst, ...leftovers].slice(0, bodyImages);
+
+  article.imageBriefs = thumbnail ? [thumbnail, ...kept] : kept;
+  /* 렌더 단계(images.js)가 imageBriefs 개수가 아니라 이 필드를 읽는다 — 자르고
+   * 여기를 안 맞추면 사진 검색은 여전히 옛 개수(11장)를 요청한다. */
+  article.bodyImageCount = kept.length;
+}
+
 /** 임의의 스키마로 codex 를 한 번 호출하고 파싱된 JSON 을 돌려준다. */
 export async function runCodexJson({ prompt, schemaFile, cfg, timeoutMs, search }) {
   const last = await runCodexExec({ prompt, schemaFile, cfg, timeoutMs, search });
   return extractJson(last);
+}
+
+/**
+ * DeepSeek Chat Completions API 를 직접 호출한다 (codex CLI 를 거치지 않는다).
+ *
+ * codex CLI(0.147.0+)는 wire_api="responses" 만 지원하고, DeepSeek 는 구형
+ * Chat Completions 만 지원해서 codex 의 model_provider 로는 붙일 수 없다
+ * (github.com/openai/codex/discussions/7782). 그래서 이 경로만 fetch 로 직접 호출한다.
+ *
+ * DeepSeek 는 json_schema 강제 모드가 없다(response_format 은 "json_object" 뿐).
+ * 그래서 스키마를 프롬프트 본문에 그대로 실어 보내고, 기존 `extractJson` 으로 파싱한다.
+ */
+async function runDeepSeekExec({ prompt, schemaFile, cfg, timeoutMs }) {
+  const apiKey = cfg.secrets?.deepseekApiKey;
+  if (!apiKey) throw new Error('DEEPSEEK_API_KEY 가 .env 에 없습니다.');
+
+  const schema = JSON.parse(fs.readFileSync(schemaFile, 'utf8'));
+  const fullPrompt =
+    `${prompt}\n\n# 출력 형식\n` +
+    '다른 말 없이, 아래 JSON 스키마를 정확히 따르는 JSON 객체 하나만 응답하세요.\n\n' +
+    JSON.stringify(schema);
+
+  const limit = timeoutMs ?? cfg.codex.timeoutMs;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), limit);
+
+  try {
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: cfg.codex.deepseekModel || 'deepseek-v4-pro',
+        messages: [{ role: 'user', content: fullPrompt }],
+        response_format: { type: 'json_object' },
+        /* reasoning_content 와 최종 답변이 max_tokens 를 나눠 쓴다. 기본값에 맡기면
+         * 추론에 예산을 다 쓰고 본문이 짧게 끊긴다 (2026-08-13 실측: 3000자 지시에 2500자). */
+        max_tokens: 16000,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`DeepSeek API 오류 ${res.status}: ${text.slice(0, 500)}`);
+    }
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error('DeepSeek 응답이 비어 있습니다 (json_mode 빈 응답은 알려진 이슈).');
+    return content;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`DeepSeek 타임아웃 (${fmtDuration(limit)} 초과)`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -542,9 +634,11 @@ export async function writeArticle({ topic, cfg }) {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const started = Date.now();
+    const useDeepSeek = cfg.codex.provider === 'deepseek';
     log.step(
-      `codex 로 글 생성 중 (시도 ${attempt}/${maxAttempts}) · ${MODE_LABEL[mode]} 모드` +
-        `${cfg.codex.search ? ' · 웹검색 ON' : ''}${cfg.codex.model ? ` · ${cfg.codex.model}` : ''}`
+      `${useDeepSeek ? 'DeepSeek' : 'codex'} 로 글 생성 중 (시도 ${attempt}/${maxAttempts}) · ${MODE_LABEL[mode]} 모드` +
+        `${useDeepSeek ? ' · 웹검색 불가' : cfg.codex.search ? ' · 웹검색 ON' : ''}` +
+        `${useDeepSeek ? ` · ${cfg.codex.deepseekModel}` : cfg.codex.model ? ` · ${cfg.codex.model}` : ''}`
     );
     log.info(`${fromNews ? '소재 기사' : '주제'}: ${topic}`);
     log.info('검색과 집필에 수 분이 걸립니다. 기다려 주세요...');
@@ -573,7 +667,9 @@ export async function writeArticle({ topic, cfg }) {
         prompt += `\n\n# 재시도 사유\n직전 시도 결과가 기준에 못 미쳤습니다: ${lastErr}\n이번에는 분량과 섹션 수를 반드시 채우세요.`;
       }
 
-      const last = await runCodexExec({ prompt, schemaFile, cfg });
+      const last = useDeepSeek
+        ? await runDeepSeekExec({ prompt, schemaFile, cfg })
+        : await runCodexExec({ prompt, schemaFile, cfg });
       const raw = extractJson(last);
       const article = normalizeArticle(raw, { topic, cfg, mode });
 
@@ -603,6 +699,16 @@ export async function writeArticle({ topic, cfg }) {
        * 영상·영화 모드는 뒤이어 `run.js: applyClipShotLayout` 이 실제 캡처 수로
        * 덮어쓴다 — 그 모드의 사진 수는 장면이 정한다. */
       article.bodyImageCount = bodyImageCount(mode, cfg);
+      if (useDeepSeek) {
+        /* bodyImageDelta(모드 선언)가 요청하는 개수와 contract.photos(규격 상한)가
+         * 어긋나는 모드가 있다 — 예: topic 은 본문 11개를 요청하는데 규격은 9개(대표
+         * 포함)까지만 허용한다 (2026-08-13 발견). codex 는 이 어긋남을 실려서
+         * 알아서 덜 쓰는 편이라 안 드러났을 뿐이다. 그래서 트리밍 기준은
+         * bodyImageCount 가 아니라 **규격의 상한**이어야 한다. */
+        const { contractOf } = await import('./contract.js');
+        const maxTotal = contractOf(mode).photos[1];
+        trimDeepSeekImageBriefs(article, Math.max(0, maxTotal - 1));
+      }
 
       // 영상 소재 글: 지어낸 타임스탬프를 실제 자막 시각으로 스냅하고,
       // 자막에 없는 지점은 0(처음부터)으로 되돌린다.
