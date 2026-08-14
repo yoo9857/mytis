@@ -88,8 +88,8 @@ export async function videoDuration(videoId) {
   try {
     const { spawnSync } = await import('node:child_process');
     const r = spawnSync(
-      'python',
-      ['-m', 'yt_dlp', '--skip-download', '--print', '%(duration)s', '--js-runtimes', 'node',
+      'yt-dlp',
+      ['--skip-download', '--print', '%(duration)s', '--js-runtimes', 'node',
         `https://www.youtube.com/watch?v=${videoId}`],
       { encoding: 'utf8', maxBuffer: 8e6, timeout: 60_000 }
     );

@@ -427,6 +427,23 @@ export async function generate(topic, cfg) {
   const mode = article.mode || detectMode(topic);
   log.debug(`용도: ${MODE_LABEL[mode]} 모드`);
 
+  /* 영화 주제에 사용자가 유튜브 URL을 직접 넣었으면 자동 검색보다 우선한다.
+   * 명시한 예고편 대신 검색 상위 인터뷰 영상이 캡처·임베드되는 일을 막는다. */
+  if (mode === MODE.MOVIE) {
+    const explicitVideo = String(topic || '').match(
+      /(?:youtube\.com\/(?:watch\?(?:[^\s)]*&)?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i
+    )?.[1];
+    if (explicitVideo) {
+      article.embeds = [{
+        videoId: explicitVideo,
+        title: `${article.title || article.primaryKeyword || '영화'} 공식 영상`,
+        channel: '사용자 지정 영상',
+        startSeconds: 0,
+      }];
+      log.info(`사용자 지정 영화 영상 우선: https://www.youtube.com/watch?v=${explicitVideo}`);
+    }
+  }
+
   // 실제 장면은 공식 영상 임베드로 보여준다. 사진은 저작권 때문에 못 가져오지만
   // 임베드는 유튜브가 제공하는 기능이라 문제가 없고, 현장을 그대로 담는다.
   if (!can(mode, 'youtubeEmbeds')) {
