@@ -932,7 +932,14 @@ async function indexCaptcha(page, { screenshot, focused } = {}) {
             type: el.type || 'text',
             placeholder: el.placeholder || '',
           }));
-        return { captchaNodes: captchaNodes.length, inputs };
+        return {
+          captchaNodes: captchaNodes.length,
+          inputs,
+          /* 지도 이미지가 iframe 내부 스크롤에 가려 스크린샷에서 문제 문구가
+           * 잘릴 수 있다. 정답 자체가 아니라 화면에 표시된 안내·빈칸 텍스트만
+           * 진단 색인에 남겨 사람이 정확히 읽을 수 있게 한다. */
+          text: (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 1000),
+        };
       })
       .catch(() => null);
     if (detail) {
@@ -1190,26 +1197,17 @@ export async function clickPublish(page, urls, { interactive = false } = {}) {
                 fs.writeFileSync(answerFile, ''); // 같은 답 재입력 방지
               } catch { /* 비우지 못해도 아래에서 한 번만 쓰도록 진행한다 */ }
               log.info(`받은 답을 입력합니다: "${typed}"`);
-              const submitted = await capFrame
-                .evaluate((value) => {
-                  const input = document.querySelector('#inpDkaptcha') ||
-                    [...document.querySelectorAll('input')].find(
-                      (el) => !el.disabled && !el.readOnly && /^(text|search|)$/i.test(el.type || 'text')
-                    );
-                  if (!input) return false;
-                  input.focus();
-                  input.value = value;
-                  input.dispatchEvent(new Event('input', { bubbles: true }));
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
-                  const near = input.closest('form,div,section') || document;
-                  const btn = [...near.querySelectorAll('button,a,input[type="submit"]')].find((b) =>
-                    /확인|입력|제출|발행|완료|ok|submit/i.test((b.innerText || b.value || '').trim())
-                  );
-                  if (btn) { btn.click(); return true; }
-                  if (input.form?.submit) { input.form.submit(); return true; }
-                  return false;
-                }, typed)
-                .catch(() => false);
+              /* DKAPTCHA는 합성 input/change 이벤트와 element.click()을 무시할 수 있다.
+               * Playwright의 fill/press를 써서 사람이 타이핑하고 Enter를 누른 것과 같은
+               * trusted 키보드 이벤트를 보낸다. (2026-08-19 실측: 합성 클릭은 정답이어도
+               * 캡차가 그대로 남았고, Enter 경로는 정상 제출됐다.) */
+              const captchaInput = capFrame.locator('#inpDkaptcha').first();
+              const submitted = await (async () => {
+                if (!(await captchaInput.count())) return false;
+                await captchaInput.fill(typed);
+                await captchaInput.press('Enter');
+                return true;
+              })().catch(() => false);
               log.info(submitted ? '답을 제출했습니다. 결과를 확인합니다...' : '제출 버튼을 찾지 못했습니다 — 창에서 Enter 를 눌러 주세요.');
             }
           }

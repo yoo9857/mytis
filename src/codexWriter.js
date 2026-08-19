@@ -196,16 +196,21 @@ function runCodexExec({ prompt, schemaFile, cfg, timeoutMs, search }) {
 }
 
 /**
- * DeepSeek 전용 — 섹션마다 사진을 1~2장씩 골고루 넣어 규격(사진 수)을 넘기는 버릇을 자른다.
+ * 섹션마다 사진을 1~2장씩 골고루 넣어 규격(사진 수)을 넘기는 버릇을 자른다.
  *
- * codex 는 "본문 N개" 지시를 지키는데, DeepSeek 는 지시문을 강하게 고쳐도(2026-08-13
- * 실측 2회 연속 동일 실패) afterSection 범위를 "구간마다 채우라"는 뜻으로 읽고 12장을
- * 만든다. contract.js 의 autoFix 는 사진 수를 일부러 건드리지 않는데(어떤 사진을 버릴지는
- * 내용 판단이라서) — 그건 codex 의 드문 실패를 염두에 둔 결정이고, DeepSeek 의 이 버릇은
- * 매번 같은 모양(섹션당 1장 우선)이라 **어떤 걸 남길지가 아니라 몇 장을 남길지의 문제**다.
- * 그래서 이 트리밍은 provider==='deepseek' 일 때만 켠다 — codex 경로는 한 글자도 안 건든다.
+ * DeepSeek 는 지시문을 강하게 고쳐도(2026-08-13 실측 2회 연속 동일 실패) afterSection
+ * 범위를 "구간마다 채우라"는 뜻으로 읽고 12장을 만든다. contract.js 의 autoFix 는 사진
+ * 수를 일부러 건드리지 않는데(어떤 사진을 버릴지는 내용 판단이라서) — 이 버릇은 매번 같은
+ * 모양(섹션당 1장 먼저, 그다음 같은 섹션에 한 장 더)이라 **어떤 걸 남길지가 아니라 몇 장을
+ * 남길지의 문제**다.
+ *
+ * **2026-08-19 — provider 게이트를 뗐다.** 원래 이 트리밍은 provider==='deepseek' 일
+ * 때만 켰다. "codex 는 본문 N개 지시를 지킨다"는 전제였는데, 아래 호출부 주석이 이미
+ * "codex 는 알아서 덜 쓰는 편이라 안 드러났을 뿐"이라고 유보를 달아 뒀었다.
+ * 이날 gpt-5.6-terra 가 뉴스 모드에서 정확히 같은 모양으로 12장(섹션 1~7 한 장씩 +
+ * 1·3·5·7 에 한 장 더)을 냈다. 전제가 틀렸으므로 모델을 가리지 않는다.
  */
-function trimDeepSeekImageBriefs(article, bodyImages) {
+export function trimImageBriefs(article, bodyImages) {
   const briefs = article.imageBriefs || [];
   if (!briefs.length) return;
   const thumbnail = briefs.find((b) => b.placement === 'thumbnail');
@@ -269,8 +274,12 @@ async function runDeepSeekExec({ prompt, schemaFile, cfg, timeoutMs }) {
         messages: [{ role: 'user', content: fullPrompt }],
         response_format: { type: 'json_object' },
         /* reasoning_content 와 최종 답변이 max_tokens 를 나눠 쓴다. 기본값에 맡기면
-         * 추론에 예산을 다 쓰고 본문이 짧게 끊긴다 (2026-08-13 실측: 3000자 지시에 2500자). */
-        max_tokens: 16000,
+         * 추론에 예산을 다 쓰고 본문이 짧게 끊긴다 (2026-08-13 실측: 3000자 지시에 2500자).
+         *
+         * 16000 은 기사 모드에서 부족했다 — 2026-08-19, MC몽 도박 폭로 기사로 2회 연속
+         * "JSON 이 완결되지 않았습니다". 한국어 3,000자대 본문에 imageBriefs·FAQ·표까지
+         * 실린 JSON 은 그 자체로 6~8천 토큰이고, 앞에서 추론이 예산을 먼저 먹는다. */
+        max_tokens: 32000,
       }),
       signal: controller.signal,
     });
@@ -281,7 +290,26 @@ async function runDeepSeekExec({ prompt, schemaFile, cfg, timeoutMs }) {
     }
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content;
+    const finish = data?.choices?.[0]?.finish_reason;
+
+    /* codex 경로는 응답을 tmp 에 남기는데(runCodexExec) 이 경로는 남기지 않아,
+     * 파싱이 깨졌을 때 무엇이 왔는지 볼 방법이 없었다. 같은 자리에 남긴다. */
+    try {
+      fs.mkdirSync(DIRS.tmp, { recursive: true });
+      fs.writeFileSync(
+        path.join(DIRS.tmp, `deepseek-out-${stamp()}-${process.pid}.json`),
+        content ?? '',
+        'utf8',
+      );
+    } catch { /* 로그 실패가 집필을 막지는 않는다 */ }
+
     if (!content) throw new Error('DeepSeek 응답이 비어 있습니다 (json_mode 빈 응답은 알려진 이슈).');
+    if (finish === 'length') {
+      throw new Error(
+        `DeepSeek 응답이 max_tokens 에서 잘렸습니다 (finish_reason=length, ${content.length}자). ` +
+          'codexWriter 의 max_tokens 를 올리거나 지시문을 줄여야 합니다.',
+      );
+    }
     return content;
   } catch (err) {
     if (err.name === 'AbortError') {
@@ -699,15 +727,14 @@ export async function writeArticle({ topic, cfg }) {
        * 영상·영화 모드는 뒤이어 `run.js: applyClipShotLayout` 이 실제 캡처 수로
        * 덮어쓴다 — 그 모드의 사진 수는 장면이 정한다. */
       article.bodyImageCount = bodyImageCount(mode, cfg);
-      if (useDeepSeek) {
+      {
         /* bodyImageDelta(모드 선언)가 요청하는 개수와 contract.photos(규격 상한)가
          * 어긋나는 모드가 있다 — 예: topic 은 본문 11개를 요청하는데 규격은 9개(대표
-         * 포함)까지만 허용한다 (2026-08-13 발견). codex 는 이 어긋남을 실려서
-         * 알아서 덜 쓰는 편이라 안 드러났을 뿐이다. 그래서 트리밍 기준은
+         * 포함)까지만 허용한다 (2026-08-13 발견). 그래서 트리밍 기준은
          * bodyImageCount 가 아니라 **규격의 상한**이어야 한다. */
         const { contractOf } = await import('./contract.js');
         const maxTotal = contractOf(mode).photos[1];
-        trimDeepSeekImageBriefs(article, Math.max(0, maxTotal - 1));
+        trimImageBriefs(article, Math.max(0, maxTotal - 1));
       }
 
       // 영상 소재 글: 지어낸 타임스탬프를 실제 자막 시각으로 스냅하고,
