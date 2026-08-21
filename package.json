@@ -6,6 +6,7 @@
   "type": "module",
   "main": "src/cli.js",
   "scripts": {
+    "test": "node --test",
     "login": "node src/cli.js login",
     "post": "node src/cli.js post",
     "draft": "node src/cli.js draft",
@@ -25,7 +26,8 @@
     "gate": "node scripts/gate.mjs",
     "repreview": "node scripts/repreview.mjs",
     "imgprompts": "node scripts/img-prompts.mjs",
-    "photolint": "node scripts/photolint.mjs"
+    "photolint": "node scripts/photolint.mjs",
+    "sec": "node scripts/probe-sec.mjs"
   },
   "dependencies": {
     "playwright": "^1.49.0"

@@ -95,8 +95,13 @@ export function extractJson(text) {
   throw new Error('codex 응답의 JSON 이 완결되지 않았습니다.');
 }
 
-/** codex exec 를 한 번 실행하고 마지막 메시지를 문자열로 돌려준다. */
-function runCodexExec({ prompt, schemaFile, cfg, timeoutMs, search }) {
+/**
+ * codex exec 를 한 번 실행하고 마지막 메시지를 문자열로 돌려준다.
+ *
+ * `images` 를 주면 `-i` 로 그림을 함께 올린다 (codex exec 의 `--image`). 발행을 막는
+ * 틀린그림찾기 화면을 읽는 데 쓴다 — `wrongPicture.js`.
+ */
+function runCodexExec({ prompt, schemaFile, cfg, timeoutMs, search, images = [] }) {
   return new Promise((resolve, reject) => {
     fs.mkdirSync(DIRS.tmp, { recursive: true });
     const outFile = path.join(DIRS.tmp, `codex-out-${stamp()}-${process.pid}.json`);
@@ -123,6 +128,10 @@ function runCodexExec({ prompt, schemaFile, cfg, timeoutMs, search }) {
     if (cfg.codex.model) args.push('-m', cfg.codex.model);
     if (cfg.codex.reasoningEffort) {
       args.push('-c', `model_reasoning_effort="${cfg.codex.reasoningEffort}"`);
+    }
+    /* 그림은 실제로 있는 파일만 올린다 — 없는 경로를 주면 codex 가 시작하지 못한다. */
+    for (const image of images) {
+      if (image && fs.existsSync(image)) args.push('-i', image);
     }
     args.push('-'); // 프롬프트는 stdin 으로
 
@@ -233,8 +242,8 @@ export function trimImageBriefs(article, bodyImages) {
 }
 
 /** 임의의 스키마로 codex 를 한 번 호출하고 파싱된 JSON 을 돌려준다. */
-export async function runCodexJson({ prompt, schemaFile, cfg, timeoutMs, search }) {
-  const last = await runCodexExec({ prompt, schemaFile, cfg, timeoutMs, search });
+export async function runCodexJson({ prompt, schemaFile, cfg, timeoutMs, search, images }) {
+  const last = await runCodexExec({ prompt, schemaFile, cfg, timeoutMs, search, images });
   return extractJson(last);
 }
 

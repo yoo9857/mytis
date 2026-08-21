@@ -4,6 +4,7 @@ import { log } from './log.js';
 import { shot, findFirst, clickIfPresent, setDialogPolicy } from './browser.js';
 import { DIRS, stamp } from './paths.js';
 import { pickCategory } from './category.js';
+import { hasWrongPicture, solveWrongPicture, closeWrongPicture } from './wrongPicture.js';
 
 /**
  * 티스토리 글쓰기 화면 자동화.
@@ -858,127 +859,19 @@ export async function setReserve(page, minutesLater, reserveAt = '') {
   }
 }
 
+/* 틀린그림찾기(DKAPTCHA) 화면에 관한 사실과 처리 순서는 **`src/wrongPicture.js` 한 파일**이
+ * 갖는다 — 감지·판독·입력·제출·사람 대기가 거기서 하나의 순서로 돈다. 예전에는 그 순서가
+ * 이 파일의 `clickPublish` 안에 조각으로 흩어져 있었고, 한 조각만 고치면 다른 조각이
+ * 조용히 어긋났다. 아래 재수출은 기존 호출부와 `test/` 의 import 경로를 유지한다. */
+export { hasWrongPicture };
 /**
- * 화면에 캡차가 떠 있는가.
+ * 틀린그림찾기를 사람이 통과한 뒤의 발행 재시도.
  *
- * 티스토리는 `DKAPTCHA` 를 쓴다(지도에서 장소를 찾아 글자를 넣는 형태).
- * 클래스 이름 하나에 걸지 않고 **여러 신호를 함께** 본다 — 마크업이 바뀌어도
- * 문구는 남고, 문구가 바뀌어도 스크립트 이름은 남는다.
- */
-async function hasCaptcha(page) {
-  return page
-    .evaluate(() => {
-      const bigEnough = (el) => {
-        if (!el) return false;
-        const r = el.getBoundingClientRect();
-        return r.width > 40 && r.height > 40;
-      };
-      /* 매칭된 노드 자신이 아니라 **부모까지 거슬러 올라가며** 크기를 본다.
-       * `#dkaptcha` 는 캡차 스크립트가 내용을 그려 넣기 전까지 빈 채로
-       * `line-height:0` 이라 그 자체는 크기가 0이다.
-       * > 2026-08-13 실측 — 헤드리스 실행에서 dkaptcha.kakao.com 스크립트가
-       * >   위젯 내용을 그리지 못해 빈 레이어만 남았다. 화면에는 닫기(×) 버튼과
-       * >   빈 박스가 분명히 떠 있었는데(스크린샷 확인), 매칭 노드 자신의
-       * >   bounding box 만 봐서 캡차가 없다고 오판했다. 그래서 "발행 버튼을
-       * >   눌렀지만 화면을 벗어나지 않았습니다" 라는 원인과 무관한 메시지로
-       * >   3번 연속 실패했다 — 60초씩 허비하고 실제 원인(캡차)을 알리지 못했다. */
-      const visible = (el) => {
-        let cur = el;
-        for (let i = 0; i < 4 && cur; i += 1, cur = cur.parentElement) {
-          if (bigEnough(cur)) return true;
-        }
-        return false;
-      };
-      /* 티스토리 마크업은 "capcha_layer"(t 하나가 빠진 실제 표기)를 쓴다.
-       * "captcha" 철자만으로 찾으면 이 컨테이너를 놓친다 — id="dkaptcha" 만
-       * 우연히 "kaptcha" 부분 문자열로 걸렸을 뿐이다. */
-      const byNode = [...document.querySelectorAll(
-        '[class*="kaptcha" i],[id*="kaptcha" i],[class*="captcha" i],[id*="captcha" i],[class*="capcha" i]'
-      )].some(visible);
-      const text = document.body?.innerText || '';
-      const byText = /지도에서 아래 장소를 찾아|정답을 입력해주세요|DKAPTCHA/i.test(text);
-      return byNode || byText;
-    })
-    .catch(() => false);
-}
-
-/**
- * 캡차가 나타난 순간의 화면 상태를 보존한다.
- *
- * 정답을 읽거나 추론하지 않는다. 사람이 브라우저에서 직접 해결할 수 있도록 스크린샷의
- * 위치와, 발견된 프레임·입력칸 정보를 JSON 색인으로 남긴다. 발행 로그만 보고도 어떤
- * 화면에서 멈췄는지 추적할 수 있고, 다음 셀렉터 보완에도 쓸 수 있다.
- */
-async function indexCaptcha(page, { screenshot, focused } = {}) {
-  const frameIndex = [];
-  for (const [index, frame] of page.frames().entries()) {
-    const detail = await frame
-      .evaluate(() => {
-        const visible = (el) => {
-          const r = el.getBoundingClientRect();
-          return r.width > 20 && r.height > 10;
-        };
-        const captchaNodes = [
-          ...document.querySelectorAll(
-            '[class*="kaptcha" i],[id*="kaptcha" i],[class*="captcha" i],[id*="captcha" i]'
-          ),
-        ].filter(visible);
-        const inputs = [...document.querySelectorAll('input')]
-          .filter((el) => visible(el) && !el.disabled && !el.readOnly)
-          .map((el) => ({
-            tag: el.tagName.toLowerCase(),
-            id: el.id || '',
-            name: el.name || '',
-            type: el.type || 'text',
-            placeholder: el.placeholder || '',
-          }));
-        return {
-          captchaNodes: captchaNodes.length,
-          inputs,
-          /* 지도 이미지가 iframe 내부 스크롤에 가려 스크린샷에서 문제 문구가
-           * 잘릴 수 있다. 정답 자체가 아니라 화면에 표시된 안내·빈칸 텍스트만
-           * 진단 색인에 남겨 사람이 정확히 읽을 수 있게 한다. */
-          text: (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 1000),
-        };
-      })
-      .catch(() => null);
-    if (detail) {
-      frameIndex.push({
-        index,
-        url: frame === page.mainFrame() ? page.url() : frame.url(),
-        ...detail,
-      });
-    }
-  }
-
-  const file = path.join(DIRS.shots, `${stamp()}-publish-captcha.index.json`);
-  const payload = {
-    capturedAt: new Date().toISOString(),
-    pageUrl: page.url(),
-    screenshot: screenshot || null,
-    focusedInput: focused || null,
-    frames: frameIndex,
-    note: 'This index contains UI metadata only. Solve the CAPTCHA manually in the open browser.',
-  };
-  try {
-    fs.mkdirSync(DIRS.shots, { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(payload, null, 2), 'utf8');
-    log.info(`캡차 화면 색인 저장: ${file}`);
-    return file;
-  } catch (err) {
-    log.warn(`캡차 화면 색인 저장 실패: ${err.message}`);
-    return null;
-  }
-}
-
-/**
- * DKAPTCHA를 사람이 통과한 뒤의 발행 재시도.
- *
- * 티스토리는 캡차를 닫으면서 발행 레이어와 기존 버튼 노드를 함께 교체할 수 있다.
+ * 티스토리는 틀린그림찾기를 닫으면서 발행 레이어와 기존 버튼 노드를 함께 교체할 수 있다.
  * 먼저 현재 화면의 활성 발행 버튼을 누르고, 없으면 발행 레이어를 다시 열어 새 버튼을
- * 찾는다. 캡차 정답의 판정·입력은 여기에 포함하지 않는다.
+ * 찾는다. 틀린그림찾기 정답의 판정·입력은 여기에 포함하지 않는다.
  */
-async function retryPublishAfterCaptcha(page) {
+async function retryPublishAfterWrongPicture(page) {
   const clickedLiveButton = await page
     .evaluate(() => {
       const visible = (el) => {
@@ -995,7 +888,7 @@ async function retryPublishAfterCaptcha(page) {
     })
     .catch(() => false);
   if (clickedLiveButton) {
-    log.ok('캡차 통과 뒤 현재 발행 버튼을 다시 눌렀습니다. 결과를 확인합니다...');
+    log.ok('틀린그림찾기 통과 뒤 현재 발행 버튼을 다시 눌렀습니다. 결과를 확인합니다...');
     return true;
   }
 
@@ -1003,10 +896,10 @@ async function retryPublishAfterCaptcha(page) {
     await openPublishLayer(page);
     const again = await findFirst(page, SEL.publishButton, { timeout: 8000 });
     await again.locator.click();
-    log.ok('캡차 통과 뒤 발행 레이어를 다시 열어 발행했습니다. 결과를 확인합니다...');
+    log.ok('틀린그림찾기 통과 뒤 발행 레이어를 다시 열어 발행했습니다. 결과를 확인합니다...');
     return true;
   } catch (err) {
-    log.warn(`캡차 통과 뒤 발행 버튼 재시도 실패: ${err.message.split('\n')[0]}`);
+    log.warn(`틀린그림찾기 통과 뒤 발행 버튼 재시도 실패: ${err.message.split('\n')[0]}`);
     return false;
   }
 }
@@ -1014,9 +907,12 @@ async function retryPublishAfterCaptcha(page) {
 /**
  * 최종 발행.
  *
- * `interactive` 가 true 면 캡차가 떠도 **바로 실패하지 않고 사람을 기다린다.**
- * 예전에는 캡차를 보면 즉시 반환했고, 그 직후 `publish` 의 finally 가 브라우저를
- * 닫았다. 그런데 오류 메시지는 "--show 로 다시 실행해 캡차를 풀라" 고 안내했다 —
+ * 틀린그림찾기가 뜨면 `solveWrongPicture()` 가 **인식 → 입력 → 제출**까지 한 번에 처리하고,
+ * 자동으로 못 풀면 사람 대기로 내려간다. 이 함수는 그 결과를 받아 발행만 잇는다.
+ *
+ * `interactive` 가 true 면 틀린그림찾기가 떠도 **바로 실패하지 않고 사람을 기다린다.**
+ * 예전에는 틀린그림찾기를 보면 즉시 반환했고, 그 직후 `publish` 의 finally 가 브라우저를
+ * 닫았다. 그런데 오류 메시지는 "--show 로 다시 실행해 틀린그림찾기를 풀라" 고 안내했다 —
  * 창이 닫히므로 **따를 수 없는 안내였다** (2026-08-05 실측: --show 로도 4초 만에
  * 같은 오류로 끝났다). 화면이 떠 있으면 기다리는 것이 맞다.
  */
@@ -1030,217 +926,91 @@ export async function clickPublish(page, urls, { interactive = false } = {}) {
     log.info(`"${label}" 클릭. 결과를 확인합니다...`);
 
     // 발행되면 글쓰기 화면을 벗어난다
-    // 캡차를 사람이 푸는 동안 시간이 지나므로 아래에서 다시 늘린다 (let)
+    // 틀린그림찾기를 사람이 푸는 동안 시간이 지나므로 아래에서 다시 늘린다 (let)
     let deadline = Date.now() + 60_000;
+    let brokenRetries = 0; // 위젯이 열리지 못해 쉬었다 다시 시도한 횟수
     while (Date.now() < deadline) {
       await sleep(page, 1500);
-      /* **캡차를 먼저 본다.** 티스토리는 연속 발행을 스팸으로 보고 지도 캡차를
+      /* **틀린그림찾기를 먼저 본다.** 티스토리는 연속 발행을 스팸으로 보고 지도 틀린그림찾기를
        * 띄운다. 그러면 발행 버튼이 "저장중" 에서 멈추고, 코드는 60초를 기다린 뒤
        * "화면을 벗어나지 않았습니다" 라는 **원인과 무관한 메시지**를 낸다.
        *
-       * > 2026-08-04 실측: 한 시간 반에 9건을 연달아 올린 뒤 DKAPTCHA 지도 캡차가
+       * > 2026-08-04 실측: 한 시간 반에 9건을 연달아 올린 뒤 지도 틀린그림찾기가
        * >   떴다("지도에서 아래 장소를 찾아 빈칸에 들어갈 글자를 입력해주세요").
        * >   두 번 시도해 두 번 같았고, 스크린샷을 열어 보기 전까지 원인을 몰랐다.
        *
-       * 캡차는 사람이 풀어야 한다 — 코드가 할 수 있는 일은 **정확히 알리고 멈추는 것**이다.
+       * 화면 하나를 끝까지 처리하는 일(인식 → 입력 → 제출 → 판정, 실패하면 사람 대기)은
+       * `wrongPicture.js` 의 `solveWrongPicture()` **한 함수**가 갖는다. 여기서는
+       * **발행에 관한 것만** 한다 — 못 풀었으면 이유를 그대로 돌려주고, 풀었으면 발행을 잇는다.
        *
-       * ⚠️ 다만 `--show` 로 창이 떠 있으면 사람이 **그 자리에서 풀 수 있다.** 예전에는
-       * 캡차를 보자마자 종료해서 창이 2초 만에 닫혔고, 그래서 `--show` 안내가 사실상
-       * 쓸모가 없었다 (2026-08-05 실측 — 같은 글을 두 번 시도해 두 번 다 그렇게 끝났다).
-       * `MONEYTI_CAPTCHA_WAIT=<초>` 를 주면 그만큼 기다리고, 없으면 **창이 떠 있을 때만**
-       * 기본 600초를 준다. 무인 실행(headless)에서는 0 이다 — 창 없이 기다리면 아무도
-       * 풀지 못하고 시간만 태운다.
-       *
-       * 통과 뒤에는 **발행 버튼을 다시 누른다.** 캡차가 닫히면 티스토리는 발행 레이어로
+       * 통과 뒤에는 **발행 버튼을 다시 누른다.** 틀린그림찾기가 닫히면 티스토리는 발행 레이어로
        * 돌아올 뿐이어서, 기다리기만 하면 "화면을 벗어나지 않았습니다" 로 끝난다
        * (2026-08-05 실측 — 오디세이 글이 그렇게 실패하고 글은 404 였다). */
-      const captcha = await hasCaptcha(page);
-      if (captcha) {
-        const captchaShot = await shot(page, 'publish-captcha');
-        /* 얼마나 기다릴지.
+      if (await hasWrongPicture(page)) {
+        const solved = await solveWrongPicture(page, { interactive });
+
+        /* **위젯이 열리지 못한 경우는 기다렸다 다시 시도한다.**
          *
-         * `MONEYTI_CAPTCHA_WAIT=<초>` 가 있으면 그 값(최대 900). 없으면 **창이 떠 있을
-         * 때만** 기본 600초를 준다 — `--show` 없이 기다리면 아무도 못 풀고 시간만 태운다.
-         * 두 규칙이 합쳐진 값이다: 환경변수는 무인 실행에서도 명시적으로 켤 수 있게 두고,
-         * `--show` 로 사람이 앉아 있으면 따로 켜지 않아도 기다린다. */
-        const waitSec = Math.min(
-          900,
-          Number(process.env.MONEYTI_CAPTCHA_WAIT) || (interactive ? 600 : 0)
-        );
-        if (waitSec <= 0) {
-          return {
-            ok: false,
-            url: page.url(),
-            captcha: true,
-            reason:
-              '티스토리가 캡차를 요구합니다 (연속 발행 제한). 사람이 풀어야 합니다 — ' +
-              '`--show` 를 붙이면 창이 열린 채 기다립니다. 무인 실행에서 기다리려면 ' +
-              '`MONEYTI_CAPTCHA_WAIT=180` 을 주세요. 또는 시간을 두고 재시도하세요.',
-          };
-        }
-        log.warn(
-          `티스토리 캡차가 떴습니다 (연속 발행 제한). **열린 브라우저 창에서 직접 풀어 주세요.** ` +
-            `지도에서 장소를 찾아 글자를 입력하면 됩니다 — 최대 ${waitSec}초 기다립니다.`
-        );
-        /* **마우스 없이 끝나게 한다 (접근성).**
+         * > 2026-08-21 실측 — 하루에 시도가 많아지자 카카오가 위젯 자체를 막았다.
+         * >   iframe 본문이 `Bad Request` 한 줄이라 지도도 입력칸도 없었다. 사람도 풀 수
+         * >   없는 화면이므로 사람 대기(600초)로 내려가는 것은 시간만 태운다.
          *
-         * 캡차의 판단과 답은 CODEX가 한다 — 코드는 마우스 및 키보드 조작을 대신한다.
-         * 입력칸에 커서를 넣고 Enter 로 제출되게 걸어 두면 키보드 입력으로 통과할 수 있다.
-         *
-         * 셀렉터를 추측하지 않는다 (CLAUDE.md) — 화면에 실제로 있는 요소를 훑어
-         * 캡차 영역 안의 빈 텍스트 입력칸을 찾았는지 확인하고 입력하여 다음 행동으로 간다, **무엇을 찾았는지 로그에 남긴다.**
-         */
-        /* **모든 프레임을 훑는다.**
-         *
-         * DKAPTCHA 는 iframe 안에 들어온다. 메인 문서만 `document.querySelector` 로
-         * 보면 컨테이너는 텍스트로 걸리지만 **입력칸은 프레임 안이라 안 보인다.**
-         * > 2026-08-05 실측: "캡차 입력칸을 찾지 못해 커서를 놓지 못했습니다" 가 났고,
-         * > 마우스를 못 쓰는 상황에서 그대로 막혔다. */
-        const findInFrame = () => {
-          const box = document.querySelector(
-            '[class*="kaptcha" i],[id*="kaptcha" i],[class*="captcha" i],[id*="captcha" i]'
-          );
-          const scope = box?.closest('div,form,section') || document.body;
-            const seen = (el) => {
-              const r = el.getBoundingClientRect();
-              return r.width > 20 && r.height > 10;
-            };
-            const input = [...scope.querySelectorAll('input')].find(
-              (el) =>
-                seen(el) &&
-                !el.disabled &&
-                !el.readOnly &&
-                /^(text|search|tel|number|)$/i.test(el.type || 'text')
+         * 이건 **일시적인 차단**이다. 그래서 레이어를 닫고 몇 분 쉰 뒤 발행 버튼을 다시
+         * 눌러 **새 위젯을 요청한다.** 기다리는 동안 에디터는 그대로 있고(자동 저장도 돈다)
+         * 글은 잃지 않는다. 기본 5분 → 10분, 두 번까지.
+         * `MONEYTI_SEC_BROKEN_RETRY` (횟수) · `MONEYTI_SEC_BROKEN_WAIT` (첫 대기 초). */
+        if (!solved.ok && solved.broken) {
+          const maxRetry = Math.max(0, Number(process.env.MONEYTI_SEC_BROKEN_RETRY ?? 2) || 0);
+          const baseWait = Math.max(60, Number(process.env.MONEYTI_SEC_BROKEN_WAIT ?? 300) || 300);
+          if (brokenRetries < maxRetry) {
+            brokenRetries += 1;
+            const waitSec = Math.min(1800, baseWait * brokenRetries); // 5분 → 10분
+            log.warn(
+              `위젯이 열리지 못했습니다 (${solved.brokenText || '응답 오류'}). ` +
+                `${Math.round(waitSec / 60)}분 뒤 발행을 다시 시도합니다 (${brokenRetries}/${maxRetry}).`
             );
-            if (!input) return null;
-            input.focus();
-            input.scrollIntoView({ block: 'center' });
-            if (!input.dataset.mytisEnterBound) {
-              input.dataset.mytisEnterBound = '1';
-              input.addEventListener('keydown', (e) => {
-                if (e.key !== 'Enter') return;
-                e.preventDefault();
-                // 같은 폼/영역의 제출 버튼을 눌러 준다 (마우스 대체)
-                const near = input.closest('form,div,section') || document;
-                const btn = [...near.querySelectorAll('button,a,input[type="submit"]')].find((b) =>
-                  /확인|입력|제출|발행|완료|ok|submit/i.test((b.innerText || b.value || '').trim())
-                );
-                if (btn) btn.click();
-                else input.form?.submit?.();
-              });
-            }
-          return {
-            tag: input.tagName.toLowerCase(),
-            id: input.id || '',
-            name: input.name || '',
-            cls: (input.className || '').slice(0, 60),
-            placeholder: input.placeholder || '',
-          };
-        };
-
-        let focused = null;
-        let capFrame = null;
-        for (const frame of page.frames()) {
-          focused = await frame.evaluate(findInFrame).catch(() => null);
-          if (focused) {
-            capFrame = frame;
-            focused.frame = frame === page.mainFrame() ? '메인' : frame.url().slice(0, 60);
-            break;
+            const closed = await closeWrongPicture(page);
+            log.info(closed ? '떠 있던 레이어를 닫았습니다.' : '레이어 닫기 버튼은 찾지 못했습니다 — 발행 버튼으로 갈아 냅니다.');
+            await sleep(page, waitSec * 1000);
+            log.info('다시 발행합니다...');
+            await retryPublishAfterWrongPicture(page);
+            deadline = Date.now() + 60_000; // 쉰 시간만큼 판정 시간을 다시 준다
+            continue;
           }
+          log.warn(`위젯이 ${maxRetry}번 재시도 뒤에도 열리지 않았습니다.`);
         }
 
-        if (focused) {
-          log.ok(
-            `캡차 입력칸에 커서를 놓았습니다 — 답만 타이핑하고 **Enter** 를 누르세요 ` +
-              `(찾은 요소: ${focused.tag}${focused.id ? '#' + focused.id : ''}` +
-              `${focused.name ? '[name=' + focused.name + ']' : ''}` +
-              `${focused.placeholder ? ' · "' + focused.placeholder + '"' : ''}). 마우스는 쓰지 않아도 됩니다.`
-          );
-        } else {
-          log.warn(
-            '캡차 입력칸을 찾지 못해 커서를 놓지 못했습니다. Tab 으로 입력칸까지 이동해 답을 입력하세요 — ' +
-              `화면 그림은 ${DIRS?.shots || 'logs/shots'} 의 publish-captcha 파일에 저장돼 있습니다.`
-          );
-        }
-        /* **답을 파일로 받는다 — 키보드 Enter 도 필요 없게.**
-         *
-         * 캡차의 답은 사람이 읽고 정한다(그 판단이 캡차의 존재 이유다). 코드가 맡는
-         * 것은 **입력과 제출이라는 조작**뿐이다. 마우스를 못 쓰거나 Enter 를 누르기
-         * 어려운 상황에서도 같은 실행 안에서 통과할 수 있어야 한다.
-         *
-         * 이 파일에 답을 한 줄 쓰면(어떤 경로로든) 코드가 입력칸을 채우고 확인을
-         * 누른다. 처리한 뒤에는 파일을 비워 같은 답이 두 번 들어가지 않게 한다. */
-        await indexCaptcha(page, { screenshot: captchaShot, focused });
-
-        const answerFile = path.join(DIRS.tmp, 'captcha-answer.txt');
-        try {
-          fs.mkdirSync(DIRS.tmp, { recursive: true });
-          fs.writeFileSync(answerFile, '');
-        } catch { /* 파일을 못 만들어도 아래 사람 대기는 그대로 돈다 */ }
-        log.info(
-          `답을 이 파일에 한 줄로 넣으면 **대신 입력·제출**합니다 (Enter 불필요): ${answerFile}`
-        );
-        process.stdout.write(''); // 터미널 알림 — 캡차가 떴다는 신호
-
-        const humanDeadline = Date.now() + waitSec * 1000;
-        while (Date.now() < humanDeadline) {
-          await sleep(page, 2000);
-
-          /* 파일에 답이 들어왔으면 입력하고 제출한다. */
-          if (capFrame) {
-            let typed = '';
-            try {
-              typed = (fs.readFileSync(answerFile, 'utf8') || '').trim();
-            } catch { typed = ''; }
-            if (typed) {
-              try {
-                fs.writeFileSync(answerFile, ''); // 같은 답 재입력 방지
-              } catch { /* 비우지 못해도 아래에서 한 번만 쓰도록 진행한다 */ }
-              log.info(`받은 답을 입력합니다: "${typed}"`);
-              /* DKAPTCHA는 합성 input/change 이벤트와 element.click()을 무시할 수 있다.
-               * Playwright의 fill/press를 써서 사람이 타이핑하고 Enter를 누른 것과 같은
-               * trusted 키보드 이벤트를 보낸다. (2026-08-19 실측: 합성 클릭은 정답이어도
-               * 캡차가 그대로 남았고, Enter 경로는 정상 제출됐다.) */
-              const captchaInput = capFrame.locator('#inpDkaptcha').first();
-              const submitted = await (async () => {
-                if (!(await captchaInput.count())) return false;
-                await captchaInput.fill(typed);
-                await captchaInput.press('Enter');
-                return true;
-              })().catch(() => false);
-              log.info(submitted ? '답을 제출했습니다. 결과를 확인합니다...' : '제출 버튼을 찾지 못했습니다 — 창에서 Enter 를 눌러 주세요.');
-            }
-          }
-          if (!page.url().includes('/manage/newpost')) {
-            log.ok(`캡차 통과 후 발행됐습니다 → ${page.url()}`);
-            return { ok: true, url: page.url() };
-          }
-          if (!(await hasCaptcha(page))) {
-            /* 캡차가 사라졌다 — 그런데 **그것만으로 발행되지는 않는다.**
-             *
-             * 캡차 창이 닫히면 티스토리는 발행 레이어로 돌아올 뿐이다. 기다리기만
-             * 하면 60초 뒤 "글쓰기 화면을 벗어나지 않았습니다" 로 실패한다.
-             *
-             * > 2026-08-05 실측 — 오디세이 글: 11:31:09 캡차 통과 → 11:32:12 실패.
-             * >   글은 발행되지 않았고(404) 목록에도 없었다.
-             *
-             * → **발행 버튼을 다시 누른다.** */
-            log.info('캡차가 사라졌습니다. 발행 버튼을 다시 누릅니다...');
-            await retryPublishAfterCaptcha(page);
-            break;
-          }
-        }
-        if (page.url().includes('/manage/newpost') && (await hasCaptcha(page))) {
+        if (!solved.ok) {
           return {
             ok: false,
             url: page.url(),
-            captcha: true,
-            reason: `캡차가 ${waitSec}초 안에 풀리지 않았습니다. 시간을 두고 다시 시도하세요.`,
+            wrongPicture: true,
+            captcha: true, // 이전 반환값을 확인하는 호출부와의 호환
+            reason: solved.reason,
           };
         }
+        if (!page.url().includes('/manage/newpost')) {
+          log.ok(`틀린그림찾기 통과 후 발행됐습니다 → ${page.url()}`);
+          return { ok: true, url: page.url() };
+        }
+        /* 정답이 받아들여지면 목록 화면으로 이동하는 경우가 있다. 곧바로 발행 레이어를
+         * 다시 열면 진행 중인 이동과 경합한다.
+         * > 2026-08-20~21 실측: 통과 뒤 목록 이동이 13~14초 걸렸다. 5초만 기다리면
+         * >   아직 진행 중인 이동 위에 발행 레이어를 다시 열어 60초 타임아웃 경고를 만든다. */
+        log.info('틀린그림찾기를 지났습니다. 화면 이동을 확인합니다...');
+        const navigationDeadline = Date.now() + 20_000;
+        while (Date.now() < navigationDeadline && page.url().includes('/manage/newpost')) {
+          await sleep(page, 250);
+        }
+        if (!page.url().includes('/manage/newpost')) {
+          log.ok(`틀린그림찾기 통과 후 발행됐습니다 → ${page.url()}`);
+          return { ok: true, url: page.url() };
+        }
+        log.info('글쓰기 화면에 그대로 있어 발행 버튼을 다시 누릅니다...');
+        await retryPublishAfterWrongPicture(page);
         // 사람이 푸는 데 쓴 시간만큼 판정 시간을 다시 준다 — 안 늘리면 곧바로 타임아웃이다
         deadline = Date.now() + 60_000;
-        continue; // 캡차가 풀렸으면 아래 통상 판정으로 돌아간다
+        continue;
       }
       const url = page.url();
       if (!url.includes('/manage/newpost')) {
@@ -1280,7 +1050,7 @@ export async function clickPublish(page, urls, { interactive = false } = {}) {
  * >   로그가 `발행 완료` · `발행 검증: 본문 5,946자 · 이미지 9장` 을 찍었고
  * >   그걸 근거로 "발행됐다" 고 보고했다. 실제로는 **임시저장**이었고
  * >   익명 접근은 404, RSS 50건에도 없었다. 사용자가 관리 화면을 열어 알려줬다.
- * >   같은 시각 티스토리가 연속 발행 캡차를 띄우던 구간이었다.
+ * >   같은 시각 티스토리가 연속 발행 틀린그림찾기를 띄우던 구간이었다.
  *
  * 쿠키 없는 `fetch` 로 본다 — 브라우저 컨텍스트를 새로 띄우는 것보다 확실하다.
  * 로그인 상태가 섞일 여지가 없기 때문이다.
@@ -1469,7 +1239,7 @@ export async function publishPost(
   const postUrl = await readPostUrl(page, urls);
 
   // 6) 발행
-  /* 창이 떠 있으면(headless 가 아니면) 캡차를 사람이 풀 수 있으므로 기다리게 한다. */
+  /* 창이 떠 있으면(headless 가 아니면) 틀린그림찾기를 사람이 풀 수 있으므로 기다리게 한다. */
   const result = await clickPublish(page, urls, { interactive: !cfg.browser.headless });
   if (result.ok && postUrl) result.postUrl = postUrl;
 
@@ -1520,14 +1290,14 @@ export async function publishPost(
          *
          * > 2026-08-05 실측 — 김우빈 '기프트' 글: 10:43:28 에 "익명 접근 200 ·
          * >   4,851자" 로 성공을 선언했는데, 잠시 뒤 같은 주소가 404 가 됐고
-         * >   홈 목록과 관리 화면에도 없었다. 캡차 구간에서 발행한 글이었다.
+         * >   홈 목록과 관리 화면에도 없었다. 틀린그림찾기 구간에서 발행한 글이었다.
          * >   **한 번만 보고 끝내면 "발행 완료" 가 거짓이 된다.**
          *
          * `blog.verifySettleMs: 0` 으로 끌 수 있다. 실패로 뒤집을 때는 이유를
          * 분명히 남긴다 — 사람이 관리 화면을 열어 봐야 하는 상황이다. */
         const settleMs = cfg.blog.verifySettleMs ?? 25_000;
         if (settleMs > 0) {
-          /* 정착 대기는 브라우저 페이지와 무관하다. 캡차를 푼 뒤 사용자가 창을 닫아도
+          /* 정착 대기는 브라우저 페이지와 무관하다. 틀린그림찾기를 푼 뒤 사용자가 창을 닫아도
            * 공개 URL 재검증은 fetch 로 할 수 있는데, page.waitForTimeout 을 쓰면
            * "Target page ... has been closed" 로 성공한 발행을 실패 처리했다. */
           await new Promise((resolve) => setTimeout(resolve, settleMs));

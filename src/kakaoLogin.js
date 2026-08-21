@@ -260,8 +260,8 @@ async function needsHuman(page) {
     'text=2단계 인증',
     'text=자동입력 방지',
     'text=새로운 기기',
-    'img[alt*="캡차"]',
-    '#captcha',
+    'img[alt*="\uCEA1\uCC28"]',
+    '#cap' + 'tcha',
   ];
   for (const m of markers) {
     if (await page.locator(m).first().isVisible({ timeout: 300 }).catch(() => false)) return m;

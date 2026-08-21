@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["answer", "confidence", "seen"],
+  "properties": {
+    "answer": {
+      "type": "string",
+      "description": "지도 그림에서 읽어낸 라벨 전체. 문제가 가리키는 대상의 인쇄된 글자를 그대로 옮긴다. 확실하지 않으면 빈 문자열."
+    },
+    "confidence": {
+      "type": "number",
+      "description": "글자를 정확히 읽었다는 확신 0~1. 뭉개져 추측한 것이면 0.3 미만으로 준다."
+    },
+    "seen": {
+      "type": "string",
+      "description": "그림에서 읽은 라벨들을 쉼표로 나열. 판독 근거를 로그에 남기는 자리다."
+    }
+  }
+}

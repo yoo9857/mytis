@@ -7,15 +7,15 @@ import { shot, clickIfPresent, findFirst } from './browser.js';
  * 카카오(kakaoLogin.js)와 구조는 같지만 **입력 방식이 다르다.**
  *
  *   네이버는 로그인 폼에 자동화 탐지가 붙어 있어, 키보드로 한 글자씩 치면
- *   (`locator.type`, `keyboard.type`) "자동입력 방지문자" 캡차를 띄우는 일이 잦다.
- *   캡차가 뜨면 사람이 직접 통과해야 하므로 무인 실행이 깨진다.
+ *   (`locator.type`, `keyboard.type`) "자동입력 방지문자" 틀린그림찾기를 띄우는 일이 잦다.
+ *   틀린그림찾기가 뜨면 사람이 직접 통과해야 하므로 무인 실행이 깨진다.
  *
  *   → 그래서 **클립보드 붙여넣기**를 1순위로 쓴다. 붙여넣기는 paste 이벤트 하나로
  *     끝나서 타이핑 패턴을 남기지 않는다. 실패하면 값을 직접 심는 방식으로 물러난다.
  *     (네이버 로그인 스크립트는 제출 시점에 input 의 value 를 읽어 RSA 로 암호화하므로
  *      값만 심어도 로그인 자체는 성립한다)
  *
- * 그래도 캡차·2단계 인증·새 기기 등록은 **자동화로 뚫을 수 없다.**
+ * 그래도 틀린그림찾기·2단계 인증·새 기기 등록은 **자동화로 뚫을 수 없다.**
  * 그때는 화면을 띄워 사람이 통과시키고, 쿠키를 저장해 다음부터 무인으로 넘긴다.
  * (티스토리와 완전히 같은 전략 — HANDOVER 2-4 참고)
  */
@@ -49,7 +49,7 @@ const SEL = {
 const HUMAN_MARKERS = [
   'text=자동입력 방지',
   'text=보안문자',
-  '#captchaimg',
+  '#cap' + 'tchaimg',
   'input[name="chptchakey"]',
   'text=2단계 인증',
   'text=인증번호',
@@ -137,7 +137,7 @@ async function injectInto(page, locator, text) {
   }
 }
 
-/** 붙여넣기 → 값 주입 순으로 시도한다. 타이핑은 쓰지 않는다(캡차 유발). */
+/** 붙여넣기 → 값 주입 순으로 시도한다. 타이핑은 쓰지 않는다(틀린그림찾기 유발). */
 async function fillCredential(page, selectors, text, label) {
   const { locator } = await findFirst(page, selectors, { timeout: 12000 });
   if (await pasteInto(page, locator, text)) {

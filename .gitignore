@@ -51,3 +51,6 @@ out/pending/*
 .env
 topics.done.txt
 topics.failed.txt
+
+# 로컬 도구 상태 (공유할 것이 아니다)
+.codewhale/
