@@ -597,6 +597,33 @@ async function dropVisualDupes(result) {
   }
 }
 
+/** 실제 보도·공식 사진을 경쟁 블로그 재가공 이미지보다 먼저 쓴다. */
+export function orderSourcePhotoUrls(article, slots = 0) {
+  const urls = [...new Set([article.sourceImage, ...(article.sourceImages || [])].filter(Boolean))];
+  const origins = article.sourceImageOrigins || {};
+  const meta = article.sourceImageMeta || {};
+  const names = (article.entities || [])
+    .map((e) => String(e?.nameKo || '').replace(/\s+/g, '').trim())
+    .filter((x) => x.length >= 2);
+  const season = `${article.primaryKeyword || ''} ${article.title || ''}`.match(/(\d{1,2}기)/)?.[1] || '';
+  const hostOf = (url) => {
+    try { return new URL(url).hostname.replace(/^www\.|^m\./, ''); } catch { return ''; }
+  };
+  const isBlog = (url) => hostOf(origins[url]?.pageUrl || '') === 'blog.naver.com';
+  const score = (url) => {
+    const alt = String(meta[url]?.alt || '').replace(/\s+/g, '');
+    return (names.some((name) => alt.includes(name)) ? 100 : 0) +
+      (season && alt.includes(season) ? 25 : 0) +
+      (isBlog(url) ? -100 : 30) +
+      (Number(meta[url]?.width || 0) >= 600 || Number(meta[url]?.height || 0) >= 600 ? 5 : 0);
+  };
+  const ordered = urls.sort((a, b) => score(b) - score(a));
+  const press = ordered.filter((url) => !isBlog(url));
+  /* 발행 장수를 모두 채울 만큼 실제 보도사진이 있으면 경쟁 블로그 이미지는 쓰지 않는다.
+   * 부족하면 마지막 후보로만 남겨 자동화 전체가 멈추는 것은 피한다. */
+  return slots > 0 && press.length >= slots ? press : ordered;
+}
+
 export async function fetchBackgrounds(article, cfg, slots) {
   const result = new Array(slots).fill(null);
   if (slots <= 0) return result;
@@ -952,7 +979,7 @@ export async function fetchBackgrounds(article, cfg, slots) {
     }
   }
 
-  const sourcePool = [article.sourceImage, ...(article.sourceImages || [])].filter(Boolean);
+  const sourcePool = orderSourcePhotoUrls(article, slots);
   /* 중복 제거로 빈 자리가 생기면 아래에서 다시 부른다 (기사 사진 재충전).
    * 원문 사진 단계가 실행되지 않는 모드에서는 그대로 null 이다. */
   let fillFromSourceArticles = null;

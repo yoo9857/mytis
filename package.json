@@ -12,6 +12,7 @@
     "draft": "node src/cli.js draft",
     "publish": "node src/cli.js publish",
     "queue": "node src/cli.js queue",
+    "follow": "node src/cli.js follow",
     "news": "node src/cli.js news",
     "radar": "node src/cli.js radar",
     "probe": "node src/cli.js probe",

@@ -398,7 +398,7 @@ export async function renderImages(article, cfg) {
     if (subjectPhotos < 3) {
       throw new Error(
         `기사 사진이 ${subjectPhotos}장뿐입니다 (최소 3장). ` +
-          '외국 스톡으로 채우지 않고 발행을 중단합니다. 관련 기사 사진이나 검증된 인물 사진을 확보하세요.'
+          '외국 스톡이나 생성 카드로 채우지 않고 중단합니다. 동일 인물·회차의 실제 보도사진을 더 확보하세요.'
       );
     }
     log.ok(`기사 사진 안전 검사 통과: 소재 자체 사진 ${subjectPhotos}장 · 스톡 0장`);
@@ -496,6 +496,7 @@ export async function renderImages(article, cfg) {
           afterParagraph: brief.afterParagraph ?? null,
           group: brief.group || '',
           layout: 'photo',
+          isInfoCard: brief.isInfoCard === true,
           background: {
             credit: bg.credit,
             photographer: bg.photographer || '',
@@ -684,6 +685,7 @@ export async function renderImages(article, cfg) {
         afterParagraph: brief.afterParagraph ?? null,
         group: brief.group || '',
         layout,
+        isInfoCard: brief.isInfoCard === true,
         background: bg
           ? {
               credit: bg.credit,

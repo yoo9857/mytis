@@ -4,7 +4,7 @@ import path from 'node:path';
 import { ensureDirs, DIRS, FILES } from './paths.js';
 import { log } from './log.js';
 import { loadConfig, blogUrls, naverUrls, validateForPublish } from './config.js';
-import { runTopic, generate, publish, publishToNaver, mapImages, PLATFORM_LABEL } from './run.js';
+import { runTopic, generate, publish, publishToNaver, mapImages, pinRenderedArticle, PLATFORM_LABEL } from './run.js';
 import { launchBrowser, firstPage, saveSession } from './browser.js';
 import { ensureLoggedIn, isLoggedIn, discoverBlog, genericUrls } from './kakaoLogin.js';
 import {
@@ -36,6 +36,8 @@ const HELP = `
   npm run publish -- out/xxx.json      이미 생성한 아티클을 발행
   npm run queue                        topics.txt 에서 하나를 꺼내 발행 (스케줄러용)
   npm run queue -- --count 3           연속으로 3개 발행
+  npm run follow -- --source-blog happytigers --source-category "함께보는 이슈들"
+                                       새 글 우선, 없으면 과거 미작성 최신 1편 → 독립 해설 → 발행
   npm run verify                       로그인 셀렉터 점검 (계정 없이 실행 가능)
   npm run probe                        에디터 구조 덤프 (셀렉터가 깨졌을 때 진단)
   npm run doctor                       설정·환경 점검
@@ -137,9 +139,15 @@ function parseArgs(argv) {
      * 맞춰져 있어서, 다른 글을 낼 때마다 설정을 뒤집고 되돌리는 것을 잊는다. */
     else if (a === '--category') flags.category = argv[++i];
     else if (a.startsWith('--category=')) flags.category = a.split('=')[1];
+    else if (a === '--source-blog') flags.sourceBlog = argv[++i];
+    else if (a.startsWith('--source-blog=')) flags.sourceBlog = a.split('=')[1];
+    else if (a === '--source-category') flags.sourceCategory = argv[++i];
+    else if (a.startsWith('--source-category=')) flags.sourceCategory = a.split('=')[1];
+    else if (a === '--seed') flags.seed = true;
     else if (a === '--reserve-at') flags.reserveAt = argv[++i];
     else if (a.startsWith('--reserve-at=')) flags.reserveAt = a.slice('--reserve-at='.length);
     else if (a === '--force') flags.force = true;
+    else if (a === '--auto-pin-photos') flags.autoPinPhotos = true;
     else if (a === '--spoiler') flags.spoiler = true;
     else if (a === '--no-spoiler') flags.spoiler = false;
     else if (a === '--naver') flags.platform = 'naver';
@@ -410,7 +418,7 @@ async function cmdPublishFile(cfg, file, flags = {}) {
   /* 기사 모드는 미리보기에서 확인하고 고정한 사진만 발행한다.
    * `--force` 로도 넘기지 않는다 — 형식 취향이 아니라 다른 인물·광고 사진이
    * 공개되는 사고를 막는 안전 조건이다. */
-  if (can(article.mode, 'requirePinnedPhotos') && !article.photoDir) {
+  if (can(article.mode, 'requirePinnedPhotos') && !article.photoDir && !flags.autoPinPhotos) {
     throw new Error(
       '기사 사진이 고정되지 않았습니다. 자동 재검색 사진으로는 발행하지 않습니다.\n' +
         `  먼저 실행: npm run repreview -- "${abs}" --pin`
@@ -437,9 +445,6 @@ async function cmdPublishFile(cfg, file, flags = {}) {
    *
    * `막음` 항목이 있으면 발행하지 않는다. 규격이 틀렸다고 판단하면 `--force` 로 넘기고,
    * **그때는 규격을 고치는 것이 맞다** — 넘기는 습관이 들면 게이트가 없는 것과 같다. */
-  const { assertContract } = await import('./contract.js');
-  assertContract(article, { force: flags.force === true, log });
-
   /* 영상 글의 **큰따옴표 인용을 자막과 기계 대조**한다.
    *
    * 자동 자막에서 딴 인용은 축자성이 없고, 모델이 어절을 주워 문장을 만들기도 한다.
@@ -509,6 +514,13 @@ async function cmdPublishFile(cfg, file, flags = {}) {
   }
 
   const rendered = await renderImages(article, cfg);
+  if (flags.autoPinPhotos && can(article.mode, 'requirePinnedPhotos') && !article.photoDir) {
+    pinRenderedArticle({ article, articleFile: abs, rendered });
+  }
+  /* 실제 렌더 결과를 만든 뒤 검사한다. 관련 사진이 한 장 부족하면 renderImages 가
+   * 사실 기반 정보 카드로 보충하므로, 원고의 계획 수가 아니라 발행할 파일 수를 본다. */
+  const { assertContract } = await import('./contract.js');
+  assertContract(article, { force: flags.force === true, log });
   const ordered = [rendered.thumbnail, ...rendered.body].filter(Boolean);
   const imageFiles = ordered.map((i) => i.file);
   const imageMeta = ordered.map((img, idx) => ({
@@ -595,6 +607,7 @@ async function cmdPublishFile(cfg, file, flags = {}) {
       log.ok(`books.done.txt 에 새 줄로 기록: ${title}`);
     }
   }
+  return results;
 }
 
 async function cmdQueue(cfg, { count = 1, noPublish }) {
@@ -630,6 +643,112 @@ async function cmdQueue(cfg, { count = 1, noPublish }) {
 
   log.banner(`큐 처리 결과: 성공 ${ok} · 실패 ${fail}`);
   if (fail > 0 && ok === 0) process.exitCode = 1;
+}
+
+/**
+ * 특정 네이버 블로그의 RSS를 감시해 한 번에 한 편을 독립 해설로 발행한다.
+ * 새 글을 먼저 처리하고, 새 글이 없으면 최근 피드의 과거 미작성 글을 최신순으로 채운다.
+ */
+async function cmdFollow(cfg, flags = {}) {
+  const cycleStartedAt = Date.now();
+  const {
+    fetchNaverFeed,
+    findLatestFollowArtifact,
+    loadFollowState,
+    reconcilePublishedArtifacts,
+    recordDetected,
+    queueUnselectedNew,
+    saveFollowState,
+    seedFollowState,
+    selectNextFollowItem,
+  } = await import('./followBlog.js');
+
+  const blogId = String(flags.sourceBlog || 'happytigers').trim();
+  const category = String(flags.sourceCategory || '함께보는 이슈들').trim();
+  const all = await fetchNaverFeed(blogId);
+  const items = all.filter((item) => !category || item.category === category);
+  log.info(`감지 피드: blog.naver.com/${blogId} · ${category || '전체'} · 최근 ${items.length}편`);
+
+  let state = loadFollowState(blogId);
+  if (flags.seed || !state) {
+    state = seedFollowState(blogId, category, items);
+    const reconciled = reconcilePublishedArtifacts(state, items);
+    saveFollowState(blogId, state);
+    log.ok(
+      `감지 기준점 저장: 현재 글 ${Object.keys(state.seen).length}편 · ` +
+      `수동 발행 ${reconciled.length}편 확인 · 나머지는 미작성 대기열`
+    );
+    return { seeded: true, count: items.length };
+  }
+
+  const reconciled = reconcilePublishedArtifacts(state, items);
+  if (reconciled.length) {
+    saveFollowState(blogId, state);
+    log.info(`수동 발행 이력 ${reconciled.length}편을 감지 상태에 합쳤습니다 — 중복 발행에서 제외합니다.`);
+  }
+
+  const { selected, reason, pending } = selectNextFollowItem(items, state);
+  if (!selected) {
+    state.updatedAt = new Date().toISOString();
+    saveFollowState(blogId, state);
+    log.info('새 글과 과거 미작성 글이 모두 없습니다. 다음 5시간 주기에서 다시 확인합니다.');
+    return { published: false };
+  }
+
+  const queued = queueUnselectedNew(state, items, selected.id);
+  if (queued.length) {
+    saveFollowState(blogId, state);
+    log.info(`같은 주기에 감지한 나머지 새 글 ${queued.length}편을 미작성 대기열에 저장했습니다.`);
+  }
+
+  const reasonLabel = reason === 'new'
+    ? '새 글 감지'
+    : reason === 'retry'
+      ? '실패 글 재시도'
+      : '새 글 없음 · 과거 미작성 최신순';
+  log.banner(`${reasonLabel}: ${selected.title}`);
+  if (pending) log.info(`이번 글 다음 대기 후보 ${pending}편 — 다음 5시간 주기에서 최신순으로 처리합니다.`);
+  try {
+    let result;
+    const artifact = reason === 'retry' ? findLatestFollowArtifact(selected.url) : '';
+    if (artifact) {
+      log.info(`완성된 실패 원고를 재사용합니다: ${artifact}`);
+      const results = await cmdPublishFile(cfg, artifact, {
+        ...flags,
+        now: true,
+        platform: 'tistory',
+        autoPinPhotos: true,
+      });
+      result = { result: results.tistory, articleFile: artifact, reused: true };
+    } else {
+      result = await runTopic(selected.url, cfg, {
+        publish: true,
+        platforms: ['tistory'],
+        autoPinPhotos: true,
+      });
+    }
+    const postUrl = result.result?.postUrl || result.result?.url || '';
+    recordDetected(state, [selected], 'published', { postUrl, completedAt: new Date().toISOString() });
+    saveFollowState(blogId, state);
+    log.ok(`추적 발행 완료: ${postUrl}`);
+    return result;
+  } catch (err) {
+    const attempts = Number(state.seen?.[selected.id]?.attempts || 0) + 1;
+    const retryAfter = new Date(cycleStartedAt + 5 * 60 * 60 * 1000).toISOString();
+    recordDetected(state, [selected], 'failed', {
+      error: err.message.split('\n')[0],
+      attempts,
+      retryAfter,
+      completedAt: new Date().toISOString(),
+    });
+    saveFollowState(blogId, state);
+    if (attempts >= 3) {
+      log.warn(`같은 글이 ${attempts}회 실패해 자동 재시도를 멈춥니다. 다음 후보는 다음 주기에 처리합니다.`);
+    } else {
+      log.warn(`발행 실패 ${attempts}/3회 — 5시간 뒤 다시 시도합니다.`);
+    }
+    throw err;
+  }
 }
 
 async function cmdProbe(cfg) {
@@ -892,6 +1011,8 @@ async function main() {
       return cmdRadar(cfg, rest, flags);
     case 'queue':
       return cmdQueue(cfg, { count: flags.count || 1, noPublish: flags.noPublish });
+    case 'follow':
+      return cmdFollow(cfg, flags);
     case 'probe':
       return cmdProbe(cfg);
     case 'login:naver':

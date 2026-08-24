@@ -416,6 +416,74 @@ export function mapImages(rendered) {
 }
 
 /**
+ * 이미 안전 검사를 통과해 렌더된 기사 사진을 자동 발행용으로 고정한다.
+ *
+ * 일반 `post <기사URL>` 은 사람이 프리뷰를 본 뒤 고정하는 원칙을 유지한다.
+ * 특정 피드를 명시적으로 추적하는 `follow` 경로만 이 함수를 호출한다. 렌더 단계의
+ * 소재 사진 검사(원문·관련 기사·위키·로컬만 허용)를 통과한 결과물 그대로를 저장해
+ * 발행 직전 재검색으로 사진이 바뀌지 않게 한다.
+ */
+export function pinRenderedArticle({ article, articleFile, rendered }) {
+  const slots = [rendered?.thumbnail, ...(rendered?.body || [])].filter(Boolean);
+  if (!slots.length) throw new Error('자동 고정할 이미지가 없습니다.');
+
+  const slug = safeSlug(article.title, 'post');
+  const dir = path.join(DIRS.photos, 'pinned', slug);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const briefs = [
+    ...(article.imageBriefs || []).filter((b) => b.placement === 'thumbnail'),
+    ...(article.imageBriefs || []).filter((b) => b.placement === 'body'),
+  ];
+  const photoBriefs = briefs.filter((b) => b.isInfoCard !== true);
+  const infoBriefs = briefs.filter((b) => b.isInfoCard === true);
+  let photoAt = 0;
+  let infoAt = 0;
+  const kept = new Set();
+  const items = [];
+
+  slots.forEach((slot, i) => {
+    const ext = path.extname(slot.file) || '.png';
+    const name = `${String(i).padStart(2, '0')}${i === 0 ? '-thumb' : ''}${ext}`;
+    fs.copyFileSync(slot.file, path.join(dir, name));
+    const brief = slot.isInfoCard ? infoBriefs[infoAt++] : photoBriefs[photoAt++];
+    if (brief) {
+      brief.photo = name;
+      brief.noText = true;
+      brief.photoQuery = '';
+      kept.add(brief);
+    }
+    const bg = slot.background || {};
+    items.push({
+      file: name,
+      source: slot.isInfoCard ? 'generated-info-card' : bg.source || '',
+      photographer: bg.photographer || '',
+      license: bg.license || '',
+      permalink: bg.pageUrl || '',
+    });
+  });
+
+  article.imageBriefs = (article.imageBriefs || []).filter((b) => kept.has(b));
+  article.cards = (article.cards || []).filter((c) => c.autoVisualFallback !== true);
+  article.photoDir = path.join('out', 'photos', 'pinned', slug).replace(/\\/g, '/');
+  fs.writeFileSync(
+    path.join(dir, 'manifest.json'),
+    JSON.stringify(
+      {
+        note: '자동 추적 발행에서 안전 검사를 통과한 렌더 결과를 고정했다. 원저작권은 각 원저작자에게 있다.',
+        items,
+      },
+      null,
+      2
+    ) + '\n',
+    'utf8'
+  );
+  fs.writeFileSync(articleFile, JSON.stringify(article, null, 2) + '\n', 'utf8');
+  log.ok(`자동 발행 사진 ${slots.length}장 고정 → ${article.photoDir}`);
+  return { dir, count: slots.length };
+}
+
+/**
  * 주제 → 글 생성 → 이미지 생성 → HTML 조립.  발행은 하지 않는다.
  */
 export async function generate(topic, cfg) {
@@ -704,7 +772,11 @@ export const PLATFORM_LABEL = { tistory: '티스토리', naver: '네이버 블�
  * 글 생성은 플랫폼과 무관하게 **한 번만** 한다. codex 호출이 비싸기 때문이다.
  * 여러 플랫폼을 주면 같은 아티클을 각각의 방식으로 발행한다.
  */
-export async function runTopic(topic, cfg, { publish: doPublish = true, platforms = ['tistory'] } = {}) {
+export async function runTopic(
+  topic,
+  cfg,
+  { publish: doPublish = true, platforms = ['tistory'], autoPinPhotos = false } = {}
+) {
   const started = Date.now();
   log.banner(`주제: ${topic}`);
 
@@ -722,6 +794,14 @@ export async function runTopic(topic, cfg, { publish: doPublish = true, platform
    * 관련 기사에도 얼굴이 잘린 크롭·여러 화면을 붙인 캡처·광고 썸네일이 섞인다.
    * 따라서 기사 URL의 한 번짜리 `post` 자동 발행은 여기서 멈추고,
    * `draft → repreview --pin → publish` 검수 경로만 허용한다. */
+  if (
+    autoPinPhotos &&
+    can(gen.article.mode, 'requirePinnedPhotos') &&
+    !gen.article.photoDir
+  ) {
+    pinRenderedArticle(gen);
+  }
+
   if (can(gen.article.mode, 'requirePinnedPhotos') && !gen.article.photoDir) {
     throw new Error(
       `기사 사진을 아직 고정하지 않아 발행하지 않습니다. 초안은 저장됐습니다: ${gen.articleFile}\n` +

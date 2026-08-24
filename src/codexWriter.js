@@ -19,6 +19,41 @@ export function isUrl(text) {
   return /^https?:\/\/\S+$/i.test(String(text || '').trim());
 }
 
+/**
+ * 관련 기사에서 같은 인물·기수 사진을 먼저 고른다.
+ * 기사 첫 이미지라는 이유만으로 다른 출연자 사진을 가져오지 않게 alt를 함께 본다.
+ */
+export function rankRelatedArticlePhotos(fetched, { entityNames = [], season = '' } = {}) {
+  const clean = (v) => String(v || '').replace(/\s+/g, '').toLowerCase();
+  const names = entityNames.map(clean).filter((x) => x.length >= 2);
+  const rows = [
+    ...(fetched?.images || []).map((img, i) => ({
+      url: img?.url,
+      alt: img?.alt || '',
+      width: Number(img?.w || 0),
+      height: Number(img?.h || 0),
+      order: i,
+    })),
+    { url: fetched?.image, alt: fetched?.title || '', width: 0, height: 0, order: 999 },
+  ].filter((x) => /^https?:\/\//i.test(String(x.url || '')));
+
+  for (const row of rows) {
+    const text = clean(`${row.alt} ${fetched?.title || ''}`);
+    row.score = (names.some((name) => clean(row.alt).includes(name)) ? 100 : 0) +
+      (season && text.includes(clean(season)) ? 25 : 0) +
+      (/나는solo|나는솔로|나솔/i.test(text) ? 15 : 0) +
+      (row.width >= 600 || row.height >= 600 ? 5 : 0) - row.order / 100;
+  }
+  rows.sort((a, b) => b.score - a.score);
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = String(row.url).replace(/^https?:\/\/[^/]+\/(?:thumb\/[^?]+\?fname=)?/i, '').split('?')[0];
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** codex 실행 파일 위치를 찾는다. 네이티브 exe 를 우선해서 shell 인용 문제를 피한다. */
 export function resolveCodex() {
   if (process.env.CODEX_BIN && fs.existsSync(process.env.CODEX_BIN)) {
@@ -797,6 +832,14 @@ export async function writeArticle({ topic, cfg }) {
             .filter(Boolean)
             .map((u) => [u, { publisher: source.publisher || '', pageUrl: topic }])
         );
+        article.sourceImageMeta = Object.fromEntries(
+          [
+            source.image ? { url: source.image, alt: source.title || article.title } : null,
+            ...(source.images || []),
+          ]
+            .filter((x) => x?.url)
+            .map((x) => [x.url, { alt: x.alt || '', width: x.w || 0, height: x.h || 0 }])
+        );
         log.debug(
           `원문 사진 확보: 대표 ${source.image ? 1 : 0}장 · 본문 ${(source.images || []).length}장`
         );
@@ -842,9 +885,28 @@ export async function writeArticle({ topic, cfg }) {
         ]
           .map((s) => String(s || '').replace(/\s+/g, '').trim())
           .filter((s) => s.length >= 2);
+        /* 출연자 이름은 기사마다 프로그램 표기가 달라진다.
+         * 예: entity 는 "나는 SOLO 15기 영숙"인데 관련 기사 제목은
+         * "'나는솔로' 15기 영철♥영숙"이다. 전체 문자열 포함만 보면 같은 사안의
+         * SBS·머니투데이 사진을 전부 버리고 원문 2장만 남는다.
+         * 모델이 이미 sources 로 고른 기사 안에서만 검사하므로, 한글 이름의 마지막
+         * 토큰(영숙·광수 등)도 좁은 보조 키로 허용한다. */
+        const entityNames = (article.entities || [])
+          .map((e) => String(e.nameKo || '').trim().split(/\s+/).filter(Boolean).pop() || '')
+          .map((s) => s.replace(/[^0-9A-Za-z가-힣]/g, ''))
+          .filter((s) => s.length >= 2);
+        const identityText = `${article.primaryKeyword || ''} ${article.title || ''}`.replace(/\s+/g, '');
+        const season = identityText.match(/(\d{1,2}기)/)?.[1] || '';
+        const isSoloTitle = (title) => /나는\s*solo|나는솔로|나솔/i.test(String(title || '').replace(/\s+/g, ''));
+        const isSameSeries = (source) => {
+          const title = String(source?.title || '').replace(/\s+/g, '');
+          return !!season && title.includes(season) && isSoloTitle(title);
+        };
         const isSameSubject = (source) => {
           const title = String(source?.title || '').replace(/\s+/g, '');
-          return subjects.some((subject) => title.includes(subject));
+          return subjects.some((subject) => title.includes(subject)) ||
+            entityNames.some((name) => title.includes(name)) ||
+            isSameSeries(source);
         };
         const extra = article.sources
           .filter((s) => isSameSubject(s))
@@ -865,9 +927,8 @@ export async function writeArticle({ topic, cfg }) {
              * > 2026-08-05 실측 — 김우빈 '기프트' 글: 기사 4곳에서 15장을 받았더니
              * > mk.co.kr 후보에 **속옷 광고 사진**과 사안과 무관한 배우 사진이 있었고,
              * > 그게 본문 카드로 들어갔다. 많이 받는 것이 손해였다. */
-            const got = [s?.image, ...(s?.images || []).map((i) => i.url)]
-              .filter(Boolean)
-              .slice(0, 3);
+            const ranked = rankRelatedArticlePhotos(s, { entityNames, season }).slice(0, 4);
+            const got = ranked.map((x) => x.url);
             if (got.length) {
               article.sourceImages = [...(article.sourceImages || []), ...got];
               // 이 사진들의 출처는 소재 기사가 아니라 이 기사다 — 사진별로 남긴다.
@@ -877,10 +938,67 @@ export async function writeArticle({ topic, cfg }) {
                   got.map((u) => [u, { publisher: s?.publisher || '', pageUrl: url }])
                 ),
               };
+              article.sourceImageMeta = {
+                ...(article.sourceImageMeta || {}),
+                ...Object.fromEntries(ranked.map((x) => [x.url, {
+                  alt: x.alt || '', width: x.width || 0, height: x.height || 0,
+                }])),
+              };
               log.debug(`추가 출처 사진 ${got.length}장: ${new URL(url).hostname}`);
             }
           } catch (err) {
             log.debug(`추가 출처 사진 실패 (${url.slice(0, 50)}): ${err.message.slice(0, 60)}`);
+          }
+        }
+
+        /* 모델이 근거 기사로 고른 sources 는 사진 공급용 목록이 아니다. 같은 회차의
+         * 팩트가 있어도 제목에 인물명이 없으면 사진 후보가 2~3장에 그칠 수 있다.
+         * 실제 관련 사진이 4장 미만일 때만 웹 검색을 한 번 더 해 동일 기수·인물의
+         * 보도기사를 찾는다. 결과 기사도 위의 isSameSubject 검사를 다시 통과해야 한다. */
+        if ((article.sourceImages?.length || 0) < 8) {
+          try {
+            const person = entityNames[0] || '';
+            const query = ['나는 SOLO', season, person, article.primaryKeyword, '사진 기사']
+              .filter(Boolean).join(' ');
+            const found = await runCodexJson({
+              prompt: `웹 검색으로 "${query}"와 정확히 같은 기수·인물을 다룬 한국 보도기사 6건을 찾으세요. 다른 기수의 동명 출연자는 제외하세요. URL은 실제로 확인한 기사만 newsfeed 스키마에 맞춰 반환하세요.`,
+              schemaFile: FILES.newsfeedSchema,
+              cfg,
+              search: true,
+              timeoutMs: Math.min(cfg.codex.timeoutMs, 300_000),
+            });
+            const known = new Set([topic, ...(article.sources || []).map((s) => s.url)]);
+            for (const candidate of (found?.items || []).filter(isSameSubject)) {
+              if ((article.sourceImages?.length || 0) >= 12) break;
+              if (!candidate?.url || known.has(candidate.url)) continue;
+              known.add(candidate.url);
+              try {
+                const s = await fetchArticle(candidate.url, cfg, 300);
+                if (!isSameSubject({ title: s?.title || candidate.title })) continue;
+                const ranked = rankRelatedArticlePhotos(s, { entityNames, season }).slice(0, 5);
+                const got = ranked.map((x) => x.url);
+                if (!got.length) continue;
+                article.sourceImages = [...(article.sourceImages || []), ...got];
+                article.sourceImageOrigins = {
+                  ...(article.sourceImageOrigins || {}),
+                  ...Object.fromEntries(got.map((u) => [u, {
+                    publisher: s?.publisher || candidate.publisher || '',
+                    pageUrl: candidate.url,
+                  }])),
+                };
+                article.sourceImageMeta = {
+                  ...(article.sourceImageMeta || {}),
+                  ...Object.fromEntries(ranked.map((x) => [x.url, {
+                    alt: x.alt || '', width: x.width || 0, height: x.height || 0,
+                  }])),
+                };
+                log.debug(`추가 검색 사진 ${got.length}장: ${new URL(candidate.url).hostname}`);
+              } catch (err) {
+                log.debug(`추가 검색 기사 실패: ${err.message.slice(0, 60)}`);
+              }
+            }
+          } catch (err) {
+            log.warn(`관련 사진 추가 검색 실패: ${err.message.split('\n')[0]}`);
           }
         }
         if (article.sourceImages?.length) {
