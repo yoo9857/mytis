@@ -37,7 +37,9 @@ const HELP = `
   npm run queue                        topics.txt 에서 하나를 꺼내 발행 (스케줄러용)
   npm run queue -- --count 3           연속으로 3개 발행
   npm run follow -- --source-blog happytigers --source-category "함께보는 이슈들"
-                                       새 글 우선, 없으면 과거 미작성 최신 1편 → 독립 해설 → 발행
+  npm run follow -- --source-blog ektha0108 --source-category "*"   # 전체 카테고리
+                                       --target-blog eco-m 으로 작업별 티스토리 지정 가능
+                                       인기순 1편 → 독립 해설 → 검증 후 발행
   npm run verify                       로그인 셀렉터 점검 (계정 없이 실행 가능)
   npm run probe                        에디터 구조 덤프 (셀렉터가 깨졌을 때 진단)
   npm run doctor                       설정·환경 점검
@@ -143,6 +145,10 @@ function parseArgs(argv) {
     else if (a.startsWith('--source-blog=')) flags.sourceBlog = a.split('=')[1];
     else if (a === '--source-category') flags.sourceCategory = argv[++i];
     else if (a.startsWith('--source-category=')) flags.sourceCategory = a.split('=')[1];
+    else if (a === '--target-blog') flags.targetBlog = argv[++i];
+    else if (a.startsWith('--target-blog=')) flags.targetBlog = a.split('=')[1];
+    else if (a === '--target-category') flags.targetCategory = argv[++i];
+    else if (a.startsWith('--target-category=')) flags.targetCategory = a.split('=')[1];
     else if (a === '--seed') flags.seed = true;
     else if (a === '--reserve-at') flags.reserveAt = argv[++i];
     else if (a.startsWith('--reserve-at=')) flags.reserveAt = a.slice('--reserve-at='.length);
@@ -568,7 +574,8 @@ async function cmdPublishFile(cfg, file, flags = {}) {
   }
 
   for (const [platform, r] of Object.entries(results)) {
-    log.ok(`${PLATFORM_LABEL[platform]} 발행 완료: ${r.postUrl || r.url}`);
+    const privateSave = platform === 'tistory' && cfg.blog.visibility === 'private';
+    log.ok(`${PLATFORM_LABEL[platform]} ${privateSave ? '비공개 테스트 저장 완료' : '발행 완료'}: ${r.postUrl || r.url}`);
     // 다음 발행의 간격 계산 근거 — 성공한 것만 기록한다
     if (platform === 'tistory') recordPublish('tistory', cfg.blog.name);
   }
@@ -650,10 +657,24 @@ async function cmdQueue(cfg, { count = 1, noPublish }) {
  * 새 글을 먼저 처리하고, 새 글이 없으면 최근 피드의 과거 미작성 글을 최신순으로 채운다.
  */
 async function cmdFollow(cfg, flags = {}) {
+  const { acquireFollowLock } = await import('./followBlog.js');
+  const blogId = String(flags.sourceBlog || 'happytigers').trim();
+  const release = await acquireFollowLock({ owner: blogId });
+  try {
+    return await cmdFollowUnlocked(cfg, flags);
+  } finally {
+    release();
+  }
+}
+
+async function cmdFollowUnlocked(cfg, flags = {}) {
   const cycleStartedAt = Date.now();
   const {
+    assertFollowTarget,
+    enrichNaverPopularity,
     fetchNaverFeed,
     findLatestFollowArtifact,
+    followRetryDelayMs,
     loadFollowState,
     reconcilePublishedArtifacts,
     recordDetected,
@@ -661,15 +682,50 @@ async function cmdFollow(cfg, flags = {}) {
     saveFollowState,
     seedFollowState,
     selectNextFollowItem,
+    shouldRegenerateFollowArtifact,
+    usageLimitRetryAt,
   } = await import('./followBlog.js');
 
   const blogId = String(flags.sourceBlog || 'happytigers').trim();
-  const category = String(flags.sourceCategory || '함께보는 이슈들').trim();
-  const all = await fetchNaverFeed(blogId);
-  const items = all.filter((item) => !category || item.category === category);
-  log.info(`감지 피드: blog.naver.com/${blogId} · ${category || '전체'} · 최근 ${items.length}편`);
-
+  if (!/^[A-Za-z0-9_-]+$/.test(blogId)) throw new Error(`잘못된 원본 블로그 ID: ${blogId}`);
+  const configuredTarget = String(cfg.blog.name || '').replace(/\.tistory\.com$/i, '').trim();
+  const targetBlog = String(flags.targetBlog || configuredTarget)
+    .replace(/^https?:\/\//i, '')
+    .replace(/\.tistory\.com\/?$/i, '')
+    .trim();
+  if (!/^[A-Za-z0-9-]+$/.test(targetBlog)) throw new Error(`잘못된 대상 티스토리: ${flags.targetBlog}`);
+  assertFollowTarget(blogId, targetBlog);
+  cfg.blog = { ...cfg.blog, name: targetBlog };
+  if (flags.targetCategory !== undefined) cfg.blog.category = String(flags.targetCategory).trim() || 'auto';
+  else if (targetBlog !== configuredTarget) cfg.blog.category = 'auto';
+  /* `*` 는 RSS의 모든 카테고리를 추적한다. 빈 문자열은 Windows cmd 인수 전달에서
+   * 사라질 수 있어 명시적인 표식을 쓴다. 기존 happytigers 작업은 플래그를 생략하면
+   * 계속 "함께보는 이슈들" 한 카테고리만 본다. */
+  const requestedCategory = flags.sourceCategory === undefined
+    ? '함께보는 이슈들'
+    : String(flags.sourceCategory).trim();
+  const category = requestedCategory === '*' ? '' : requestedCategory;
   let state = loadFollowState(blogId);
+  if (state?.blockedUntil) {
+    const blockedUntil = new Date(state.blockedUntil).getTime();
+    if (Number.isFinite(blockedUntil) && blockedUntil > Date.now()) {
+      log.warn(`공통 서비스 제한으로 ${new Date(blockedUntil).toLocaleString('ko-KR')}까지 자동발행을 쉽니다: ${state.blockedReason || ''}`);
+      return { published: false, blocked: true, blockedUntil: state.blockedUntil };
+    }
+    delete state.blockedUntil;
+    delete state.blockedReason;
+    state.updatedAt = new Date().toISOString();
+    saveFollowState(blogId, state);
+  }
+  const all = await fetchNaverFeed(blogId);
+  const filtered = all.filter((item) => !category || item.category === category);
+  const items = await enrichNaverPopularity(blogId, filtered);
+  const measured = items.filter((item) => !item.popularity?.unavailable).length;
+  log.info(
+    `감지 피드: blog.naver.com/${blogId} · ${category || '전체'} · 최근 ${items.length}편 · ` +
+    `인기 측정 ${measured}/${items.length} · 발행 대상 ${targetBlog}.tistory.com`
+  );
+
   if (flags.seed || !state) {
     state = seedFollowState(blogId, category, items);
     const reconciled = reconcilePublishedArtifacts(state, items);
@@ -705,12 +761,21 @@ async function cmdFollow(cfg, flags = {}) {
     ? '새 글 감지'
     : reason === 'retry'
       ? '실패 글 재시도'
-      : '새 글 없음 · 과거 미작성 최신순';
+      : '미작성 인기순';
   log.banner(`${reasonLabel}: ${selected.title}`);
-  if (pending) log.info(`이번 글 다음 대기 후보 ${pending}편 — 다음 5시간 주기에서 최신순으로 처리합니다.`);
+  const score = selected.popularity?.score ?? 0;
+  log.info(`인기 점수 ${score} (공감 ${selected.popularity?.likes || 0} · 댓글 ${selected.popularity?.comments || 0} · 공유 ${selected.popularity?.shares || 0})`);
+  if (pending) log.info(`이번 글 다음 대기 후보 ${pending}편 — 다음 실행에서도 인기순으로 처리합니다.`);
   try {
     let result;
-    const artifact = reason === 'retry' ? findLatestFollowArtifact(selected.url) : '';
+    const previousError = state.seen?.[selected.id]?.error || '';
+    const mustRegenerate = reason === 'retry' && shouldRegenerateFollowArtifact(previousError);
+    if (mustRegenerate) {
+      log.info('직전 실패가 사진 후보 부족이어서 기존 원고를 재사용하지 않고 출처 사진부터 다시 수집합니다.');
+    }
+    const artifact = reason === 'retry' && !mustRegenerate
+      ? findLatestFollowArtifact(selected.url)
+      : '';
     if (artifact) {
       log.info(`완성된 실패 원고를 재사용합니다: ${artifact}`);
       const results = await cmdPublishFile(cfg, artifact, {
@@ -728,25 +793,50 @@ async function cmdFollow(cfg, flags = {}) {
       });
     }
     const postUrl = result.result?.postUrl || result.result?.url || '';
-    recordDetected(state, [selected], 'published', { postUrl, completedAt: new Date().toISOString() });
+    const expectedHost = `${targetBlog}.tistory.com`;
+    let actualHost = '';
+    try { actualHost = new URL(postUrl).hostname; } catch { /* 아래에서 명확한 오류로 처리 */ }
+    if (!postUrl || actualHost !== expectedHost) {
+      throw new Error(`발행 검증 실패: 예상 ${expectedHost}, 결과 ${postUrl || '(주소 없음)'}`);
+    }
+    recordDetected(state, [selected], 'published', {
+      postUrl,
+      targetBlog: expectedHost,
+      completedAt: new Date().toISOString(),
+    });
     saveFollowState(blogId, state);
     log.ok(`추적 발행 완료: ${postUrl}`);
     return result;
   } catch (err) {
+    const limitRetryAt = usageLimitRetryAt(err.message, new Date(cycleStartedAt));
+    if (limitRetryAt) {
+      state.seen ||= {};
+      const previous = state.seen[selected.id];
+      state.seen[selected.id] = {
+        ...selected,
+        ...(previous || {}),
+        status: previous?.status || 'pending',
+        lastBlockedAt: new Date().toISOString(),
+      };
+      state.blockedUntil = limitRetryAt.toISOString();
+      state.blockedReason = 'Codex 사용량 제한';
+      state.updatedAt = new Date().toISOString();
+      saveFollowState(blogId, state);
+      log.warn(`Codex 사용량 제한 — 후보를 실패 처리하지 않고 ${limitRetryAt.toLocaleString('ko-KR')} 이후 재개합니다.`);
+      return { published: false, blocked: true, blockedUntil: state.blockedUntil };
+    }
     const attempts = Number(state.seen?.[selected.id]?.attempts || 0) + 1;
-    const retryAfter = new Date(cycleStartedAt + 5 * 60 * 60 * 1000).toISOString();
+    const retryDelayMs = followRetryDelayMs(err.message, attempts);
+    const retryAfter = new Date(cycleStartedAt + retryDelayMs).toISOString();
     recordDetected(state, [selected], 'failed', {
       error: err.message.split('\n')[0],
       attempts,
       retryAfter,
+      targetBlog: `${targetBlog}.tistory.com`,
       completedAt: new Date().toISOString(),
     });
     saveFollowState(blogId, state);
-    if (attempts >= 3) {
-      log.warn(`같은 글이 ${attempts}회 실패해 자동 재시도를 멈춥니다. 다음 후보는 다음 주기에 처리합니다.`);
-    } else {
-      log.warn(`발행 실패 ${attempts}/3회 — 5시간 뒤 다시 시도합니다.`);
-    }
+    log.warn(`발행 실패 ${attempts}회 — ${Math.ceil(retryDelayMs / 60_000)}분 뒤 다시 시도하며 다른 후보는 막지 않습니다.`);
     throw err;
   }
 }

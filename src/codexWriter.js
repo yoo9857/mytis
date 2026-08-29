@@ -54,6 +54,38 @@ export function rankRelatedArticlePhotos(fetched, { entityNames = [], season = '
   });
 }
 
+/**
+ * 모델이 entities 를 비워도 관련 기사 사진 검색에 쓸 좁은 식별어를 복구한다.
+ *
+ * 연예 기사 스키마에서 entities 는 선택 필드라 종종 빈 배열로 온다. 예전 코드는
+ * 그때 primaryKeyword 전체(예: "합숙맞선2 안도윤 권예찬")를 한 덩어리로만
+ * 비교했다. 관련 기사 제목에는 그 문자열 전체가 그대로 들어 있지 않으므로 이미
+ * 확보한 SBS 기사들까지 전부 탈락했고, 원문 사진 2장만 남아 발행이 막혔다.
+ *
+ * primaryKeyword 는 모델이 검색 핵심어만 공백으로 나눈 값이라 제목 전체보다
+ * 잡음이 적다. entities 의 이름과 이 토큰을 함께 쓰되, 기사 제목에 흔한 상태어는
+ * 제외한다. 반환값은 뒤에서 실제 source 제목과 다시 대조하므로 웹 전체를 느슨하게
+ * 검색하는 용도로 쓰이지 않는다.
+ */
+export function relatedPhotoIdentityTerms(article = {}) {
+  const stop = new Set([
+    '근황', '충격', '포착', '실화', '최종', '선택', '포기', '직진', '결말',
+    '방송', '공개', '논란', '반전', '이유', '사진', '기사', '프로필',
+  ]);
+  const entityTerms = (article.entities || []).flatMap((entity) => {
+    const full = String(entity?.nameKo || '').trim();
+    const last = full.split(/\s+/).filter(Boolean).pop() || '';
+    return [full, last];
+  });
+  const keywordTerms = String(article.primaryKeyword || '')
+    .split(/[^0-9A-Za-z가-힣]+/)
+    .filter(Boolean);
+
+  return [...new Set([...entityTerms, ...keywordTerms]
+    .map((term) => String(term).replace(/\s+/g, '').trim())
+    .filter((term) => term.length >= 2 && !stop.has(term)))];
+}
+
 /** codex 실행 파일 위치를 찾는다. 네이티브 exe 를 우선해서 shell 인용 문제를 피한다. */
 export function resolveCodex() {
   if (process.env.CODEX_BIN && fs.existsSync(process.env.CODEX_BIN)) {
@@ -879,8 +911,10 @@ export async function writeArticle({ topic, cfg }) {
         // A source can substantiate background facts without being about the people or
         // event in this post. Only collect photos from sources whose title names a
         // declared entity (or the article's main keyword).
+        const inferredTerms = relatedPhotoIdentityTerms(article);
         const subjects = [
           article.primaryKeyword,
+          ...inferredTerms,
           ...(article.entities || []).flatMap((e) => [e.nameKo, e.nameEn]),
         ]
           .map((s) => String(s || '').replace(/\s+/g, '').trim())
@@ -891,10 +925,10 @@ export async function writeArticle({ topic, cfg }) {
          * SBS·머니투데이 사진을 전부 버리고 원문 2장만 남는다.
          * 모델이 이미 sources 로 고른 기사 안에서만 검사하므로, 한글 이름의 마지막
          * 토큰(영숙·광수 등)도 좁은 보조 키로 허용한다. */
-        const entityNames = (article.entities || [])
+        const entityNames = [...new Set([...(article.entities || [])
           .map((e) => String(e.nameKo || '').trim().split(/\s+/).filter(Boolean).pop() || '')
           .map((s) => s.replace(/[^0-9A-Za-z가-힣]/g, ''))
-          .filter((s) => s.length >= 2);
+          .filter((s) => s.length >= 2), ...inferredTerms])];
         const identityText = `${article.primaryKeyword || ''} ${article.title || ''}`.replace(/\s+/g, '');
         const season = identityText.match(/(\d{1,2}기)/)?.[1] || '';
         const isSoloTitle = (title) => /나는\s*solo|나는솔로|나솔/i.test(String(title || '').replace(/\s+/g, ''));
@@ -957,9 +991,14 @@ export async function writeArticle({ topic, cfg }) {
          * 보도기사를 찾는다. 결과 기사도 위의 isSameSubject 검사를 다시 통과해야 한다. */
         if ((article.sourceImages?.length || 0) < 8) {
           try {
-            const person = entityNames[0] || '';
-            const query = ['나는 SOLO', season, person, article.primaryKeyword, '사진 기사']
-              .filter(Boolean).join(' ');
+            /* 특정 프로그램을 하드코딩하지 않는다. 예전의 `나는 SOLO` 접두사는
+             * 합숙맞선·배우·가수 기사까지 엉뚱한 검색으로 보내 사진 보강을 막았다. */
+            const query = [...new Set([
+              article.primaryKeyword,
+              ...entityNames.slice(0, 2),
+              season,
+              '사진 기사',
+            ].filter(Boolean))].join(' ');
             const found = await runCodexJson({
               prompt: `웹 검색으로 "${query}"와 정확히 같은 기수·인물을 다룬 한국 보도기사 6건을 찾으세요. 다른 기수의 동명 출연자는 제외하세요. URL은 실제로 확인한 기사만 newsfeed 스키마에 맞춰 반환하세요.`,
               schemaFile: FILES.newsfeedSchema,

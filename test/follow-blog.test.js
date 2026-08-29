@@ -4,13 +4,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  acquireFollowLock,
+  assertFollowTarget,
   findLatestFollowArtifact,
+  followRetryDelayMs,
   parseNaverRss,
+  popularityScore,
   queueUnselectedNew,
+  recordDetected,
   reconcilePublishedArtifacts,
   selectLatestNew,
   selectNextFollowItem,
+  shouldRegenerateFollowArtifact,
   sourcePostId,
+  usageLimitRetryAt,
 } from '../src/followBlog.js';
 
 test('실패 재시도는 같은 원문의 최신 완성 원고를 재사용한다', () => {
@@ -37,6 +44,30 @@ test('실패 재시도는 같은 원문의 최신 완성 원고를 재사용한�
   } finally {
     fs.rmSync(outDir, { recursive: true, force: true });
   }
+});
+
+test('사진 부족 실패는 기존 원고를 재사용하지 않고 다시 생성한다', () => {
+  assert.equal(
+    shouldRegenerateFollowArtifact('기사 사진이 2장뿐입니다 (최소 3장). 동일 인물 사진을 더 확보하세요.'),
+    true
+  );
+  assert.equal(shouldRegenerateFollowArtifact('티스토리가 틀린그림찾기를 요구합니다.'), false);
+});
+
+test('재시도 성공 상태에는 과거 실패 정보를 남기지 않는다', () => {
+  const state = { seen: {} };
+  recordDetected(state, [{
+    id: '1',
+    error: '기사 사진이 2장뿐입니다',
+    attempts: 1,
+    retryAfter: '2026-08-25T00:00:00.000Z',
+  }], 'published', { postUrl: 'https://example.com/entry/ok' });
+  assert.deepEqual(state.seen['1'], {
+    id: '1',
+    status: 'published',
+    detectedAt: state.seen['1'].detectedAt,
+    postUrl: 'https://example.com/entry/ok',
+  });
 });
 
 test('네이버 RSS에서 글 번호·카테고리·정식 URL을 읽는다', () => {
@@ -81,7 +112,7 @@ test('새 글이 있으면 과거 미작성보다 새 글을 먼저 고르고 �
   const result = selectNextFollowItem(items, state);
   assert.equal(result.selected.id, '3');
   assert.equal(result.reason, 'new');
-  assert.equal(result.pending, 1);
+  assert.equal(result.pending, 2, '새 글 1편과 기존 미작성 1편이 남는다');
   assert.equal(state.seen['2'], undefined, '선택하지 않은 새 글은 다음 주기 후보로 남아야 한다');
 });
 
@@ -104,7 +135,7 @@ test('새 글이 없으면 과거 미작성 글 중 최신 글을 고른다', ()
   assert.equal(result.pending, 1);
 });
 
-test('실패 글은 5시간 대기 뒤 최대 3회까지만 재시도한다', () => {
+test('실패 글은 대기 시간이 지나면 횟수 제한 없이 재시도한다', () => {
   const items = [{ id: '1', publishedAt: 'Sun, 23 Aug 2026 11:00:00 +0900' }];
   const waiting = {
     seen: { 1: { status: 'failed', attempts: 1, retryAfter: '2026-08-24T06:00:00.000Z' } },
@@ -112,8 +143,87 @@ test('실패 글은 5시간 대기 뒤 최대 3회까지만 재시도한다', ()
   assert.equal(selectNextFollowItem(items, waiting, new Date('2026-08-24T05:00:00.000Z')).selected, null);
   assert.equal(selectNextFollowItem(items, waiting, new Date('2026-08-24T07:00:00.000Z')).reason, 'retry');
 
-  const exhausted = { seen: { 1: { status: 'failed', attempts: 3 } } };
-  assert.equal(selectNextFollowItem(items, exhausted).selected, null);
+  const manyFailures = { seen: { 1: { ...items[0], status: 'failed', attempts: 20 } } };
+  assert.equal(selectNextFollowItem(items, manyFailures).reason, 'retry');
+});
+
+test('미작성 후보는 최신순이 아니라 공감·댓글·공유 인기순으로 고른다', () => {
+  const items = [
+    { id: 'new', publishedAt: 'Sun, 23 Aug 2026 13:00:00 +0900', popularity: { likes: 1, comments: 0, shares: 0 } },
+    { id: 'popular', publishedAt: 'Sun, 23 Aug 2026 11:00:00 +0900', popularity: { likes: 10, comments: 3, shares: 1 } },
+  ];
+  const result = selectNextFollowItem(items, { seen: {} });
+  assert.equal(result.selected.id, 'popular');
+  assert.equal(popularityScore(result.selected), 53);
+});
+
+test('참고 블로그와 발행 티스토리 연결이 바뀌면 발행 전에 차단한다', () => {
+  assert.equal(assertFollowTarget('ektha0108', 'eco-m'), true);
+  assert.equal(assertFollowTarget('happytigers', 'classic-m.tistory.com'), true);
+  assert.throws(() => assertFollowTarget('ektha0108', 'classic-m'), /eco-m\.tistory\.com/);
+  assert.throws(() => assertFollowTarget('happytigers', 'eco-m'), /classic-m\.tistory\.com/);
+});
+
+test('실패 후보는 정상 대기 후보를 막지 않는다', () => {
+  const items = [
+    { id: 'failed', url: 'https://example.com/failed', popularity: { likes: 100 } },
+    { id: 'healthy', url: 'https://example.com/healthy', popularity: { likes: 1 } },
+  ];
+  const state = { seen: {
+    failed: { ...items[0], status: 'failed', attempts: 2, retryAfter: '2026-08-20T00:00:00.000Z' },
+    healthy: { ...items[1], status: 'pending' },
+  } };
+  assert.equal(selectNextFollowItem(items, state, new Date('2026-08-26T00:00:00.000Z')).selected.id, 'healthy');
+});
+
+test('재시도 간격은 일시 오류 10분부터 늘고 24시간을 넘지 않는다', () => {
+  assert.equal(followRetryDelayMs('navigation timeout', 1), 10 * 60_000);
+  assert.equal(followRetryDelayMs('사진 후보 부족', 1), 30 * 60_000);
+  assert.equal(followRetryDelayMs('navigation timeout', 99), 24 * 60 * 60_000);
+});
+
+test('Codex 사용량 제한의 재개 시각을 글별 실패와 별도로 계산한다', () => {
+  const now = new Date('2026-08-26T00:30:00+09:00');
+  assert.equal(
+    usageLimitRetryAt("You've hit your usage limit. try again at 4:27 AM.", now).toISOString(),
+    '2026-08-25T19:27:00.000Z'
+  );
+  assert.equal(usageLimitRetryAt('navigation timeout', now), null);
+});
+
+test('follow 잠금은 동시 실행을 거부하고 해제 뒤 다시 잡힌다', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'moneyti-follow-lock-'));
+  const lockFile = path.join(root, 'follow.lock');
+  try {
+    const release = await acquireFollowLock({ lockFile, owner: 'one', waitMs: 0 });
+    await assert.rejects(
+      acquireFollowLock({ lockFile, owner: 'two', waitMs: 0 }),
+      /다른 자동발행 작업/
+    );
+    release();
+    const releaseAgain = await acquireFollowLock({ lockFile, owner: 'two', waitMs: 0 });
+    releaseAgain();
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('비정상 종료로 남은 죽은 프로세스 잠금은 즉시 회수한다', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'moneyti-follow-dead-lock-'));
+  const lockFile = path.join(root, 'follow.lock');
+  try {
+    fs.writeFileSync(lockFile, JSON.stringify({
+      token: 'dead',
+      owner: 'crashed',
+      pid: 2147483647,
+      startedAt: new Date().toISOString(),
+    }));
+    const release = await acquireFollowLock({ lockFile, owner: 'recovered', waitMs: 0 });
+    release();
+    assert.equal(fs.existsSync(lockFile), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('수동 발행은 원고 sourceUrl과 실제 발행 완료 로그가 모두 있을 때만 합친다', () => {

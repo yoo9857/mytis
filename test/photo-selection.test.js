@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rankRelatedArticlePhotos } from '../src/codexWriter.js';
+import { rankRelatedArticlePhotos, relatedPhotoIdentityTerms } from '../src/codexWriter.js';
 import { orderSourcePhotoUrls } from '../src/photo.js';
 
 test('관련 기사 사진은 같은 기수의 대상 인물 alt를 가장 먼저 고른다', () => {
@@ -57,4 +57,11 @@ test('보도사진이 모자라면 블로그 사진은 최후 후보로만 남�
     'https://press.example/one.jpg',
     'https://blogthumb.pstatic.net/card.jpg',
   ]);
+});
+
+test('entities가 비어도 primaryKeyword에서 관련 기사 인물명을 복구한다', () => {
+  assert.deepEqual(relatedPhotoIdentityTerms({
+    primaryKeyword: '합숙맞선2 안도윤 권예찬',
+    entities: [],
+  }), ['합숙맞선2', '안도윤', '권예찬']);
 });

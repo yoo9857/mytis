@@ -2,10 +2,12 @@
 param(
   [string] $BlogId = 'happytigers',
   [string] $Category = '',
+  [string] $TargetBlog = '',
+  [string] $TargetCategory = 'auto',
   [string] $StartAt = '01:00',
   [int] $EveryHours = 5,
   [string] $TaskName = 'MoneytiFollowHappytigers',
-  [switch] $RunWhenLoggedOff
+  [switch] $RunWhenLoggedOff = $true
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,13 +27,15 @@ if ($first -le (Get-Date)) { $first = $first.AddDays(1) }
 $trigger = New-ScheduledTaskTrigger -Once -At $first `
   -RepetitionInterval (New-TimeSpan -Hours $EveryHours) `
   -RepetitionDuration (New-TimeSpan -Days 3650)
-$taskArgs = '"{0}" "{1}"' -f $BlogId, $Category
+$taskArgs = '"{0}" "{1}" "{2}" "{3}"' -f $BlogId, $Category, $TargetBlog, $TargetCategory
 $action = New-ScheduledTaskAction -Execute $runner -Argument $taskArgs -WorkingDirectory $projectRoot
 $settings = New-ScheduledTaskSettingsSet `
   -AllowStartIfOnBatteries `
   -DontStopIfGoingOnBatteries `
   -StartWhenAvailable `
   -MultipleInstances IgnoreNew `
+  -RestartCount 3 `
+  -RestartInterval (New-TimeSpan -Minutes 10) `
   -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 
 $userId = "$env:USERDOMAIN\$env:USERNAME"
@@ -50,3 +54,5 @@ Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
 Write-Host "Registered: $TaskName"
 Write-Host "First run: $first; repeats every $EveryHours hours"
 Write-Host "Source: https://blog.naver.com/$BlogId"
+if ($TargetBlog) { Write-Host "Target: https://$TargetBlog.tistory.com" }
+else { Write-Host 'Target: (default TISTORY_BLOG)' }

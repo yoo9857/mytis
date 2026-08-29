@@ -45,9 +45,13 @@ export async function fetchNaverFeed(blogId) {
   });
   try {
     const url = `https://rss.blog.naver.com/${blogId}.xml`;
-    const res = await ctx.get(url, { timeout: 30_000 });
-    if (!res.ok()) throw new Error(`네이버 RSS 응답 ${res.status()}: ${url}`);
-    return parseNaverRss(await res.text());
+    return await retry(async () => {
+      const res = await ctx.get(url, { timeout: 30_000 });
+      if (!res.ok()) throw new Error(`네이버 RSS 응답 ${res.status()}: ${url}`);
+      const items = parseNaverRss(await res.text());
+      if (!items.length) throw new Error(`네이버 RSS가 비어 있습니다: ${url}`);
+      return items;
+    }, 3, 1_000);
   } finally {
     await ctx.dispose();
   }
@@ -58,16 +62,25 @@ export function followStateFile(blogId) {
 }
 
 export function loadFollowState(blogId) {
+  const file = followStateFile(blogId);
   try {
-    return JSON.parse(fs.readFileSync(followStateFile(blogId), 'utf8'));
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
-    return null;
+    try {
+      return JSON.parse(fs.readFileSync(`${file}.bak`, 'utf8'));
+    } catch {
+      return null;
+    }
   }
 }
 
 export function saveFollowState(blogId, state) {
   fs.mkdirSync(DIRS.logs, { recursive: true });
-  fs.writeFileSync(followStateFile(blogId), JSON.stringify(state, null, 2) + '\n', 'utf8');
+  const file = followStateFile(blogId);
+  const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak`);
+  fs.writeFileSync(temp, JSON.stringify(state, null, 2) + '\n', 'utf8');
+  fs.renameSync(temp, file);
 }
 
 export function seedFollowState(blogId, category, items) {
@@ -91,6 +104,132 @@ const publishedTime = (item) => {
 };
 
 const newestFirst = (items) => items.slice().sort((a, b) => publishedTime(b) - publishedTime(a));
+
+const REQUIRED_TARGETS = {
+  happytigers: 'classic-m',
+  ektha0108: 'eco-m',
+};
+
+/** 알려진 참고 블로그가 엉뚱한 티스토리로 발행되는 설정 사고를 차단한다. */
+export function assertFollowTarget(blogId, targetBlog) {
+  const source = String(blogId || '').trim().toLowerCase();
+  const target = String(targetBlog || '').trim().toLowerCase().replace(/\.tistory\.com$/, '');
+  const required = REQUIRED_TARGETS[source];
+  if (required && target !== required) {
+    throw new Error(`참고 블로그 연결 오류: ${source} 글은 ${required}.tistory.com 에만 발행할 수 있습니다.`);
+  }
+  return true;
+}
+
+const safeCount = (value) => {
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+};
+
+/** 공감·댓글·공유를 하나의 안정적인 인기 점수로 합친다. */
+export function popularityScore(item = {}) {
+  const likes = safeCount(item.likes ?? item.popularity?.likes);
+  const comments = safeCount(item.comments ?? item.popularity?.comments);
+  const shares = safeCount(item.shares ?? item.popularity?.shares);
+  return likes * 3 + comments * 5 + shares * 8;
+}
+
+const popularFirst = (items) => items.slice().sort((a, b) => {
+  const score = popularityScore(b) - popularityScore(a);
+  if (score) return score;
+  const likes = safeCount(b.likes ?? b.popularity?.likes) - safeCount(a.likes ?? a.popularity?.likes);
+  if (likes) return likes;
+  return publishedTime(b) - publishedTime(a);
+});
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function retry(fn, attempts = 3, baseDelayMs = 750) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await delay(baseDelayMs * 2 ** (attempt - 1));
+    }
+  }
+  throw lastError;
+}
+
+function extractCount(html, name) {
+  const text = String(html || '');
+  const patterns = [
+    new RegExp(`${name}="(\\d+)"`, 'i'),
+    new RegExp(`"${name}"\\s*:\\s*(\\d+)`, 'i'),
+    new RegExp(`\\\\"${name}\\\\"\\s*:\\s*(\\d+)`, 'i'),
+  ];
+  for (const pattern of patterns) {
+    const found = text.match(pattern);
+    if (found) return safeCount(found[1]);
+  }
+  return 0;
+}
+
+/**
+ * RSS에는 조회수가 없으므로 공개 공감 API와 모바일 글의 댓글·공유 수를 결합한다.
+ * 인기 조회 실패는 발행 전체를 막지 않고 0점(최신순 동률 처리)으로 폴백한다.
+ */
+export async function enrichNaverPopularity(blogId, items, {
+  concurrency = 4,
+  timeoutMs = 12_000,
+} = {}) {
+  if (!items.length) return [];
+  const ctx = await request.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/127 Safari/537.36',
+    extraHTTPHeaders: { Referer: `https://m.blog.naver.com/${blogId}` },
+  });
+  const result = items.map((item) => ({ ...item }));
+  let cursor = 0;
+
+  const inspect = async (item) => {
+    const q = encodeURIComponent(`BLOG[${blogId}_${item.id}]`);
+    const likeUrl = `https://blog.like.naver.com/v1/search/contents?suppress_response_codes=true&q=${q}`;
+    const mobileUrl = `https://m.blog.naver.com/${blogId}/${item.id}`;
+    try {
+      const [likeJson, html] = await Promise.all([
+        retry(async () => {
+          const response = await ctx.get(likeUrl, { timeout: timeoutMs });
+          if (!response.ok()) throw new Error(`like HTTP ${response.status()}`);
+          return response.json();
+        }, 2),
+        retry(async () => {
+          const response = await ctx.get(mobileUrl, { timeout: timeoutMs });
+          if (!response.ok()) throw new Error(`post HTTP ${response.status()}`);
+          return response.text();
+        }, 2),
+      ]);
+      const content = likeJson?.contents?.find((entry) => entry.contentsId === `${blogId}_${item.id}`)
+        || likeJson?.contents?.[0];
+      const likes = safeCount(
+        content?.reactions?.reduce((sum, reaction) => sum + safeCount(reaction.count), 0)
+      );
+      const comments = extractCount(html, 'commentCount');
+      const shares = extractCount(html, 'shareCount');
+      return { ...item, popularity: { likes, comments, shares, score: likes * 3 + comments * 5 + shares * 8 } };
+    } catch (error) {
+      return { ...item, popularity: { likes: 0, comments: 0, shares: 0, score: 0, unavailable: true, error: error.message } };
+    }
+  };
+
+  const workers = Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      result[index] = await inspect(items[index]);
+    }
+  });
+  try {
+    await Promise.all(workers);
+    return result;
+  } finally {
+    await ctx.dispose();
+  }
+}
 
 /** 네이버 글 주소의 logNo를 형식별로 읽는다(PostView URL·모바일 URL·일반 URL). */
 export function sourcePostId(url = '') {
@@ -178,6 +317,11 @@ export function findLatestFollowArtifact(sourceUrl, { outDir = DIRS.out } = {}) 
   return matches[0]?.file || '';
 }
 
+/** 사진 후보 자체가 부족했던 실패는 같은 JSON을 재사용하면 반드시 똑같이 실패한다. */
+export function shouldRegenerateFollowArtifact(error = '') {
+  return /기사 사진이\s*\d+장뿐|기사 사진 안전 검사 실패|photos:\s*\d+\s*\(규격/i.test(String(error));
+}
+
 /**
  * 한 실행에 발행할 글 하나를 고른다.
  *
@@ -188,35 +332,118 @@ export function findLatestFollowArtifact(sourceUrl, { outDir = DIRS.out } = {}) 
  * 선택하지 않은 글은 상태를 바꾸지 않는다. 다음 5시간 주기에서 다시 후보가 된다.
  */
 export function selectNextFollowItem(items, state, now = new Date()) {
-  const unseen = newestFirst(items.filter((item) => !state.seen?.[item.id]));
-  if (unseen.length) {
-    return { selected: unseen[0], reason: 'new', pending: unseen.length - 1 };
-  }
-
   const nowMs = now.getTime();
   const current = new Map(items.map((item) => [String(item.id), item]));
+  const unseen = items.filter((item) => !state.seen?.[item.id]);
   const tracked = Object.entries(state.seen || {}).map(([id, saved]) => ({
     id,
     ...saved,
     ...(current.get(String(id)) || {}),
   }));
-  const backlog = newestFirst(tracked.filter((saved) => {
+  const backlog = tracked.filter((saved) => {
     if (!saved?.id || (!saved.url && !current.has(String(saved.id)))) return false;
     if (state.category && saved.category && saved.category !== state.category) return false;
     if (saved.status === 'baseline' || saved.status === 'superseded' || saved.status === 'pending') return true;
-    if (saved.status !== 'failed' || Number(saved.attempts || 1) >= 3) return false;
+    if (saved.status !== 'failed') return false;
     const retryAt = new Date(saved.retryAfter || 0).getTime();
     return !Number.isFinite(retryAt) || retryAt <= nowMs;
-  }));
-  if (backlog.length) {
-    const saved = state.seen?.[backlog[0].id];
+  });
+
+  // 실패 후보 하나가 계속 전체 대기열을 막지 않도록 정상 후보를 먼저 처리한다.
+  const healthy = popularFirst([...unseen, ...backlog.filter((item) => item.status !== 'failed')]);
+  const retries = popularFirst(backlog.filter((item) => item.status === 'failed'))
+    .sort((a, b) => Number(a.attempts || 0) - Number(b.attempts || 0));
+  const candidates = healthy.length ? healthy : retries;
+  if (candidates.length) {
+    const selected = candidates[0];
+    const saved = state.seen?.[selected.id];
     return {
-      selected: backlog[0],
-      reason: saved?.status === 'failed' ? 'retry' : 'backlog',
-      pending: backlog.length - 1,
+      selected,
+      reason: !saved ? 'new' : saved.status === 'failed' ? 'retry' : 'backlog',
+      pending: healthy.length + retries.length - 1,
     };
   }
   return { selected: null, reason: 'empty', pending: 0 };
+}
+
+/** 실패 원인과 누적 횟수에 따라 10분~24시간 사이에서 다시 시도한다. */
+export function followRetryDelayMs(error = '', attempts = 1) {
+  const message = String(error);
+  const transient = /timeout|timed out|net::|ECONN|ENOTFOUND|HTTP 429|HTTP 5\d\d|로그인|세션|브라우저|navigation|captcha|틀린그림|dkaptcha/i.test(message);
+  const base = transient ? 10 * 60_000 : 30 * 60_000;
+  return Math.min(24 * 60 * 60_000, base * 2 ** Math.max(0, Number(attempts) - 1));
+}
+
+/** Codex 사용량 제한처럼 모든 글에 공통인 차단은 글별 실패와 분리한다. */
+export function usageLimitRetryAt(error = '', now = new Date()) {
+  const message = String(error);
+  if (!/usage limit|purchase more credits|try again at|사용량.*한도|크레딧/i.test(message)) return null;
+  const retry = new Date(now);
+  const clock = message.match(/try again at\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!clock) return new Date(now.getTime() + 4 * 60 * 60_000);
+  let hour = Number(clock[1]) % 12;
+  if (clock[3].toUpperCase() === 'PM') hour += 12;
+  retry.setHours(hour, Number(clock[2]), 0, 0);
+  if (retry.getTime() <= now.getTime()) retry.setDate(retry.getDate() + 1);
+  return retry;
+}
+
+/** 같은 Chrome 프로필을 쓰는 서로 다른 follow 작업의 동시 실행을 막는다. */
+export async function acquireFollowLock({
+  lockFile = path.join(DIRS.logs, 'follow-publish.lock'),
+  owner = '',
+  waitMs = 30 * 60_000,
+  pollMs = 5_000,
+  staleMs = 3 * 60 * 60_000,
+  now = () => Date.now(),
+} = {}) {
+  fs.mkdirSync(path.dirname(lockFile), { recursive: true });
+  const token = `${process.pid}-${now()}-${Math.random().toString(16).slice(2)}`;
+  const deadline = now() + waitMs;
+
+  while (true) {
+    try {
+      const fd = fs.openSync(lockFile, 'wx');
+      fs.writeFileSync(fd, JSON.stringify({ token, owner, pid: process.pid, startedAt: new Date(now()).toISOString() }));
+      fs.closeSync(fd);
+      return () => {
+        try {
+          const held = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+          if (held.token === token) fs.rmSync(lockFile, { force: true });
+        } catch {
+          // 이미 정리됐거나 손상된 잠금은 해제할 것이 없다.
+        }
+      };
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      let stale = false;
+      try {
+        const held = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+        const started = new Date(held.startedAt || 0).getTime();
+        let ownerAlive = true;
+        const ownerPid = Number(held.pid);
+        if (!Number.isInteger(ownerPid) || ownerPid <= 0) {
+          ownerAlive = false;
+        } else {
+          try {
+            process.kill(ownerPid, 0);
+          } catch (error) {
+            // EPERM은 프로세스가 있지만 조회 권한만 없다는 뜻이다.
+            ownerAlive = error.code === 'EPERM';
+          }
+        }
+        stale = !ownerAlive || !Number.isFinite(started) || now() - started > staleMs;
+      } catch {
+        stale = true;
+      }
+      if (stale) {
+        fs.rmSync(lockFile, { force: true });
+        continue;
+      }
+      if (now() >= deadline) throw new Error(`다른 자동발행 작업이 실행 중입니다 (${owner || 'follow'} 대기 시간 초과).`);
+      await delay(Math.min(pollMs, Math.max(1, deadline - now())));
+    }
+  }
 }
 
 /** Preserve every newly observed item that was not selected in this cycle. */
@@ -246,6 +473,12 @@ export function recordDetected(state, items, status, extra = {}) {
   state.seen ||= {};
   for (const item of items) {
     state.seen[item.id] = { ...item, status, detectedAt: now, ...extra };
+    if (status === 'published') {
+      // 재시도 성공 뒤 과거 실패 정보가 남으면 운영 화면에서 여전히 실패처럼 보인다.
+      delete state.seen[item.id].error;
+      delete state.seen[item.id].attempts;
+      delete state.seen[item.id].retryAfter;
+    }
   }
   state.updatedAt = now;
   return state;
